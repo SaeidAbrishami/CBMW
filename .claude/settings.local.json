@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(Get-ChildItem -Recurse \"P:\\\\University\\\\workflow sim paper\\\\WorkflowSim-1.0\\\\sources\" -Filter \"*.java\")",
+      "Bash(Select-Object FullName)",
+      "PowerShell(Get-ChildItem \"P:\\\\University\\\\workflow sim paper\\\\WorkflowSim-1.0\\\\examples\" -Recurse | ForEach-Object { $_.FullName })",
+      "PowerShell(Get-ChildItem \"P:\\\\University\\\\workflow sim paper\\\\WorkflowSim-1.0\\\\examples\\\\org\\\\workflowsim\" -Recurse | ForEach-Object { $_.FullName })",
+      "PowerShell(Get-ChildItem \"P:\\\\University\\\\workflow sim paper\\\\WorkflowSim-1.0\\\\lib\" | ForEach-Object { $_.FullName })",
+      "PowerShell(Get-ChildItem \"P:\\\\University\\\\workflow sim paper\\\\WorkflowSim-1.0\" -Force | ForEach-Object { $_.FullName })",
+      "PowerShell(winget *)",
+      "PowerShell(Get-Command *)",
+      "Bash(dir examples\\\\org\\\\workflowsim\\\\examples\\\\cbmw /b)"
+    ]
+  }
+}

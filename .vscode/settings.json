@@ -1,0 +1,10 @@
+{
+    "java.project.referencedLibraries": [
+        "lib/**/*.jar"
+    ],
+    "java.project.sourcePaths": [
+        "sources",
+        "examples"
+    ],
+    "git.ignoreLimitWarning": true
+}
