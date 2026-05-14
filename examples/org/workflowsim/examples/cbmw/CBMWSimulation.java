@@ -1,5 +1,8 @@
 package org.workflowsim.examples.cbmw;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.LinkedList;
@@ -41,16 +44,8 @@ import org.workflowsim.utils.ReplicaCatalog;
  */
 public class CBMWSimulation {
 
-    private static final String BASE_PATH =
-            "P:\\University\\workflow sim paper\\WorkflowSim-1.0\\config\\dax\\";
-
-    private static final String[] WORKFLOW_TYPES = {
-        BASE_PATH + "Montage_100.xml",
-        BASE_PATH + "CyberShake_100.xml",
-        BASE_PATH + "Inspiral_100.xml",
-        BASE_PATH + "Epigenomics_100.xml",
-        BASE_PATH + "Sipht_100.xml"
-    };
+    private static final String TEST_WORKFLOWS_DIR = "test_workflows";
+    private static final String MANIFEST_PATH      = TEST_WORKFLOWS_DIR + File.separator + "manifest.csv";
 
     private static final double[] LAMBDAS    = {2.0, 3.0, 6.0};   // workflows/min
     private static final double[] TIGHTNESSES = {1.2, 3.0};       // tight, loose
@@ -113,11 +108,9 @@ public class CBMWSimulation {
         engine.submitVmList(broker.getVmPool().getReservedVms(), 0);
         engine.bindSchedulerDatacenter(datacenter.getId(), 0);
 
-        // ---- Schedule Poisson workflow arrivals ----
+        // ---- Register Poisson workflow arrivals (fired inside startEntity) ----
         scheduleArrivals(broker, lambda, simDuration, seed);
-
-        // Schedule simulation end signal
-        broker.schedule(broker.getId(), simDuration, WorkflowSimTags.SIM_END, null);
+        broker.setSimEndTime(simDuration);
 
         // ---- Run ----
         CloudSim.startSimulation();
@@ -133,19 +126,48 @@ public class CBMWSimulation {
     }
 
     private static void scheduleArrivals(CBMWBroker broker, double lambda,
-                                          double simDuration, int seed) {
+                                          double simDuration, int seed) throws Exception {
+        List<String[]> specs = loadManifest();
+        if (specs.isEmpty()) {
+            throw new RuntimeException("manifest.csv is empty or missing. "
+                    + "Run CreateTestDaxModule first.");
+        }
+
         Random rng = new Random(seed);
-        double meanInterArrival = 60.0 / lambda; // seconds between arrivals
+        double meanInterArrival = 60.0 / lambda;
         double t = 0.0;
         int index = 0;
 
         while (true) {
             t += -meanInterArrival * Math.log(1.0 - rng.nextDouble());
             if (t >= simDuration) break;
-            String dax = WORKFLOW_TYPES[index++ % WORKFLOW_TYPES.length];
-            broker.schedule(broker.getId(), t, WorkflowSimTags.WORKFLOW_ARRIVE,
-                    new WorkflowArrivalData(dax, t));
+
+            String[] spec     = specs.get(index++ % specs.size());
+            String daxPath    = TEST_WORKFLOWS_DIR + File.separator + spec[0]; // filename col
+            double cpInFile   = Double.parseDouble(spec[3]);                   // criticalPath col
+            double factor     = Double.parseDouble(spec[4]);                   // deadlineFactor col
+            double userDeadline = t + cpInFile * factor;                       // absolute deadline
+
+            broker.addArrival(t, daxPath, userDeadline);
         }
+    }
+
+    /**
+     * Reads manifest.csv and returns all data rows (skips the header).
+     * Each element is the array of comma-split columns for one workflow.
+     */
+    private static List<String[]> loadManifest() throws Exception {
+        List<String[]> rows = new ArrayList<>();
+        File f = new File(MANIFEST_PATH);
+        if (!f.exists()) return rows;
+        try (BufferedReader br = new BufferedReader(new FileReader(f))) {
+            String line = br.readLine(); // skip header
+            while ((line = br.readLine()) != null) {
+                line = line.trim();
+                if (!line.isEmpty()) rows.add(line.split(","));
+            }
+        }
+        return rows;
     }
 
     private static WorkflowDatacenter createDatacenter(String name) throws Exception {

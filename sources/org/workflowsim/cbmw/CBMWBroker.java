@@ -43,8 +43,10 @@ public class CBMWBroker extends WorkflowScheduler {
     private int nextWorkflowId = 0;
     private int workflowEngineId = -1;
 
-    // DAX parser is reused across arrivals
-    private WorkflowParser parser;
+    // Arrival schedule — populated before startSimulation(), fired in startEntity()
+    private final List<WorkflowArrivalData> pendingArrivals    = new ArrayList<>();
+    private final List<Double>              pendingArrivalTimes = new ArrayList<>();
+    private double simEndTime = -1;
 
     public CBMWBroker(String name, double tightness) throws Exception {
         super(name);
@@ -53,6 +55,29 @@ public class CBMWBroker extends WorkflowScheduler {
         this.provisioner = new ProvisioningModule(vmPool, getId());
         this.dynamicScheduler = new CBMWDynamicSchedulingAlgorithm(
                 vmPool, activeWorkflows, provisioner);
+    }
+
+    /** Called before startSimulation() to register a workflow arrival. */
+    public void addArrival(double time, String daxPath, double userDeadline) {
+        pendingArrivalTimes.add(time);
+        pendingArrivals.add(new WorkflowArrivalData(daxPath, time, userDeadline));
+    }
+
+    /** Called before startSimulation() to set when the simulation should end. */
+    public void setSimEndTime(double time) {
+        this.simEndTime = time;
+    }
+
+    @Override
+    public void startEntity() {
+        super.startEntity();
+        for (int i = 0; i < pendingArrivals.size(); i++) {
+            schedule(getId(), pendingArrivalTimes.get(i),
+                    WorkflowSimTags.WORKFLOW_ARRIVE, pendingArrivals.get(i));
+        }
+        if (simEndTime > 0) {
+            schedule(getId(), simEndTime, WorkflowSimTags.SIM_END, null);
+        }
     }
 
     @Override
@@ -100,9 +125,10 @@ public class CBMWBroker extends WorkflowScheduler {
 
         WorkflowRecord wfr = new WorkflowRecord(wfId, data.getDaxPath(), data.getArrivalTime());
         wfr.setTaskList(tasks);
+        wfr.setDeadline(data.getUserDeadline());   // deadline comes from the submitter
         allWorkflows.add(wfr);
 
-        // Module 1: negotiate
+        // Module 1: negotiate — checks cp * BETA <= (deadline - arrivalTime)
         if (!negotiation.negotiate(wfr)) {
             Log.printLine(CloudSim.clock() + ": CBMW: workflow " + wfId + " rejected");
             return;

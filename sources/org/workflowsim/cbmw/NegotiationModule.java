@@ -12,7 +12,7 @@ import org.workflowsim.Task;
  */
 public class NegotiationModule {
 
-    private static final double BETA = 1.0; // safety factor (CP * beta <= relative_deadline)
+    private static final double BETA = 1.1; // safety factor — workflow needs at least CP*BETA seconds of slack
     private final double tightness;         // 1.2 tight, 3.0 loose
 
     public NegotiationModule(double tightness) {
@@ -20,15 +20,16 @@ public class NegotiationModule {
     }
 
     /**
-     * Evaluates the workflow, sets deadline in the record, returns true if accepted.
+     * Checks whether the workflow can feasibly meet its user-given deadline.
+     * Deadline must already be set on wfr before calling this.
+     * Returns true if accepted.
      */
     public boolean negotiate(WorkflowRecord wfr) {
-        double cp = computeCriticalPath(wfr.getTaskList());
+        double cp   = computeCriticalPath(wfr.getTaskList());
         wfr.setCriticalPathLength(cp);
-        double deadline = wfr.getArrivalTime() + cp * tightness;
-        wfr.setDeadline(deadline);
-        // Accept when the deadline slack satisfies the safety factor
-        boolean feasible = (cp * BETA <= cp * tightness);
+
+        double slack = wfr.getDeadline() - wfr.getArrivalTime();
+        boolean feasible = (cp * BETA <= slack);
         wfr.setAccepted(feasible);
         return feasible;
     }

@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<adag xmlns="http://pegasus.isi.edu/schema/DAX"
+      xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+      xsi:schemaLocation="http://pegasus.isi.edu/schema/DAX http://pegasus.isi.edu/schema/dax-2.1.xsd"
+      version="2.1" count="1" index="0" name="synthetic_CHAIN">
+
+  <job id="ID0000001" name="task" runtime="73.5003">
+    <uses name="f_0000001_in"  link="input"  size="1024" type="data"/>
+    <uses name="f_0000001_out" link="output" size="1024" type="data"/>
+  </job>
+  <job id="ID0000002" name="task" runtime="253.1159">
+    <uses name="f_0000002_in"  link="input"  size="1024" type="data"/>
+    <uses name="f_0000002_out" link="output" size="1024" type="data"/>
+  </job>
+  <job id="ID0000003" name="task" runtime="51.0394">
+    <uses name="f_0000003_in"  link="input"  size="1024" type="data"/>
+    <uses name="f_0000003_out" link="output" size="1024" type="data"/>
+  </job>
+  <job id="ID0000004" name="task" runtime="134.1746">
+    <uses name="f_0000004_in"  link="input"  size="1024" type="data"/>
+    <uses name="f_0000004_out" link="output" size="1024" type="data"/>
+  </job>
+  <job id="ID0000005" name="task" runtime="47.0963">
+    <uses name="f_0000005_in"  link="input"  size="1024" type="data"/>
+    <uses name="f_0000005_out" link="output" size="1024" type="data"/>
+  </job>
+  <job id="ID0000006" name="task" runtime="165.2514">
+    <uses name="f_0000006_in"  link="input"  size="1024" type="data"/>
+    <uses name="f_0000006_out" link="output" size="1024" type="data"/>
+  </job>
+  <job id="ID0000007" name="task" runtime="86.6766">
+    <uses name="f_0000007_in"  link="input"  size="1024" type="data"/>
+    <uses name="f_0000007_out" link="output" size="1024" type="data"/>
+  </job>
+  <job id="ID0000008" name="task" runtime="91.2433">
+    <uses name="f_0000008_in"  link="input"  size="1024" type="data"/>
+    <uses name="f_0000008_out" link="output" size="1024" type="data"/>
+  </job>
+  <job id="ID0000009" name="task" runtime="217.6288">
+    <uses name="f_0000009_in"  link="input"  size="1024" type="data"/>
+    <uses name="f_0000009_out" link="output" size="1024" type="data"/>
+  </job>
+  <job id="ID0000010" name="task" runtime="143.4210">
+    <uses name="f_0000010_in"  link="input"  size="1024" type="data"/>
+    <uses name="f_0000010_out" link="output" size="1024" type="data"/>
+  </job>
+
+  <child ref="ID0000002">
+    <parent ref="ID0000001"/>
+  </child>
+  <child ref="ID0000003">
+    <parent ref="ID0000002"/>
+  </child>
+  <child ref="ID0000004">
+    <parent ref="ID0000003"/>
+  </child>
+  <child ref="ID0000005">
+    <parent ref="ID0000004"/>
+  </child>
+  <child ref="ID0000006">
+    <parent ref="ID0000005"/>
+  </child>
+  <child ref="ID0000007">
+    <parent ref="ID0000006"/>
+  </child>
+  <child ref="ID0000008">
+    <parent ref="ID0000007"/>
+  </child>
+  <child ref="ID0000009">
+    <parent ref="ID0000008"/>
+  </child>
+  <child ref="ID0000010">
+    <parent ref="ID0000009"/>
+  </child>
+
+</adag>
