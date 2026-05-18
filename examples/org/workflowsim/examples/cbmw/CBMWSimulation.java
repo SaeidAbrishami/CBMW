@@ -55,18 +55,23 @@ public class CBMWSimulation {
     public static void main(String[] args) throws Exception {
         StringBuilder csv = new StringBuilder(CBMWResultCollector.csvHeader()).append("\n");
 
-        for (double lambda : LAMBDAS) {
-            for (double tightness : TIGHTNESSES) {
-                for (int seed = 0; seed < NUM_SEEDS; seed++) {
-                    String row = runScenario("CBMW", lambda, tightness, seed, csv);
-                    System.out.println("Completed: CBMW lambda=" + lambda
-                            + " tightness=" + tightness + " seed=" + seed);
-                }
-            }
-        }
-
+        // --- Single scenario for testing ---
+        runScenario("CBMW", 2.0, 1.2, 0, csv);
         System.out.println("\n===== CSV OUTPUT =====");
         System.out.println(csv.toString());
+
+        // --- Full 180-scenario experiment (uncomment when ready) ---
+//        for (double lambda : LAMBDAS) {
+//            for (double tightness : TIGHTNESSES) {
+//                for (int seed = 0; seed < NUM_SEEDS; seed++) {
+//                    String row = runScenario("CBMW", lambda, tightness, seed, csv);
+//                    System.out.println("Completed: CBMW lambda=" + lambda
+//                            + " tightness=" + tightness + " seed=" + seed);
+//                }
+//            }
+//        }
+//        System.out.println("\n===== CSV OUTPUT =====");
+//        System.out.println(csv.toString());
     }
 
     private static String runScenario(String algorithm, double lambda,
@@ -100,12 +105,10 @@ public class CBMWSimulation {
         WorkflowPlanner planner = new WorkflowPlanner("planner_0", 1);
         WorkflowEngine engine = planner.getWorkflowEngine();
 
-        // ---- CBMW Broker ----
+        // ---- CBMW Broker — replaces the engine's auto-created internal scheduler ----
         CBMWBroker broker = new CBMWBroker("CBMWBroker_0", tightness);
-        broker.setWorkflowEngineId(engine.getId());
-
-        // Submit reserved VMs
-        engine.submitVmList(broker.getVmPool().getReservedVms(), 0);
+        engine.replaceScheduler(broker);          // broker IS now the engine's scheduler
+        broker.submitVmList(broker.getVmPool().getReservedVms());
         engine.bindSchedulerDatacenter(datacenter.getId(), 0);
 
         // ---- Register Poisson workflow arrivals (fired inside startEntity) ----
@@ -182,8 +185,8 @@ public class CBMWSimulation {
         }
         Host host = new Host(0,
                 new RamProvisionerSimple(1024 * 1024),   // 1 TiB
-                new BwProvisionerSimple(100_000),
-                1_000_000,
+                new BwProvisionerSimple(1_000_000),  // 1 Tbps — enough for 50+ VMs at 10 Gbps each
+                10_000_000,   // 10 TB — enough for 50+ VMs at 100 GB each
                 peList,
                 new VmSchedulerSpaceShared(peList));
         hostList.add(host);

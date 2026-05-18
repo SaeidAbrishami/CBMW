@@ -187,6 +187,10 @@ public final class ClusteringEngine extends SimEntity {
      */
     protected void processDatastaging() {
 
+        if (getJobList().isEmpty()) {
+            return;
+        }
+
         /**
          * All the files of this workflow, it is saved in the workflow engine
          */

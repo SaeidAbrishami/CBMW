@@ -99,6 +99,18 @@ public final class WorkflowEngine extends SimEntity {
     }
 
     /**
+     * Replaces the auto-created internal scheduler with an external one (e.g. CBMWBroker).
+     * Must be called before startSimulation().
+     */
+    public void replaceScheduler(WorkflowScheduler externalScheduler) {
+        getSchedulers().clear();
+        getSchedulerIds().clear();
+        getSchedulers().add(externalScheduler);
+        getSchedulerIds().add(externalScheduler.getId());
+        externalScheduler.setWorkflowEngineId(getId());
+    }
+
+    /**
      * This method is used to send to the broker the list with virtual machines
      * that must be created.
      *
@@ -205,7 +217,8 @@ public final class WorkflowEngine extends SimEntity {
      */
     protected void processJobSubmit(SimEvent ev) {
         List<? extends Cloudlet> list = (List) ev.getData();
-        setJobsList(list);
+        getJobsList().addAll(list);
+        sendNow(getId(), CloudSimTags.CLOUDLET_SUBMIT, null);
     }
 
     /**
