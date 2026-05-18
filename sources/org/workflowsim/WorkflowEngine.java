@@ -57,8 +57,9 @@ public final class WorkflowEngine extends SimEntity {
      */
     protected int jobsSubmitted;
     protected List<? extends Vm> vmList;
-    /** When true, the engine will terminate even if more workflows may arrive. */
     protected boolean simulationComplete = false;
+    /** Counts workflows that have arrived but not yet fully disposed (rejected or all jobs returned). */
+    private int pendingWorkflowCount = 0;
     /**
      * The associated scheduler id*
      */
@@ -240,18 +241,31 @@ public final class WorkflowEngine extends SimEntity {
         getJobsReceivedList().add(job);
         jobsSubmitted--;
         if (getJobsList().isEmpty() && jobsSubmitted == 0 && simulationComplete) {
-            //send msg to all the schedulers
-            for (int i = 0; i < getSchedulerIds().size(); i++) {
-                sendNow(getSchedulerId(i), CloudSimTags.END_OF_SIMULATION, null);
-            }
+            tryTerminate();
         } else if (!getJobsList().isEmpty() || jobsSubmitted > 0) {
             sendNow(this.getId(), CloudSimTags.CLOUDLET_SUBMIT, null);
         }
     }
 
+    /** Called by the broker when a workflow arrives (accepted or rejected). */
+    public void notifyWorkflowArriving() {
+        pendingWorkflowCount++;
+    }
+
+    /** Called by the broker when a workflow is fully disposed (rejected or all jobs returned). */
+    public void notifyWorkflowDisposed() {
+        pendingWorkflowCount--;
+        tryTerminate();
+    }
+
     public void setSimulationComplete(boolean complete) {
         this.simulationComplete = complete;
-        if (complete && getJobsList().isEmpty() && jobsSubmitted == 0) {
+        tryTerminate();
+    }
+
+    private void tryTerminate() {
+        if (simulationComplete && getJobsList().isEmpty()
+                && jobsSubmitted == 0 && pendingWorkflowCount == 0) {
             for (int i = 0; i < getSchedulerIds().size(); i++) {
                 sendNow(getSchedulerId(i), CloudSimTags.END_OF_SIMULATION, null);
             }

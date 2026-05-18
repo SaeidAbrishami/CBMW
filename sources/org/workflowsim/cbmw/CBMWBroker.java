@@ -116,10 +116,14 @@ public class CBMWBroker extends WorkflowScheduler {
         WorkflowArrivalData data = (WorkflowArrivalData) ev.getData();
         int wfId = nextWorkflowId++;
 
+        WorkflowEngine engine = getWorkflowEngineRef();
+        if (engine != null) engine.notifyWorkflowArriving();
+
         // Parse the DAX file into tasks
         List<Task> tasks = parseDax(data.getDaxPath(), wfId);
         if (tasks == null || tasks.isEmpty()) {
             Log.printLine("CBMW: failed to parse " + data.getDaxPath());
+            if (engine != null) engine.notifyWorkflowDisposed();
             return;
         }
 
@@ -131,6 +135,7 @@ public class CBMWBroker extends WorkflowScheduler {
         // Module 1: negotiate — checks cp * BETA <= (deadline - arrivalTime)
         if (!negotiation.negotiate(wfr)) {
             Log.printLine(CloudSim.clock() + ": CBMW: workflow " + wfId + " rejected");
+            if (engine != null) engine.notifyWorkflowDisposed();
             return;
         }
 
@@ -144,6 +149,7 @@ public class CBMWBroker extends WorkflowScheduler {
         } catch (Exception e) {
             Log.printLine("CBMW: static planner error for workflow " + wfId);
             e.printStackTrace();
+            if (engine != null) engine.notifyWorkflowDisposed();
             return;
         }
 
@@ -336,6 +342,8 @@ public class CBMWBroker extends WorkflowScheduler {
             Log.printLine(CloudSim.clock() + ": CBMW: workflow " + wfId
                     + (wfr.isDeadlineMet() ? " MET" : " MISSED") + " deadline "
                     + String.format("%.1f", wfr.getDeadline()));
+            WorkflowEngine eng = getWorkflowEngineRef();
+            if (eng != null) eng.notifyWorkflowDisposed();
         }
     }
 }

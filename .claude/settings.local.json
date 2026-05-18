@@ -21,7 +21,13 @@
       "Bash(taskkill -F -IM java.exe)",
       "Bash(tasklist)",
       "Bash(findstr java *)",
-      "Bash(tasklist /FI \"IMAGENAME eq java.exe\" /FO CSV)"
+      "Bash(tasklist /FI \"IMAGENAME eq java.exe\" /FO CSV)",
+      "Bash(dir P:\\\\University\\\\CBMW_Workflow_Simulation\\\\sources\\\\org\\\\workflowsim\\\\cbmw *)",
+      "Bash(javac -cp \"lib/*;bin\" -d bin sources/org/workflowsim/WorkflowEngine.java sources/org/workflowsim/examples/cbmw/CBMWSimulation.java)",
+      "Bash(javac -cp \"lib/*;bin\" -d bin sources/org/workflowsim/WorkflowEngine.java examples/org/workflowsim/examples/cbmw/CBMWSimulation.java)",
+      "Bash(echo \"EXIT:$?\")",
+      "Bash(Get-ChildItem -Path \"P:\\\\University\\\\CBMW_Workflow_Simulation\" -Force)",
+      "Bash(Select-Object Name, FullName)"
     ]
   }
 }
