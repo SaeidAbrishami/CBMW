@@ -183,28 +183,39 @@ public class CBMWBroker extends WorkflowScheduler {
         }
 
         List<Cloudlet> scheduled = dynamicScheduler.getScheduledList();
+        List<CondorVM> newVms = new ArrayList<>();
+        List<Cloudlet> actuallySubmitted = new ArrayList<>();
+
         for (Cloudlet cl : scheduled) {
             int vmId = cl.getVmId();
             Integer dcId = getVmsToDatacentersMap().get(vmId);
             if (dcId == null) {
-                // on-demand VM not yet registered — register it now
+                // on-demand VM not yet in datacenter — reset state so scheduler
+                // can re-assign next tick, and batch-register if truly new
                 CondorVM vm = vmPool.getVmById(vmId);
                 if (vm != null) {
-                    List<CondorVM> tmp = new ArrayList<>();
-                    tmp.add(vm);
-                    submitVmList(tmp);
-                    createVmsInDatacenter(getDatacenterIdsList().get(0));
+                    vm.setState(WorkflowSimTags.VM_STATUS_IDLE);
+                    if (!getVmList().contains(vm)) {
+                        newVms.add(vm);
+                    }
                 }
-                // Re-queue the cloudlet for next tick
                 continue;
             }
             double delay = Parameters.getOverheadParams().getQueueDelay() != null
                     ? Parameters.getOverheadParams().getQueueDelay(cl) : 0.0;
             schedule(dcId, delay, CloudSimTags.CLOUDLET_SUBMIT, cl);
+            actuallySubmitted.add(cl);
         }
-        getCloudletList().removeAll(scheduled);
-        getCloudletSubmittedList().addAll(scheduled);
-        cloudletsSubmitted += scheduled.size();
+
+        // Single batch registration — prevents N² CREATE requests
+        if (!newVms.isEmpty()) {
+            submitVmList(newVms);
+            createVmsInDatacenter(getDatacenterIdsList().get(0));
+        }
+
+        getCloudletList().removeAll(actuallySubmitted);
+        getCloudletSubmittedList().addAll(actuallySubmitted);
+        cloudletsSubmitted += actuallySubmitted.size();
     }
 
     // -----------------------------------------------------------------------

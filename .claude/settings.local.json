@@ -27,7 +27,11 @@
       "Bash(javac -cp \"lib/*;bin\" -d bin sources/org/workflowsim/WorkflowEngine.java examples/org/workflowsim/examples/cbmw/CBMWSimulation.java)",
       "Bash(echo \"EXIT:$?\")",
       "Bash(Get-ChildItem -Path \"P:\\\\University\\\\CBMW_Workflow_Simulation\" -Force)",
-      "Bash(Select-Object Name, FullName)"
+      "Bash(Select-Object Name, FullName)",
+      "Bash(Get-Content compile.txt)",
+      "PowerShell(cmd /c \"dir /a P:\\\\University\\\\CBMW_Workflow_Simulation\")",
+      "PowerShell(java *)",
+      "PowerShell(Get-Process *)"
     ]
   }
 }

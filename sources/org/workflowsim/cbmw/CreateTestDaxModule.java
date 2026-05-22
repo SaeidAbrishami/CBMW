@@ -20,7 +20,7 @@ public class CreateTestDaxModule {
     // -----------------------------------------------------------------------
     public static final double DEADLINE_FACTOR  = 1.5;   // deadline = CP * this
     public static final String OUTPUT_DIR       = "test_workflows";
-    public static final int    TOTAL_WORKFLOWS  = 50;
+    public static final int    TOTAL_WORKFLOWS  = 3;
     public static final int    MIN_TASKS        = 10;
     public static final int    MAX_TASKS        = 50;
     public static final double MIN_RUNTIME_SEC  = 10.0;
