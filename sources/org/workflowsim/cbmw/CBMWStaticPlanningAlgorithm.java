@@ -3,13 +3,11 @@ package org.workflowsim.cbmw;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.cloudbus.cloudsim.Log;
+import org.cloudbus.cloudsim.core.CloudSim;
 import org.workflowsim.CondorVM;
 import org.workflowsim.Task;
-import org.workflowsim.WorkflowSimTags;
 import org.workflowsim.planning.BasePlanningAlgorithm;
 
 /**
@@ -28,8 +26,6 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
     private HybridVmPool pool;
     private NegotiationModule negotiation;
 
-    // Per-VM list of already-occupied time intervals [start, end]
-    private final Map<Integer, List<double[]>> occupiedSlots = new HashMap<>();
 
     public CBMWStaticPlanningAlgorithm(WorkflowRecord wfr, HybridVmPool pool,
                                         NegotiationModule negotiation) {
@@ -54,17 +50,17 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
             t.setWorkflowId(wfr.getWorkflowId());
         }
 
-        // Initialise occupied-slot lists for reserved VMs
-        for (CondorVM vm : pool.getReservedVms()) {
-            occupiedSlots.put(vm.getId(), new ArrayList<>());
-        }
-
         // Step 3: sort by LST descending (latest-deadline tasks assigned first)
         List<Task> sorted = new ArrayList<>(tasks);
         sorted.sort(Comparator.comparingDouble(
                 (Task t) -> wfr.getLST(t.getCloudletId())).reversed());
 
-        // Step 4: backward sweep assignment
+        CBMWLogger.log("PLAN-START",
+                String.format("wf=%d tasks=%d deadline=%.4f",
+                        wfr.getWorkflowId(), tasks.size(), deadline));
+
+        // Step 4: backward sweep assignment — bookings are read/written to the
+        // shared pool registry so cross-workflow conflicts are visible.
         for (Task task : sorted) {
             double lst     = wfr.getLST(task.getCloudletId());
             double dur     = task.getCloudletLength() / HybridVmPool.RESERVED_MIPS;
@@ -72,7 +68,7 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
             double bestSlot = -1.0;
 
             for (CondorVM vm : pool.getReservedVms()) {
-                double slot = findLatestFeasibleSlot(vm.getId(), lst, dur);
+                double slot = findLatestFeasibleSlot(vm.getId(), lst, dur, deadline);
                 if (slot >= 0 && slot > bestSlot) {
                     bestSlot = slot;
                     bestVm   = vm.getId();
@@ -82,37 +78,54 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
             if (bestVm != ON_DEMAND_SENTINEL) {
                 task.setVmId(bestVm);
                 wfr.setAssignedVm(task.getCloudletId(), bestVm);
-                occupiedSlots.get(bestVm).add(new double[]{bestSlot, bestSlot + dur});
+                pool.bookSlot(bestVm, task.getCloudletId(), bestSlot, bestSlot + dur);
+                CBMWLogger.log("PLAN-ASSIGN-RESERVED",
+                        String.format("wf=%d task=%d -> vm=%d slot=[%.4f, %.4f]",
+                                wfr.getWorkflowId(), task.getCloudletId(),
+                                bestVm, bestSlot, bestSlot + dur));
             } else {
                 task.setVmId(ON_DEMAND_SENTINEL);
                 wfr.setAssignedVm(task.getCloudletId(), ON_DEMAND_SENTINEL);
-                Log.printLine("CBMW planner: task " + task.getCloudletId()
-                        + " assigned to on-demand (no reserved slot available)");
+                CBMWLogger.log("PLAN-ASSIGN-ONDEMAND",
+                        String.format("wf=%d task=%d lst=%.4f dur=%.4f"
+                                + " (no reserved slot fits before deadline=%.4f)",
+                                wfr.getWorkflowId(), task.getCloudletId(),
+                                lst, dur, deadline));
             }
         }
+
+        CBMWLogger.log("PLAN-DONE",
+                String.format("wf=%d tasks=%d deadline=%.4f",
+                        wfr.getWorkflowId(), tasks.size(), wfr.getDeadline()));
     }
 
     /**
-     * Finds the latest start time <= (lst - dur) on the given VM that does not
-     * overlap any already-occupied interval.  Returns -1 if no slot exists.
+     * Finds the latest start time on vmId such that:
+     *   - start + dur <= deadline  (task finishes before its workflow deadline)
+     *   - start <= lst - dur       (respects latest-start-time constraint)
+     *   - [start, start+dur] does not overlap any booking in the pool
+     * Returns -1 if no such slot exists.
      */
-    private double findLatestFeasibleSlot(int vmId, double lst, double dur) {
-        double candidate = lst - dur;
+    private double findLatestFeasibleSlot(int vmId, double lst, double dur, double deadline) {
+        // Cap planning horizon to arrival + 1.5×CP so loose-deadline workflows don't
+        // block reserved capacity far into the future.
+        double horizon = wfr.getArrivalTime() + wfr.getCriticalPathLength() * 1.5;
+        double candidate = Math.min(lst - dur, Math.min(deadline - dur, horizon - dur));
         if (candidate < 0) return -1.0;
 
-        List<double[]> slots = occupiedSlots.get(vmId);
-        // Sort by start ascending so we can find gaps easily
-        List<double[]> sorted = new ArrayList<>(slots);
+        List<double[]> booked = pool.getBookings(vmId);
+        List<double[]> sorted = new ArrayList<>(booked);
         Collections.sort(sorted, Comparator.comparingDouble(s -> s[0]));
 
+        double now = CloudSim.clock();
         while (candidate >= 0) {
             boolean conflict = false;
             for (double[] interval : sorted) {
-                // overlaps if candidate < interval_end AND candidate+dur > interval_start
+                // Skip bookings that are already past — task already ran and released its slot
+                if (interval[1] <= now) continue;
                 if (candidate < interval[1] && candidate + dur > interval[0]) {
                     conflict = true;
-                    // Move candidate to just before this interval
-                    candidate = interval[0] - dur;
+                    candidate = interval[0] - dur - 1e-9;
                     break;
                 }
             }

@@ -28,9 +28,18 @@ public class NegotiationModule {
         double cp   = computeCriticalPath(wfr.getTaskList());
         wfr.setCriticalPathLength(cp);
 
-        double slack = wfr.getDeadline() - wfr.getArrivalTime();
-        boolean feasible = (cp * BETA <= slack);
+        double slack    = wfr.getDeadline() - wfr.getArrivalTime();
+        double required = cp * BETA;
+        boolean feasible = (required <= slack);
         wfr.setAccepted(feasible);
+
+        CBMWLogger.log("NEGOTIATE",
+                String.format("wf=%d tasks=%d arrivalTime=%.4f deadline=%.4f"
+                        + " cp=%.4f BETA*cp=%.4f slack=%.4f -> %s",
+                        wfr.getWorkflowId(), wfr.getTaskList().size(),
+                        wfr.getArrivalTime(), wfr.getDeadline(),
+                        cp, required, slack,
+                        feasible ? "ACCEPTED" : "REJECTED (slack < BETA*cp)"));
         return feasible;
     }
 

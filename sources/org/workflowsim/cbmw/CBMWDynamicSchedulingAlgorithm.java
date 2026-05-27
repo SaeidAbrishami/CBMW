@@ -53,18 +53,28 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
 
         List<Cloudlet> toSchedule = new ArrayList<>();
 
+        if (!readyJobs.isEmpty()) {
+            CBMWLogger.log("SCHED-TICK",
+                    String.format("readyJobs=%d", readyJobs.size()));
+        }
+
         for (Cloudlet cl : readyJobs) {
             Job job = (Job) cl;
-            int wfId = getWorkflowId(job);
+            int wfId   = getWorkflowId(job);
+            int taskId = getPrimaryTaskId(job);
             WorkflowRecord wfr = (activeWorkflows != null) ? activeWorkflows.get(wfId) : null;
 
             if (wfr == null) {
                 CondorVM vm = pool.getAnyIdleReservedVm();
-                if (vm != null) { assign(job, vm); toSchedule.add(job); }
+                if (vm != null) {
+                    assign(job, vm);
+                    toSchedule.add(job);
+                    CBMWLogger.log("DISPATCH",
+                            String.format("wf=? task=%d -> vm=%d (reserved, no wfr)", taskId, vm.getId()));
+                }
                 continue;
             }
 
-            int taskId    = getPrimaryTaskId(job);
             int plannedVm = wfr.getAssignedVm(taskId);
 
             if (plannedVm == CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL) {
@@ -72,17 +82,50 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                 if (vm.getState() == WorkflowSimTags.VM_STATUS_IDLE) {
                     assign(job, vm);
                     toSchedule.add(job);
+                    CBMWLogger.log("DISPATCH",
+                            String.format("wf=%d task=%d planned=ON-DEMAND -> vm=%d (on-demand)",
+                                    wfId, taskId, vm.getId()));
                 }
+                // else: VM just provisioned but not in datacenter yet — retry next tick
             } else {
                 CondorVM planned = pool.getVmById(plannedVm);
                 if (planned != null && planned.getState() == WorkflowSimTags.VM_STATUS_IDLE) {
                     assign(job, planned);
                     toSchedule.add(job);
+                    CBMWLogger.log("DISPATCH",
+                            String.format("wf=%d task=%d -> vm=%d (planned reserved, was idle)",
+                                    wfId, taskId, plannedVm));
                 } else {
-                    CondorVM earlier = pool.getAnyIdleReservedVm();
+                    double execTime = job.getCloudletLength() / HybridVmPool.RESERVED_MIPS;
+                    CondorVM earlier = pool.getIdleReservedVmForAdvance(now, now + execTime);
                     if (earlier != null && canAdvance(job, wfr, now)) {
                         assign(job, earlier);
                         toSchedule.add(job);
+                        CBMWLogger.log("DISPATCH",
+                                String.format("wf=%d task=%d planned=vm%d BUSY -> advanced to vm=%d",
+                                        wfId, taskId, plannedVm, earlier.getId()));
+                    } else if (earlier == null || now >= wfr.getLST(taskId)) {
+                        // No idle reserved VM available at all, or past LST — fall back to on-demand
+                        // immediately rather than blocking. Prefer reusing an idle on-demand VM.
+                        CondorVM idleOD = pool.getAnyIdleOnDemandVm();
+                        CondorVM vm = (idleOD != null) ? idleOD : provisioner.getOrProvision(job);
+                        if (vm.getState() == WorkflowSimTags.VM_STATUS_IDLE) {
+                            assign(job, vm);
+                            toSchedule.add(job);
+                            CBMWLogger.log("DISPATCH",
+                                    String.format("wf=%d task=%d planned=vm%d %s -> on-demand vm=%d",
+                                            wfId, taskId, plannedVm,
+                                            earlier == null ? "no-idle-reserved" : "past-LST",
+                                            vm.getId()));
+                        }
+                    } else {
+                        // Idle reserved VM exists but advancing would push a child past its LST.
+                        // Wait for the planned VM or until LST is reached.
+                        CBMWLogger.log("DISPATCH-STUCK",
+                                String.format("wf=%d task=%d planned=vm%d BUSY"
+                                        + " canAdvance=false lst=%.1f now=%.1f",
+                                        wfId, taskId, plannedVm,
+                                        wfr.getLST(taskId), now));
                     }
                 }
             }
@@ -99,6 +142,9 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
     private boolean canAdvance(Job job, WorkflowRecord wfr, double now) {
         double execTime = job.getCloudletLength() / HybridVmPool.RESERVED_MIPS;
         double endTime  = now + execTime;
+        if (endTime > wfr.getDeadline()) return false;
+        // remainingCP[child] = deadline - LST[child]; advancing is safe if
+        // endTime + remainingCP[child] <= deadline, i.e. endTime <= LST[child].
         for (Task child : getChildTasks(job)) {
             if (endTime > wfr.getLST(child.getCloudletId())) return false;
         }

@@ -26,6 +26,7 @@ import org.workflowsim.WorkflowEngine;
 import org.workflowsim.WorkflowPlanner;
 import org.workflowsim.WorkflowSimTags;
 import org.workflowsim.cbmw.CBMWBroker;
+import org.workflowsim.cbmw.CBMWLogger;
 import org.workflowsim.cbmw.CBMWResultCollector;
 import org.workflowsim.cbmw.HybridVmPool;
 import org.workflowsim.cbmw.WorkflowArrivalData;
@@ -112,12 +113,14 @@ public class CBMWSimulation {
         engine.bindSchedulerDatacenter(datacenter.getId(), 0);
 
         // ---- Register Poisson workflow arrivals (fired inside startEntity) ----
-        scheduleArrivals(broker, lambda, simDuration, seed);
+        scheduleArrivals(broker, lambda, simDuration, seed, tightness);
         broker.setSimEndTime(simDuration);
 
         // ---- Run ----
+        CBMWLogger.init();
         CloudSim.startSimulation();
         CloudSim.stopSimulation();
+        CBMWLogger.close();
 
         // ---- Collect results ----
         CBMWResultCollector collector = new CBMWResultCollector(broker.getAllWorkflows());
@@ -129,7 +132,8 @@ public class CBMWSimulation {
     }
 
     private static void scheduleArrivals(CBMWBroker broker, double lambda,
-                                          double simDuration, int seed) throws Exception {
+                                          double simDuration, int seed,
+                                          double tightness) throws Exception {
         List<String[]> specs = loadManifest();
         if (specs.isEmpty()) {
             throw new RuntimeException("manifest.csv is empty or missing. "
@@ -148,8 +152,7 @@ public class CBMWSimulation {
             String[] spec     = specs.get(index++ % specs.size());
             String daxPath    = TEST_WORKFLOWS_DIR + File.separator + spec[0]; // filename col
             double cpInFile   = Double.parseDouble(spec[3]);                   // criticalPath col
-            double factor     = Double.parseDouble(spec[4]);                   // deadlineFactor col
-            double userDeadline = t + cpInFile * factor;                       // absolute deadline
+            double userDeadline = t + cpInFile * tightness;                    // absolute deadline
 
             broker.addArrival(t, daxPath, userDeadline);
         }
@@ -176,17 +179,18 @@ public class CBMWSimulation {
     private static WorkflowDatacenter createDatacenter(String name) throws Exception {
         List<Host> hostList = new ArrayList<>();
 
-        // One large host that accommodates all reserved + a generous on-demand buffer
-        int numPes  = 2000;
+        // One large host that accommodates all reserved + on-demand VMs at peak
+        int numPes  = 10000;
+        // RAM: 50 reserved × 4096 MB + generous on-demand headroom
         long mips   = (long) HybridVmPool.RESERVED_MIPS;
         List<Pe> peList = new ArrayList<>();
         for (int i = 0; i < numPes; i++) {
             peList.add(new Pe(i, new PeProvisionerSimple(mips)));
         }
         Host host = new Host(0,
-                new RamProvisionerSimple(1024 * 1024),   // 1 TiB
-                new BwProvisionerSimple(1_000_000),  // 1 Tbps — enough for 50+ VMs at 10 Gbps each
-                10_000_000,   // 10 TB — enough for 50+ VMs at 100 GB each
+                new RamProvisionerSimple(Integer.MAX_VALUE),
+                new BwProvisionerSimple(Long.MAX_VALUE / 2),
+                Long.MAX_VALUE / 2,
                 peList,
                 new VmSchedulerSpaceShared(peList));
         hostList.add(host);

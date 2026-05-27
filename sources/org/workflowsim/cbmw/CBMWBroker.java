@@ -41,6 +41,7 @@ public class CBMWBroker extends WorkflowScheduler {
     private final List<WorkflowRecord> allWorkflows = new ArrayList<>();
 
     private int nextWorkflowId = 0;
+    private int nextTaskId     = 1;   // global unique task ID counter across all workflows
     private int workflowEngineId = -1;
 
     // Arrival schedule — populated before startSimulation(), fired in startEntity()
@@ -163,6 +164,31 @@ public class CBMWBroker extends WorkflowScheduler {
         Log.printLine(CloudSim.clock() + ": CBMW: workflow " + wfId
                 + " accepted, deadline=" + String.format("%.1f", wfr.getDeadline())
                 + ", tasks=" + tasks.size());
+        CBMWLogger.log("WF-ACCEPTED",
+                String.format("wf=%d dax=%s arrival=%.4f deadline=%.4f cp=%.4f jobs=%d",
+                        wfId, data.getDaxPath(), wfr.getArrivalTime(),
+                        wfr.getDeadline(), wfr.getCriticalPathLength(), jobs.size()));
+    }
+
+    // -----------------------------------------------------------------------
+    // VM creation ack — trigger scheduling pass for newly-ready on-demand VMs
+    // -----------------------------------------------------------------------
+
+    @Override
+    protected void processVmCreate(SimEvent ev) {
+        super.processVmCreate(ev);
+        sendNow(getId(), WorkflowSimTags.CLOUDLET_UPDATE);
+    }
+
+    /**
+     * CBMW drives job dispatch via CLOUDLET_UPDATE, not via the engine roundtrip.
+     * The base class calls this on every VM creation ack (because we add VMs
+     * one-at-a-time, the count always matches), which causes an O(n³)
+     * submitJobs() cascade over the full job list. Override to no-op.
+     */
+    @Override
+    protected void submitCloudlets() {
+        // intentional no-op: job dispatch is handled by processCloudletUpdate
     }
 
     // -----------------------------------------------------------------------
@@ -235,15 +261,27 @@ public class CBMWBroker extends WorkflowScheduler {
         CondorVM vm = (CondorVM) VmList.getById(getVmsCreatedList(), cl.getVmId());
         if (vm != null) vm.setState(WorkflowSimTags.VM_STATUS_IDLE);
 
-        // Module 4: terminate on-demand VM if no more work
+        // Module 4: release reserved slot or terminate on-demand VM
         if (provisioner.isOnDemandVm(cl.getVmId())) {
             provisioner.jobCompleted(cl.getCloudletId());
-            // Record on-demand cost for this job
             int wfId = getWorkflowIdForJob(job);
             WorkflowRecord wfr = activeWorkflows.get(wfId);
+            double cost = cl.getActualCPUTime() * HybridVmPool.ON_DEMAND_PER_SEC;
             if (wfr != null) {
-                wfr.addOnDemandCost(cl.getActualCPUTime() * HybridVmPool.ON_DEMAND_PER_SEC);
+                wfr.addOnDemandCost(cost);
             }
+            CBMWLogger.log("TASK-COMPLETE",
+                    String.format("task=%d wf=%d vm=%d(on-demand) actualCPU=%.4fs cost=$%.6f",
+                            cl.getCloudletId(), wfId, cl.getVmId(),
+                            cl.getActualCPUTime(), cost));
+        } else {
+            int wfId = getWorkflowIdForJob(job);
+            CBMWLogger.log("TASK-COMPLETE",
+                    String.format("task=%d wf=%d vm=%d(reserved) actualCPU=%.4fs",
+                            cl.getCloudletId(), wfId, cl.getVmId(),
+                            cl.getActualCPUTime()));
+            // Free the reserved slot so future workflow planners can reuse it
+            vmPool.releaseSlot(cl.getCloudletId());
         }
 
         // Track workflow completion
@@ -284,8 +322,15 @@ public class CBMWBroker extends WorkflowScheduler {
         try {
             Parameters.setDaxPath(daxPath);
             WorkflowParser p = new WorkflowParser(getId());
+            p.setJobIdStartsFrom(nextTaskId);   // globally unique IDs across all workflows
             p.parse();
-            return p.getTaskList();
+            List<Task> tasks = p.getTaskList();
+            nextTaskId += tasks.size();
+            CBMWLogger.log("PARSE-DAX",
+                    String.format("wf=%d dax=%s tasks=%d idRange=[%d,%d]",
+                            wfId, daxPath, tasks.size(),
+                            nextTaskId - tasks.size(), nextTaskId - 1));
+            return tasks;
         } catch (Exception e) {
             Log.printLine("CBMW: DAX parse error: " + e.getMessage());
             return null;
@@ -348,11 +393,17 @@ public class CBMWBroker extends WorkflowScheduler {
         }
 
         if (allDone) {
-            wfr.setDeadlineMet(wfr.getCompletionTime() <= wfr.getDeadline());
+            boolean met = wfr.getCompletionTime() <= wfr.getDeadline();
+            wfr.setDeadlineMet(met);
             activeWorkflows.remove(wfId);
+            double margin = wfr.getDeadline() - wfr.getCompletionTime();
             Log.printLine(CloudSim.clock() + ": CBMW: workflow " + wfId
-                    + (wfr.isDeadlineMet() ? " MET" : " MISSED") + " deadline "
+                    + (met ? " MET" : " MISSED") + " deadline "
                     + String.format("%.1f", wfr.getDeadline()));
+            CBMWLogger.log("WF-COMPLETE",
+                    String.format("wf=%d completionTime=%.4f deadline=%.4f margin=%.4f -> %s",
+                            wfId, wfr.getCompletionTime(), wfr.getDeadline(),
+                            margin, met ? "MET" : "MISSED"));
             WorkflowEngine eng = getWorkflowEngineRef();
             if (eng != null) eng.notifyWorkflowDisposed();
         }

@@ -63,6 +63,9 @@ public final class WorkflowParser {
      */
     private int jobIdStartsFrom;
 
+    /** Sets the first task ID so that IDs are globally unique across workflows. */
+    public void setJobIdStartsFrom(int id) { this.jobIdStartsFrom = id; }
+
     /**
      * Gets the task list
      *
