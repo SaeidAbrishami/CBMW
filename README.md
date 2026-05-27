@@ -119,7 +119,26 @@ scenario, algorithm, lambda, tightness, run, total, accepted, deadlineRate, onDe
 
 ### Detailed event log
 
-`cbmw_detail.log` — written by `CBMWLogger` during each run. Contains timestamped entries for every negotiation decision, slot booking, VM dispatch, and workflow completion. Useful for diagnosing scheduling behaviour.
+`cbmw_detail.log` — written by `CBMWLogger` during each run. Contains timestamped entries for every negotiation decision, VM dispatch, task completion, and workflow outcome. Useful for diagnosing scheduling behaviour.
+
+### Gantt chart
+
+`<label>_gantt.png` — generated automatically after each scenario by `plot_gantt.py`. Requires Python 3 and matplotlib (`pip install matplotlib`).
+
+The chart has two panels sharing a common time axis:
+
+- **Reserved VMs (top)** — one row per VM (0–49); each bar is one task, coloured by workflow. Hatched bars indicate workflows that missed their deadline.
+- **On-demand slots (bottom)** — ephemeral VMs are slot-packed so that when one VM finishes its display row is reused by the next. The row count equals the peak concurrent on-demand usage, not the total number of VMs provisioned.
+
+The chart can also be run standalone:
+
+```bash
+# regenerate from an existing log
+python plot_gantt.py cbmw_detail.log my_output.png
+
+# restrict the time axis to the first 1000 seconds
+python plot_gantt.py cbmw_detail.log out.png 0 1000
+```
 
 ---
 

@@ -79,7 +79,8 @@
       "Bash(Select-String \"WF-COMPLETE\")",
       "Bash(Select-Object -Last 30)",
       "Bash(javac -cp \"lib/*;out\" -d out sources/org/workflowsim/cbmw/CBMWDynamicSchedulingAlgorithm.java)",
-      "Bash(Test-Path *)"
+      "Bash(Test-Path *)",
+      "Bash(pip install *)"
     ]
   }
 }

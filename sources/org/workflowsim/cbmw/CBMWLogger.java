@@ -2,11 +2,14 @@ package org.workflowsim.cbmw;
 
 import java.io.FileWriter;
 import java.io.PrintWriter;
+import java.util.Set;
 import org.cloudbus.cloudsim.core.CloudSim;
 
 /**
- * Thread-safe, flush-on-every-write logger for CBMW state changes.
+ * Flush-on-every-write logger for CBMW workflow and task state changes.
  * Output goes to cbmw_detail.log in the working directory.
+ *
+ * Only events in LOGGED_TAGS are written; all other tags are silently dropped.
  *
  * Format per line:
  *   [t=<sim-time>][<TAG>] <message>
@@ -16,6 +19,14 @@ import org.cloudbus.cloudsim.core.CloudSim;
 public class CBMWLogger {
 
     public static final String LOG_FILE = "cbmw_detail.log";
+
+    /** Only these tags produce output. Everything else is silently dropped. */
+    private static final Set<String> LOGGED_TAGS = Set.of(
+            "NEGOTIATE",      // workflow accepted or rejected (with reason)
+            "DISPATCH",       // task assigned to a VM (ready -> running)
+            "TASK-COMPLETE",  // task finished (running -> done)
+            "WF-COMPLETE"     // workflow done, deadline met or missed
+    );
 
     private static PrintWriter writer;
 
@@ -31,11 +42,11 @@ public class CBMWLogger {
     }
 
     /**
-     * Writes one log line immediately.
+     * Writes one log line if tag is in LOGGED_TAGS.
      * Safe to call at any time; silently does nothing if init() was not called.
      */
     public static void log(String tag, String message) {
-        if (writer == null) return;
+        if (writer == null || !LOGGED_TAGS.contains(tag)) return;
         writeLine(tag, message);
     }
 

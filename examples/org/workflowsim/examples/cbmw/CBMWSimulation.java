@@ -3,6 +3,7 @@ package org.workflowsim.examples.cbmw;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
+import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.LinkedList;
@@ -104,7 +105,7 @@ public class CBMWSimulation {
         ReplicaCatalog.init(ReplicaCatalog.FileSystem.SHARED);
 
         WorkflowPlanner planner = new WorkflowPlanner("planner_0", 1);
-        WorkflowEngine engine = planner.getWorkflowEngine();
+        WorkflowEngine engine = planner.getWor11kflowEngine();
 
         // ---- CBMW Broker — replaces the engine's auto-created internal scheduler ----
         CBMWBroker broker = new CBMWBroker("CBMWBroker_0", tightness);
@@ -127,6 +128,8 @@ public class CBMWSimulation {
         String label = algorithm + "_lam" + (int) lambda + "_t" + tightness + "_seed" + seed;
         collector.printReport(label);
         csv.append(collector.toCsvRow(algorithm, lambda, tightness, seed)).append("\n");
+
+        generateGanttChart(label);
 
         return label;
     }
@@ -174,6 +177,28 @@ public class CBMWSimulation {
             }
         }
         return rows;
+    }
+
+    private static void generateGanttChart(String label) {
+        String outFile = label + "_gantt.png";
+        String[] cmds = { "python", "plot_gantt.py", CBMWLogger.LOG_FILE, outFile };
+        try {
+            ProcessBuilder pb = new ProcessBuilder(cmds);
+            pb.redirectErrorStream(true);
+            pb.directory(new File("."));
+            Process p = pb.start();
+            try (BufferedReader br = new BufferedReader(
+                    new InputStreamReader(p.getInputStream()))) {
+                String line;
+                while ((line = br.readLine()) != null)
+                    System.out.println("[chart] " + line);
+            }
+            int exit = p.waitFor();
+            if (exit != 0)
+                System.out.println("[chart] Python exited with code " + exit);
+        } catch (Exception e) {
+            System.out.println("[chart] Could not generate chart: " + e.getMessage());
+        }
     }
 
     private static WorkflowDatacenter createDatacenter(String name) throws Exception {
