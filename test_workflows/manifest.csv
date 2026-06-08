@@ -1,4 +1,0 @@
-filename,topology,numTasks,criticalPath,deadlineFactor,deadline
-workflow_000_CHAIN_24tasks.xml,CHAIN,24,3313.617,1.5,4970.425
-workflow_001_FORK_JOIN_23tasks.xml,FORK_JOIN,23,468.256,1.5,702.385
-workflow_002_RANDOM_40tasks.xml,RANDOM,40,469.130,1.5,703.694
