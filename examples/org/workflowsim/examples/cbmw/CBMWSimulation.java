@@ -1,15 +1,14 @@
 package org.workflowsim.examples.cbmw;
 
 import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Random;
-import org.cloudbus.cloudsim.Datacenter;
 import org.cloudbus.cloudsim.DatacenterCharacteristics;
 import org.cloudbus.cloudsim.Host;
 import org.cloudbus.cloudsim.Log;
@@ -21,83 +20,74 @@ import org.cloudbus.cloudsim.core.CloudSim;
 import org.cloudbus.cloudsim.provisioners.BwProvisionerSimple;
 import org.cloudbus.cloudsim.provisioners.PeProvisionerSimple;
 import org.cloudbus.cloudsim.provisioners.RamProvisionerSimple;
-import org.workflowsim.CondorVM;
 import org.workflowsim.WorkflowDatacenter;
 import org.workflowsim.WorkflowEngine;
 import org.workflowsim.WorkflowPlanner;
-import org.workflowsim.WorkflowSimTags;
 import org.workflowsim.cbmw.CBMWBroker;
 import org.workflowsim.cbmw.CBMWLogger;
 import org.workflowsim.cbmw.CBMWResultCollector;
 import org.workflowsim.cbmw.HybridVmPool;
 import org.workflowsim.cbmw.WorkflowArrivalData;
+import org.workflowsim.cbmw.WorkflowLoader;
 import org.workflowsim.utils.ClusteringParameters;
 import org.workflowsim.utils.OverheadParameters;
 import org.workflowsim.utils.Parameters;
 import org.workflowsim.utils.ReplicaCatalog;
 
 /**
- * Main simulation driver for the CBMW paper experiments.
+ * Main simulation driver for CBMW paper experiments.
  *
- * Scenarios: 3 arrival rates × 2 deadline tightness values × 3 algorithms ×
- *            10 seeds = 180 runs total.
- *
- * Usage: run main() for all scenarios, or adjust the loop variables below.
+ * Runs one scenario: CBMW algorithm against all real workflow arrivals loaded
+ * from test_workflows/poisson_distribution.json. Arrival times come from the
+ * JSON; deadlines are set as arrivalTime + criticalPath * TIGHTNESS.
+ * Task runtimes use the perturbed values from the matching .txt files.
  */
 public class CBMWSimulation {
 
-    private static final String TEST_WORKFLOWS_DIR = "test_workflows";
-    private static final String MANIFEST_PATH      = TEST_WORKFLOWS_DIR + File.separator + "manifest.csv";
-
-    private static final double[] LAMBDAS    = {2.0, 3.0, 6.0};   // workflows/min
-    private static final double[] TIGHTNESSES = {1.2, 3.0};       // tight, loose
-    private static final int      NUM_SEEDS   = 10;
-    private static final double   SIM_MINUTES = 60.0;
+    private static final String OUTPUT_DIR      = "Output";
+    private static final String WORKFLOW_DIR    = "test_workflows";
+    private static final double TIGHTNESS       = 2.0;
+    private static final double SIM_BUFFER_SECS = 5000.0;
+    private static final String CSV_OUTPUT      = OUTPUT_DIR + File.separator + "results.csv";
 
     public static void main(String[] args) throws Exception {
+        new File(OUTPUT_DIR).mkdirs();
+
+        List<WorkflowArrivalData> arrivals = WorkflowLoader.load(WORKFLOW_DIR, TIGHTNESS);
+        if (arrivals.isEmpty()) {
+            System.out.println("No arrivals loaded. Check "
+                    + WORKFLOW_DIR + File.separator + "poisson_distribution.json");
+            return;
+        }
+
+        double simDuration = arrivals.get(arrivals.size() - 1).getArrivalTime() + SIM_BUFFER_SECS;
+
         StringBuilder csv = new StringBuilder(CBMWResultCollector.csvHeader()).append("\n");
+        runScenario(arrivals, simDuration, csv);
 
-        // --- Single scenario for testing ---
-        runScenario("CBMW", 2.0, 1.2, 0, csv);
-        System.out.println("\n===== CSV OUTPUT =====");
-        System.out.println(csv.toString());
-
-        // --- Full 180-scenario experiment (uncomment when ready) ---
-//        for (double lambda : LAMBDAS) {
-//            for (double tightness : TIGHTNESSES) {
-//                for (int seed = 0; seed < NUM_SEEDS; seed++) {
-//                    String row = runScenario("CBMW", lambda, tightness, seed, csv);
-//                    System.out.println("Completed: CBMW lambda=" + lambda
-//                            + " tightness=" + tightness + " seed=" + seed);
-//                }
-//            }
-//        }
-//        System.out.println("\n===== CSV OUTPUT =====");
-//        System.out.println(csv.toString());
+        saveCsv(csv.toString());
+        generateComparisonCharts();
     }
 
-    private static String runScenario(String algorithm, double lambda,
-                                       double tightness, int seed,
-                                       StringBuilder csv) throws Exception {
-        double simDuration = SIM_MINUTES * 60.0;
-        Parameters.setTightness(tightness);
-        Parameters.setArrivalRate(lambda);
+    // -----------------------------------------------------------------------
+    // Scenario runner
+    // -----------------------------------------------------------------------
+
+    private static void runScenario(List<WorkflowArrivalData> arrivals,
+                                     double simDuration,
+                                     StringBuilder csv) throws Exception {
+        Parameters.setTightness(TIGHTNESS);
         Parameters.setSimDuration(simDuration);
         Parameters.setCostModel(Parameters.CostModel.VM);
 
-        // ---- Init CloudSim ----
-        int numUsers = 1;
-        CloudSim.init(numUsers, Calendar.getInstance(), false);
+        CloudSim.init(1, Calendar.getInstance(), false);
 
-        // ---- Datacenter with enough hosts for reserved + on-demand VMs ----
         WorkflowDatacenter datacenter = createDatacenter("Datacenter_0");
 
-        // ---- Planner (no clustering, INVALID planning — CBMW does its own) ----
-        OverheadParameters op = new OverheadParameters(0, null, null, null, null, 0);
+        OverheadParameters  op = new OverheadParameters(0, null, null, null, null, 0);
         ClusteringParameters cp = new ClusteringParameters(
                 0, 0, ClusteringParameters.ClusteringMethod.NONE, null);
-        Parameters.init(HybridVmPool.NUM_RESERVED,
-                (String) null, null, null,
+        Parameters.init(HybridVmPool.NUM_RESERVED, (String) null, null, null,
                 op, cp,
                 Parameters.SchedulingAlgorithm.CBMW,
                 Parameters.PlanningAlgorithm.INVALID,
@@ -105,131 +95,103 @@ public class CBMWSimulation {
         ReplicaCatalog.init(ReplicaCatalog.FileSystem.SHARED);
 
         WorkflowPlanner planner = new WorkflowPlanner("planner_0", 1);
-        WorkflowEngine engine = planner.getWor11kflowEngine();
+        WorkflowEngine  engine  = planner.getWorkflowEngine();
 
-        // ---- CBMW Broker — replaces the engine's auto-created internal scheduler ----
-        CBMWBroker broker = new CBMWBroker("CBMWBroker_0", tightness);
-        engine.replaceScheduler(broker);          // broker IS now the engine's scheduler
+        CBMWBroker broker = new CBMWBroker("CBMWBroker_0", TIGHTNESS);
+        engine.replaceScheduler(broker);
         broker.submitVmList(broker.getVmPool().getReservedVms());
         engine.bindSchedulerDatacenter(datacenter.getId(), 0);
 
-        // ---- Register Poisson workflow arrivals (fired inside startEntity) ----
-        scheduleArrivals(broker, lambda, simDuration, seed, tightness);
+        for (WorkflowArrivalData arrival : arrivals) {
+            broker.addArrival(arrival.getArrivalTime(),
+                              arrival.getDaxPath(),
+                              arrival.getUserDeadline());
+        }
         broker.setSimEndTime(simDuration);
 
-        // ---- Run ----
-        CBMWLogger.init();
+        String label   = "CBMW_t" + TIGHTNESS;
+        String logFile = OUTPUT_DIR + File.separator + label + "_detail.log";
+        CBMWLogger.init(logFile);
         CloudSim.startSimulation();
         CloudSim.stopSimulation();
         CBMWLogger.close();
 
-        // ---- Collect results ----
         CBMWResultCollector collector = new CBMWResultCollector(broker.getAllWorkflows());
-        String label = algorithm + "_lam" + (int) lambda + "_t" + tightness + "_seed" + seed;
         collector.printReport(label);
-        csv.append(collector.toCsvRow(algorithm, lambda, tightness, seed)).append("\n");
+        csv.append(collector.toCsvRow("CBMW", 0.0, TIGHTNESS, 0)).append("\n");
 
         generateGanttChart(label);
-
-        return label;
+        System.out.println("Completed: CBMW");
     }
 
-    private static void scheduleArrivals(CBMWBroker broker, double lambda,
-                                          double simDuration, int seed,
-                                          double tightness) throws Exception {
-        List<String[]> specs = loadManifest();
-        if (specs.isEmpty()) {
-            throw new RuntimeException("manifest.csv is empty or missing. "
-                    + "Run CreateTestDaxModule first.");
+    // -----------------------------------------------------------------------
+    // Datacenter setup
+    // -----------------------------------------------------------------------
+
+    private static WorkflowDatacenter createDatacenter(String name) throws Exception {
+        long mips = (long) HybridVmPool.RESERVED_MIPS;
+        List<Pe> peList = new ArrayList<>();
+        for (int i = 0; i < 10000; i++) {
+            peList.add(new Pe(i, new PeProvisionerSimple(mips)));
         }
+        Host host = new Host(0,
+                new RamProvisionerSimple(Integer.MAX_VALUE),
+                new BwProvisionerSimple(Long.MAX_VALUE / 2),
+                Long.MAX_VALUE / 2, peList,
+                new VmSchedulerSpaceShared(peList));
 
-        Random rng = new Random(seed);
-        double meanInterArrival = 60.0 / lambda;
-        double t = 0.0;
-        int index = 0;
+        List<Host> hostList = new ArrayList<>();
+        hostList.add(host);
 
-        while (true) {
-            t += -meanInterArrival * Math.log(1.0 - rng.nextDouble());
-            if (t >= simDuration) break;
+        DatacenterCharacteristics chars = new DatacenterCharacteristics(
+                "x86", "Linux", "Xen", hostList, 0.0, 0.0, 0.0, 0.0, 0.0);
 
-            String[] spec     = specs.get(index++ % specs.size());
-            String daxPath    = TEST_WORKFLOWS_DIR + File.separator + spec[0]; // filename col
-            double cpInFile   = Double.parseDouble(spec[3]);                   // criticalPath col
-            double userDeadline = t + cpInFile * tightness;                    // absolute deadline
-
-            broker.addArrival(t, daxPath, userDeadline);
-        }
+        return new WorkflowDatacenter(name, chars,
+                new VmAllocationPolicySimple(hostList),
+                new LinkedList<Storage>(), 0);
     }
 
-    /**
-     * Reads manifest.csv and returns all data rows (skips the header).
-     * Each element is the array of comma-split columns for one workflow.
-     */
-    private static List<String[]> loadManifest() throws Exception {
-        List<String[]> rows = new ArrayList<>();
-        File f = new File(MANIFEST_PATH);
-        if (!f.exists()) return rows;
-        try (BufferedReader br = new BufferedReader(new FileReader(f))) {
-            String line = br.readLine(); // skip header
-            while ((line = br.readLine()) != null) {
-                line = line.trim();
-                if (!line.isEmpty()) rows.add(line.split(","));
-            }
+    // -----------------------------------------------------------------------
+    // Output helpers
+    // -----------------------------------------------------------------------
+
+    private static void saveCsv(String content) {
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(CSV_OUTPUT, false))) {
+            bw.write(content);
+            System.out.println("[csv] Saved to " + new File(CSV_OUTPUT).getAbsolutePath());
+        } catch (Exception e) {
+            System.out.println("[csv] Could not save: " + e.getMessage());
         }
-        return rows;
     }
 
     private static void generateGanttChart(String label) {
-        String outFile = label + "_gantt.png";
-        String[] cmds = { "python", "plot_gantt.py", CBMWLogger.LOG_FILE, outFile };
+        runPython("plot_gantt.py",
+                CBMWLogger.getLogFile(),
+                OUTPUT_DIR + File.separator + label + "_gantt.png");
+    }
+
+    private static void generateComparisonCharts() {
+        runPython("plot_comparison.py", CSV_OUTPUT);
+    }
+
+    private static void runPython(String... scriptAndArgs) {
+        String[] cmd = new String[scriptAndArgs.length + 1];
+        cmd[0] = "python";
+        System.arraycopy(scriptAndArgs, 0, cmd, 1, scriptAndArgs.length);
         try {
-            ProcessBuilder pb = new ProcessBuilder(cmds);
+            ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.redirectErrorStream(true);
             pb.directory(new File("."));
             Process p = pb.start();
             try (BufferedReader br = new BufferedReader(
                     new InputStreamReader(p.getInputStream()))) {
                 String line;
-                while ((line = br.readLine()) != null)
-                    System.out.println("[chart] " + line);
+                while ((line = br.readLine()) != null) System.out.println("[python] " + line);
             }
             int exit = p.waitFor();
-            if (exit != 0)
-                System.out.println("[chart] Python exited with code " + exit);
+            if (exit != 0) System.out.println("[python] exited with code " + exit);
         } catch (Exception e) {
-            System.out.println("[chart] Could not generate chart: " + e.getMessage());
+            System.out.println("[python] " + e.getMessage());
         }
-    }
-
-    private static WorkflowDatacenter createDatacenter(String name) throws Exception {
-        List<Host> hostList = new ArrayList<>();
-
-        // One large host that accommodates all reserved + on-demand VMs at peak
-        int numPes  = 10000;
-        // RAM: 50 reserved × 4096 MB + generous on-demand headroom
-        long mips   = (long) HybridVmPool.RESERVED_MIPS;
-        List<Pe> peList = new ArrayList<>();
-        for (int i = 0; i < numPes; i++) {
-            peList.add(new Pe(i, new PeProvisionerSimple(mips)));
-        }
-        Host host = new Host(0,
-                new RamProvisionerSimple(Integer.MAX_VALUE),
-                new BwProvisionerSimple(Long.MAX_VALUE / 2),
-                Long.MAX_VALUE / 2,
-                peList,
-                new VmSchedulerSpaceShared(peList));
-        hostList.add(host);
-
-        String arch = "x86", os = "Linux", vmm = "Xen";
-        double timeZone = 0.0, costPerSec = 0.0, costPerMem = 0.0,
-               costPerStorage = 0.0, costPerBw = 0.0;
-
-        DatacenterCharacteristics chars = new DatacenterCharacteristics(
-                arch, os, vmm, hostList, timeZone,
-                costPerSec, costPerMem, costPerStorage, costPerBw);
-
-        return new WorkflowDatacenter(name, chars,
-                new VmAllocationPolicySimple(hostList),
-                new LinkedList<Storage>(), 0);
     }
 }

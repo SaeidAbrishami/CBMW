@@ -1,5 +1,8 @@
 package org.workflowsim.cbmw;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -326,6 +329,7 @@ public class CBMWBroker extends WorkflowScheduler {
             p.parse();
             List<Task> tasks = p.getTaskList();
             nextTaskId += tasks.size();
+            applyPerturbedRuntimes(daxPath, tasks);
             CBMWLogger.log("PARSE-DAX",
                     String.format("wf=%d dax=%s tasks=%d idRange=[%d,%d]",
                             wfId, daxPath, tasks.size(),
@@ -334,6 +338,31 @@ public class CBMWBroker extends WorkflowScheduler {
         } catch (Exception e) {
             Log.printLine("CBMW: DAX parse error: " + e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * Replaces each task's cloudletLength with the perturbed runtime from the
+     * matching .txt file (same name as the .xml, different extension).
+     * Each line in the .txt is one runtime in seconds, in job-declaration order.
+     * If no .txt file exists the nominal runtimes from the XML are kept as-is.
+     */
+    private void applyPerturbedRuntimes(String daxPath, List<Task> tasks) {
+        String txtPath = daxPath.replaceAll("\\.xml$", ".txt");
+        File txtFile = new File(txtPath);
+        if (!txtFile.exists()) return;
+        try (BufferedReader br = new BufferedReader(new FileReader(txtFile))) {
+            for (Task task : tasks) {
+                String line = br.readLine();
+                if (line == null) break;
+                double perturbedRuntime = Double.parseDouble(line.trim());
+                // Mirror WorkflowParser: cloudletLength = runtime * 1000, min 100 MI
+                long length = (long) Math.max(perturbedRuntime * 1000.0, 100.0);
+                task.setCloudletLength(length);
+            }
+        } catch (Exception e) {
+            Log.printLine("CBMW: could not apply perturbed runtimes for " + txtPath
+                    + ": " + e.getMessage());
         }
     }
 
