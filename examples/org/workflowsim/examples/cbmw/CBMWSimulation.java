@@ -11,7 +11,6 @@ import java.util.LinkedList;
 import java.util.List;
 import org.cloudbus.cloudsim.DatacenterCharacteristics;
 import org.cloudbus.cloudsim.Host;
-import org.cloudbus.cloudsim.Log;
 import org.cloudbus.cloudsim.Pe;
 import org.cloudbus.cloudsim.Storage;
 import org.cloudbus.cloudsim.VmAllocationPolicySimple;
@@ -23,12 +22,15 @@ import org.cloudbus.cloudsim.provisioners.RamProvisionerSimple;
 import org.workflowsim.WorkflowDatacenter;
 import org.workflowsim.WorkflowEngine;
 import org.workflowsim.WorkflowPlanner;
+import org.workflowsim.cbmw.AbstractWorkflowBroker;
 import org.workflowsim.cbmw.CBMWBroker;
 import org.workflowsim.cbmw.CBMWLogger;
 import org.workflowsim.cbmw.CBMWResultCollector;
 import org.workflowsim.cbmw.HybridVmPool;
 import org.workflowsim.cbmw.WorkflowArrivalData;
 import org.workflowsim.cbmw.WorkflowLoader;
+import org.workflowsim.cbmw.baselines.DynamicGreedyBroker;
+import org.workflowsim.cbmw.baselines.StaticGreedyBroker;
 import org.workflowsim.utils.ClusteringParameters;
 import org.workflowsim.utils.OverheadParameters;
 import org.workflowsim.utils.Parameters;
@@ -37,18 +39,20 @@ import org.workflowsim.utils.ReplicaCatalog;
 /**
  * Main simulation driver for CBMW paper experiments.
  *
- * Runs one scenario: CBMW algorithm against all real workflow arrivals loaded
- * from test_workflows/poisson_distribution.json. Arrival times come from the
- * JSON; deadlines are set as arrivalTime + criticalPath * TIGHTNESS.
- * Task runtimes use the perturbed values from the matching .txt files.
+ * Runs one scenario: all three algorithms (CBMW, StaticGreedy, DynamicGreedy)
+ * against the same real workflow arrivals from test_workflows/.
+ * Arrival times come from poisson_distribution.json; deadlines are
+ * arrivalTime + criticalPath * TIGHTNESS; task runtimes use the perturbed
+ * values from the matching .txt files.
  */
 public class CBMWSimulation {
 
-    private static final String OUTPUT_DIR      = "Output";
-    private static final String WORKFLOW_DIR    = "test_workflows";
-    private static final double TIGHTNESS       = 2.0;
-    private static final double SIM_BUFFER_SECS = 5000.0;
-    private static final String CSV_OUTPUT      = OUTPUT_DIR + File.separator + "results.csv";
+    private static final String   OUTPUT_DIR      = "Output";
+    private static final String   WORKFLOW_DIR    = "test_workflows";
+    private static final double   TIGHTNESS       = 2.0;
+    private static final double   SIM_BUFFER_SECS = 5000.0;
+    private static final String[] ALGORITHMS      = {"CBMW", "StaticGreedy", "DynamicGreedy"};
+    private static final String   CSV_OUTPUT      = OUTPUT_DIR + File.separator + "results.csv";
 
     public static void main(String[] args) throws Exception {
         new File(OUTPUT_DIR).mkdirs();
@@ -61,9 +65,12 @@ public class CBMWSimulation {
         }
 
         double simDuration = arrivals.get(arrivals.size() - 1).getArrivalTime() + SIM_BUFFER_SECS;
-
         StringBuilder csv = new StringBuilder(CBMWResultCollector.csvHeader()).append("\n");
-        runScenario(arrivals, simDuration, csv);
+
+        for (String algo : ALGORITHMS) {
+            runScenario(algo, arrivals, simDuration, csv);
+            System.out.println("Completed: " + algo);
+        }
 
         saveCsv(csv.toString());
         generateComparisonCharts();
@@ -73,7 +80,8 @@ public class CBMWSimulation {
     // Scenario runner
     // -----------------------------------------------------------------------
 
-    private static void runScenario(List<WorkflowArrivalData> arrivals,
+    private static void runScenario(String algorithm,
+                                     List<WorkflowArrivalData> arrivals,
                                      double simDuration,
                                      StringBuilder csv) throws Exception {
         Parameters.setTightness(TIGHTNESS);
@@ -97,7 +105,7 @@ public class CBMWSimulation {
         WorkflowPlanner planner = new WorkflowPlanner("planner_0", 1);
         WorkflowEngine  engine  = planner.getWorkflowEngine();
 
-        CBMWBroker broker = new CBMWBroker("CBMWBroker_0", TIGHTNESS);
+        AbstractWorkflowBroker broker = createBroker(algorithm, TIGHTNESS);
         engine.replaceScheduler(broker);
         broker.submitVmList(broker.getVmPool().getReservedVms());
         engine.bindSchedulerDatacenter(datacenter.getId(), 0);
@@ -109,7 +117,7 @@ public class CBMWSimulation {
         }
         broker.setSimEndTime(simDuration);
 
-        String label   = "CBMW_t" + TIGHTNESS;
+        String label   = algorithm + "_t" + TIGHTNESS;
         String logFile = OUTPUT_DIR + File.separator + label + "_detail.log";
         CBMWLogger.init(logFile);
         CloudSim.startSimulation();
@@ -118,10 +126,23 @@ public class CBMWSimulation {
 
         CBMWResultCollector collector = new CBMWResultCollector(broker.getAllWorkflows());
         collector.printReport(label);
-        csv.append(collector.toCsvRow("CBMW", 0.0, TIGHTNESS, 0)).append("\n");
+        csv.append(collector.toCsvRow(algorithm, 0.0, TIGHTNESS, 0)).append("\n");
 
         generateGanttChart(label);
-        System.out.println("Completed: CBMW");
+    }
+
+    // -----------------------------------------------------------------------
+    // Broker factory
+    // -----------------------------------------------------------------------
+
+    private static AbstractWorkflowBroker createBroker(String algorithm,
+                                                        double tightness) throws Exception {
+        switch (algorithm) {
+            case "CBMW":          return new CBMWBroker("CBMWBroker_0", tightness);
+            case "StaticGreedy":  return new StaticGreedyBroker("StaticGreedyBroker_0", tightness);
+            case "DynamicGreedy": return new DynamicGreedyBroker("DynamicGreedyBroker_0", tightness);
+            default: throw new IllegalArgumentException("Unknown algorithm: " + algorithm);
+        }
     }
 
     // -----------------------------------------------------------------------
