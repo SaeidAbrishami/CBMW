@@ -41,11 +41,27 @@ public class HybridVmPool {
     }
 
     public CondorVM getVmById(int id) {
-        if (id < NUM_RESERVED) return reservedVms.get(id);
+        for (CondorVM vm : reservedVms) {
+            if (vm.getId() == id) return vm;
+        }
         for (CondorVM vm : onDemandVms) {
             if (vm.getId() == id) return vm;
         }
         return null;
+    }
+
+    /**
+     * Removes a reserved VM that failed to register with the datacenter.
+     * Clears its booking list and any task-to-VM index entries so the
+     * planner and scheduler never attempt to use it again.
+     */
+    public void removeReservedVm(int vmId) {
+        reservedVms.removeIf(vm -> vm.getId() == vmId);
+        reservedBookings.remove(vmId);
+        taskBookingIndex.entrySet().removeIf(e -> (int) e.getValue()[0] == vmId);
+        CBMWLogger.log("VM-REMOVE",
+                String.format("reserved vm=%d removed from pool remainingReserved=%d",
+                        vmId, reservedVms.size()));
     }
 
     public CondorVM getAnyIdleReservedVm() {

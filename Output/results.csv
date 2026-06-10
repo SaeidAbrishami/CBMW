@@ -1,0 +1,4 @@
+scenario,algorithm,lambda,tightness,run,total,accepted,deadlineRate,onDemandCost,reservedCost,makespan,reservedUtil
+CBMW_tight_lam0_t2.0,CBMW,0.0,2.0,0,20,20,1.0000,121.3358,163.00,5017.19,0.3242
+StaticGreedy_tight_lam0_t2.0,StaticGreedy,0.0,2.0,0,20,20,0.3000,0.0000,163.00,5492.47,0.7843
+DynamicGreedy_tight_lam0_t2.0,DynamicGreedy,0.0,2.0,0,20,20,0.3000,0.0000,163.00,5492.47,0.7843

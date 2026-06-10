@@ -26,15 +26,21 @@ public class ProvisioningModule {
     }
 
     /**
-     * Returns the on-demand VM for this job, provisioning one if needed.
-     * The caller must register the new VM with the datacenter before use.
+     * Returns the on-demand VM for this job, reusing an idle one if available,
+     * provisioning a new one only when none are free.
+     * New VMs must be registered with the datacenter before use (caller's
+     * responsibility via dispatchScheduledJobs).
      */
     public CondorVM getOrProvision(Job job) {
         int jobId = job.getCloudletId();
         if (jobToVm.containsKey(jobId)) {
             return jobToVm.get(jobId);
         }
-        CondorVM vm = pool.provisionOnDemandVm(userId);
+        CondorVM vm = pool.getAnyIdleOnDemandVm();
+        if (vm == null) {
+            vm = pool.provisionOnDemandVm(userId);
+        }
+        vm.setState(org.workflowsim.WorkflowSimTags.VM_STATUS_BUSY);
         jobToVm.put(jobId, vm);
         vmJobCount.merge(vm.getId(), 1, Integer::sum);
         return vm;
@@ -45,14 +51,14 @@ public class ProvisioningModule {
         return vmJobCount.containsKey(vmId) && vmJobCount.get(vmId) == 1;
     }
 
-    /** Called when a job on an on-demand VM completes. */
+    /** Called when a job on an on-demand VM completes. Marks the VM idle for reuse. */
     public void jobCompleted(int jobId) {
         CondorVM vm = jobToVm.remove(jobId);
         if (vm != null) {
             int count = vmJobCount.merge(vm.getId(), -1, Integer::sum);
             if (count <= 0) {
                 vmJobCount.remove(vm.getId());
-                pool.terminateOnDemandVm(vm.getId());
+                vm.setState(org.workflowsim.WorkflowSimTags.VM_STATUS_IDLE);
             }
         }
     }

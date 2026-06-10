@@ -27,7 +27,11 @@ import org.w3c.dom.NodeList;
 public class WorkflowLoader {
 
     public static List<WorkflowArrivalData> load(String workflowDir, double tightness) throws Exception {
-        String jsonPath = workflowDir + File.separator + "poisson_distribution.json";
+        return load(workflowDir, "poisson_distribution.json", tightness);
+    }
+
+    public static List<WorkflowArrivalData> load(String workflowDir, String jsonFile, double tightness) throws Exception {
+        String jsonPath = workflowDir + File.separator + jsonFile;
         Map<String, Double> arrivalMap = parseJson(jsonPath);
 
         List<WorkflowArrivalData> result = new ArrayList<>();

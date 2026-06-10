@@ -80,7 +80,17 @@
       "Bash(Select-Object -Last 30)",
       "Bash(javac -cp \"lib/*;out\" -d out sources/org/workflowsim/cbmw/CBMWDynamicSchedulingAlgorithm.java)",
       "Bash(Test-Path *)",
-      "Bash(pip install *)"
+      "Bash(pip install *)",
+      "Skill(run)",
+      "Bash(python *)",
+      "PowerShell(pip install *)",
+      "PowerShell(\\(Get-Command python\\).Source; & \"C:\\\\Users\\\\AsiaLapTop.Com\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" -c \"import matplotlib; print\\(matplotlib.__version__\\)\")",
+      "PowerShell(& \"C:\\\\Users\\\\AsiaLapTop.Com\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" -c \"import matplotlib; print\\(matplotlib.__version__\\)\")",
+      "PowerShell($py = \"C:\\\\Users\\\\AsiaLapTop.Com\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\"; cd P:\\\\University\\\\CBMW_Workflow_Simulation; & $py plot_comparison.py Output\\\\results.csv Output\\\\comparison.png 2>&1; & $py plot_gantt.py Output\\\\CBMW_t2.0_detail.log Output\\\\CBMW_t2.0_gantt.png 2>&1; & $py plot_gantt.py Output\\\\StaticGreedy_t2.0_detail.log Output\\\\StaticGreedy_t2.0_gantt.png 2>&1; & $py plot_gantt.py Output\\\\DynamicGreedy_t2.0_detail.log Output\\\\DynamicGreedy_t2.0_gantt.png 2>&1)",
+      "Bash(javac -cp \"lib/*\" -d bin @sources_list.txt)",
+      "Bash(java -cp \"bin;lib/*\" org.workflowsim.examples.cbmw.CBMWSimulation)",
+      "Bash(\"C:\\\\Users\\\\AsiaLapTop.Com\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" plot_comparison.py)",
+      "Bash(sort -t= -k2 -n)"
     ]
   }
 }

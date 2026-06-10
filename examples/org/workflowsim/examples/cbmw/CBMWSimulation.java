@@ -48,16 +48,25 @@ import org.workflowsim.utils.ReplicaCatalog;
 public class CBMWSimulation {
 
     private static final String   OUTPUT_DIR      = "Output";
-    private static final String   WORKFLOW_DIR    = "test_workflows";
-    private static final double   TIGHTNESS       = 2.0;
-    private static final double   SIM_BUFFER_SECS = 5000.0;
-    private static final String[] ALGORITHMS      = {"CBMW", "StaticGreedy", "DynamicGreedy"};
     private static final String   CSV_OUTPUT      = OUTPUT_DIR + File.separator + "results.csv";
+    private static final String[] ALGORITHMS      = {"CBMW", "StaticGreedy", "DynamicGreedy"};
+
+    // ---- SMALL RUN (20 workflows, 100-task only, arrivals ~500s) ----
+    private static final String WORKFLOW_DIR    = "test_workflows";
+    private static final String POISSON_FILE    = "poisson_small.json";
+    private static final double TIGHTNESS       = 2.0;
+    private static final double SIM_BUFFER_SECS = 2000.0;
+
+    // ---- FULL RUN (200 workflows, 100+1000-task, arrivals ~7500s) ----
+    // private static final String WORKFLOW_DIR    = "test_workflows";
+    // private static final String POISSON_FILE    = "poisson_distribution.json";
+    // private static final double TIGHTNESS       = 2.0;
+    // private static final double SIM_BUFFER_SECS = 5000.0;
 
     public static void main(String[] args) throws Exception {
         new File(OUTPUT_DIR).mkdirs();
 
-        List<WorkflowArrivalData> arrivals = WorkflowLoader.load(WORKFLOW_DIR, TIGHTNESS);
+        List<WorkflowArrivalData> arrivals = WorkflowLoader.load(WORKFLOW_DIR, POISSON_FILE, TIGHTNESS);
         if (arrivals.isEmpty()) {
             System.out.println("No arrivals loaded. Check "
                     + WORKFLOW_DIR + File.separator + "poisson_distribution.json");
@@ -152,7 +161,7 @@ public class CBMWSimulation {
     private static WorkflowDatacenter createDatacenter(String name) throws Exception {
         long mips = (long) HybridVmPool.RESERVED_MIPS;
         List<Pe> peList = new ArrayList<>();
-        for (int i = 0; i < 10000; i++) {
+        for (int i = 0; i < 50000; i++) {
             peList.add(new Pe(i, new PeProvisionerSimple(mips)));
         }
         Host host = new Host(0,
@@ -197,7 +206,7 @@ public class CBMWSimulation {
 
     private static void runPython(String... scriptAndArgs) {
         String[] cmd = new String[scriptAndArgs.length + 1];
-        cmd[0] = "python";
+        cmd[0] = "C:\\Users\\AsiaLapTop.Com\\AppData\\Local\\Programs\\Python\\Python312\\python.exe";
         System.arraycopy(scriptAndArgs, 0, cmd, 1, scriptAndArgs.length);
         try {
             ProcessBuilder pb = new ProcessBuilder(cmd);

@@ -18,8 +18,6 @@ import org.cloudbus.cloudsim.core.CloudSim;
  */
 public class CBMWLogger {
 
-    public static final String LOG_FILE = "cbmw_detail.log";
-
     /** Only these tags produce output. Everything else is silently dropped. */
     private static final Set<String> LOGGED_TAGS = Set.of(
             "NEGOTIATE",      // workflow accepted or rejected (with reason)
@@ -29,15 +27,20 @@ public class CBMWLogger {
     );
 
     private static PrintWriter writer;
+    private static String currentLogFile = "cbmw_detail.log";
 
-    /** Opens (or truncates) the log file. Must be called once per scenario run. */
-    public static void init() {
+    /** Returns the path of the currently open log file. */
+    public static String getLogFile() { return currentLogFile; }
+
+    /** Opens (or truncates) the given log file. Must be called once per scenario run. */
+    public static void init(String logFile) {
+        currentLogFile = logFile;
         try {
             if (writer != null) { writer.flush(); writer.close(); }
-            writer = new PrintWriter(new FileWriter(LOG_FILE, false));
+            writer = new PrintWriter(new FileWriter(logFile, false));
             writeLine("INIT", "=== CBMW detail log opened ===");
         } catch (Exception e) {
-            System.err.println("CBMWLogger: cannot open " + LOG_FILE + ": " + e.getMessage());
+            System.err.println("CBMWLogger: cannot open " + logFile + ": " + e.getMessage());
         }
     }
 

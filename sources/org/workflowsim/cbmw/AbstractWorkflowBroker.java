@@ -49,6 +49,11 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
     protected int nextTaskId      = 1;
     protected int workflowEngineId = -1;
 
+    // Counts VM_CREATE_ACKs received for reserved VMs (success + failure).
+    // The scheduler is blocked until this reaches NUM_RESERVED, guaranteeing
+    // the pool is fully initialised before any task is dispatched.
+    private int reservedVmsAcknowledged = 0;
+
     private final List<WorkflowArrivalData> pendingArrivals     = new ArrayList<>();
     private final List<Double>              pendingArrivalTimes = new ArrayList<>();
     private double simEndTime = -1;
@@ -104,6 +109,16 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
             case WorkflowSimTags.SIM_END:
                 processSimEnd();
                 break;
+            case CloudSimTags.VM_DESTROY_ACK:
+                break; // on-demand VM destroyed in datacenter; PE slot freed
+            case WorkflowSimTags.CLOUDLET_UPDATE:
+                // Block scheduling until every reserved VM has received a
+                // creation response (success or failure). This prevents the
+                // scheduler from setting a VM BUSY before the datacenter has
+                // registered it, which would permanently strand that VM.
+                if (reservedVmsAcknowledged < HybridVmPool.NUM_RESERVED) return;
+                super.processEvent(ev);
+                break;
             default:
                 super.processEvent(ev);
                 break;
@@ -116,7 +131,21 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
 
     @Override
     protected void processVmCreate(SimEvent ev) {
+        int[] data     = (int[]) ev.getData();
+        int   vmId     = data[1];
+        int   result   = data[2];
         super.processVmCreate(ev);
+        if (vmPool.isReserved(vmId)) {
+            reservedVmsAcknowledged++;
+            if (result == CloudSimTags.FALSE) {
+                vmPool.removeReservedVm(vmId);
+                CBMWLogger.log("VM-CREATE-FAIL",
+                        String.format("reserved vm=%d failed to register — removed from pool"
+                                + " remainingReserved=%d acknowledged=%d/%d",
+                                vmId, vmPool.getReservedVms().size(),
+                                reservedVmsAcknowledged, HybridVmPool.NUM_RESERVED));
+            }
+        }
         sendNow(getId(), WorkflowSimTags.CLOUDLET_UPDATE);
     }
 
@@ -141,20 +170,22 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         CondorVM vm = (CondorVM) VmList.getById(getVmsCreatedList(), cl.getVmId());
         if (vm != null) vm.setState(WorkflowSimTags.VM_STATUS_IDLE);
 
+        int wfId = workflowIdForJob(job);
         if (provisioner.isOnDemandVm(cl.getVmId())) {
             provisioner.jobCompleted(cl.getCloudletId());
-            int wfId = workflowIdForJob(job);
             WorkflowRecord wfr = activeWorkflows.get(wfId);
             double cost = cl.getActualCPUTime() * HybridVmPool.ON_DEMAND_PER_SEC;
             if (wfr != null) wfr.addOnDemandCost(cost);
             CBMWLogger.log("TASK-COMPLETE",
-                    String.format("task=%d vm=%d(on-demand) actualCPU=%.4fs cost=$%.6f",
-                            cl.getCloudletId(), cl.getVmId(), cl.getActualCPUTime(), cost));
+                    String.format("task=%d wf=%d vm=%d(on-demand) actualCPU=%.4fs cost=$%.6f",
+                            cl.getCloudletId(), wfId, cl.getVmId(), cl.getActualCPUTime(), cost));
         } else {
             onTaskComplete(cl);
+            WorkflowRecord wfrRes = activeWorkflows.get(wfId);
+            if (wfrRes != null) wfrRes.addReservedCpuTime(cl.getActualCPUTime());
             CBMWLogger.log("TASK-COMPLETE",
-                    String.format("task=%d vm=%d(reserved) actualCPU=%.4fs",
-                            cl.getCloudletId(), cl.getVmId(), cl.getActualCPUTime()));
+                    String.format("task=%d wf=%d vm=%d(reserved) actualCPU=%.4fs",
+                            cl.getCloudletId(), wfId, cl.getVmId(), cl.getActualCPUTime()));
         }
 
         updateWorkflowCompletion(job);
@@ -190,11 +221,13 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
             Integer dcId = getVmsToDatacentersMap().get(vmId);
             if (dcId == null) {
                 // VM provisioned but not yet registered with the datacenter —
-                // reset to idle and batch-register; the cloudlet stays in the
-                // ready queue and will be retried on the next CLOUDLET_UPDATE.
+                // batch-register; the cloudlet stays in the ready queue and
+                // will be retried on the next CLOUDLET_UPDATE.
+                // Note: for reserved VMs this path is only reached after
+                // reservedVmsAcknowledged == NUM_RESERVED (guard in processEvent),
+                // meaning only on-demand VMs can be unregistered at this point.
                 CondorVM provVm = vmPool.getVmById(vmId);
                 if (provVm != null) {
-                    provVm.setState(WorkflowSimTags.VM_STATUS_IDLE);
                     if (!getVmList().contains(provVm)) newVms.add(provVm);
                 }
                 continue;
@@ -203,6 +236,8 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
                     ? Parameters.getOverheadParams().getQueueDelay(cl) : 0.0;
             schedule(dcId, delay, CloudSimTags.CLOUDLET_SUBMIT, cl);
             actuallySubmitted.add(cl);
+            CBMWLogger.log("DISPATCH", String.format("wf=%d task=%d vm=%d",
+                    workflowIdForJob((Job) cl), cl.getCloudletId(), cl.getVmId()));
         }
 
         if (!newVms.isEmpty()) {

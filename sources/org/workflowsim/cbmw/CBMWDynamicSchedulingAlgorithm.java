@@ -79,14 +79,11 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
 
             if (plannedVm == CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL) {
                 CondorVM vm = provisioner.getOrProvision(job);
-                if (vm.getState() == WorkflowSimTags.VM_STATUS_IDLE) {
-                    assign(job, vm);
-                    toSchedule.add(job);
-                    CBMWLogger.log("DISPATCH",
-                            String.format("wf=%d task=%d planned=ON-DEMAND -> vm=%d (on-demand)",
-                                    wfId, taskId, vm.getId()));
-                }
-                // else: VM just provisioned but not in datacenter yet — retry next tick
+                assign(job, vm);
+                toSchedule.add(job);
+                CBMWLogger.log("DISPATCH",
+                        String.format("wf=%d task=%d planned=ON-DEMAND -> vm=%d (on-demand)",
+                                wfId, taskId, vm.getId()));
             } else {
                 CondorVM planned = pool.getVmById(plannedVm);
                 if (planned != null && planned.getState() == WorkflowSimTags.VM_STATUS_IDLE) {
@@ -105,19 +102,15 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                                 String.format("wf=%d task=%d planned=vm%d BUSY -> advanced to vm=%d",
                                         wfId, taskId, plannedVm, earlier.getId()));
                     } else if (earlier == null || now >= wfr.getLST(taskId)) {
-                        // No idle reserved VM available at all, or past LST — fall back to on-demand
-                        // immediately rather than blocking. Prefer reusing an idle on-demand VM.
-                        CondorVM idleOD = pool.getAnyIdleOnDemandVm();
-                        CondorVM vm = (idleOD != null) ? idleOD : provisioner.getOrProvision(job);
-                        if (vm.getState() == WorkflowSimTags.VM_STATUS_IDLE) {
-                            assign(job, vm);
-                            toSchedule.add(job);
-                            CBMWLogger.log("DISPATCH",
-                                    String.format("wf=%d task=%d planned=vm%d %s -> on-demand vm=%d",
-                                            wfId, taskId, plannedVm,
-                                            earlier == null ? "no-idle-reserved" : "past-LST",
-                                            vm.getId()));
-                        }
+                        // No idle reserved VM available at all, or past LST — fall back to on-demand.
+                        CondorVM vm = provisioner.getOrProvision(job);
+                        assign(job, vm);
+                        toSchedule.add(job);
+                        CBMWLogger.log("DISPATCH",
+                                String.format("wf=%d task=%d planned=vm%d %s -> on-demand vm=%d",
+                                        wfId, taskId, plannedVm,
+                                        earlier == null ? "no-idle-reserved" : "past-LST",
+                                        vm.getId()));
                     } else {
                         // Idle reserved VM exists but advancing would push a child past its LST.
                         // Wait for the planned VM or until LST is reached.

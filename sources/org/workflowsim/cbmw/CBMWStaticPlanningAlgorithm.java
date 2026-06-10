@@ -66,12 +66,17 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
             double dur     = task.getCloudletLength() / HybridVmPool.RESERVED_MIPS;
             int    bestVm  = ON_DEMAND_SENTINEL;
             double bestSlot = -1.0;
+            int    bestLoad = Integer.MAX_VALUE;
 
             for (CondorVM vm : pool.getReservedVms()) {
                 double slot = findLatestFeasibleSlot(vm.getId(), lst, dur, deadline);
-                if (slot >= 0 && slot > bestSlot) {
+                if (slot < 0) continue;
+                int load = pool.getBookings(vm.getId()).size();
+                // Prefer latest slot; break ties by fewest bookings (spread load)
+                if (slot > bestSlot + 1e-9 || (slot >= bestSlot - 1e-9 && load < bestLoad)) {
                     bestSlot = slot;
                     bestVm   = vm.getId();
+                    bestLoad = load;
                 }
             }
 
@@ -107,22 +112,20 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
      * Returns -1 if no such slot exists.
      */
     private double findLatestFeasibleSlot(int vmId, double lst, double dur, double deadline) {
-        // Cap planning horizon to arrival + 1.5×CP so loose-deadline workflows don't
-        // block reserved capacity far into the future.
+        double now     = CloudSim.clock();
         double horizon = wfr.getArrivalTime() + wfr.getCriticalPathLength() * 1.5;
         double candidate = Math.min(lst - dur, Math.min(deadline - dur, horizon - dur));
-        if (candidate < 0) return -1.0;
+        // Never book a slot that starts in the past
+        if (candidate < now) return -1.0;
 
         List<double[]> booked = pool.getBookings(vmId);
         List<double[]> sorted = new ArrayList<>(booked);
         Collections.sort(sorted, Comparator.comparingDouble(s -> s[0]));
 
-        double now = CloudSim.clock();
-        while (candidate >= 0) {
+        while (candidate >= now) {
             boolean conflict = false;
             for (double[] interval : sorted) {
-                // Skip bookings that are already past — task already ran and released its slot
-                if (interval[1] <= now) continue;
+                if (interval[1] <= now) continue; // already past
                 if (candidate < interval[1] && candidate + dur > interval[0]) {
                     conflict = true;
                     candidate = interval[0] - dur - 1e-9;
