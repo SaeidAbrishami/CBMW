@@ -54,6 +54,10 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
     // the pool is fully initialised before any task is dispatched.
     private int reservedVmsAcknowledged = 0;
 
+    // On-demand VMs waiting for their OPD to expire before being registered.
+    // vmId -> simTime at which the VM becomes available (now + OPD when ordered).
+    private final Map<Integer, Double> pendingVmCreations = new HashMap<>();
+
     private final List<WorkflowArrivalData> pendingArrivals     = new ArrayList<>();
     private final List<Double>              pendingArrivalTimes = new ArrayList<>();
     private double simEndTime = -1;
@@ -117,6 +121,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
                 // scheduler from setting a VM BUSY before the datacenter has
                 // registered it, which would permanently strand that VM.
                 if (reservedVmsAcknowledged < HybridVmPool.NUM_RESERVED) return;
+                processPendingVmCreations();
                 super.processEvent(ev);
                 break;
             default:
@@ -212,23 +217,57 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
     // Shared dispatch helper — called by every subclass processCloudletUpdate
     // -----------------------------------------------------------------------
 
+    /**
+     * Registers any on-demand VMs whose OPD countdown has expired.
+     * Called on every CLOUDLET_UPDATE so VMs become available at exactly
+     * readyAt = orderTime + ON_DEMAND_PROVISIONING_DELAY.
+     */
+    private void processPendingVmCreations() {
+        double now = CloudSim.clock();
+        List<Integer>  toRemove  = new ArrayList<>();
+        List<CondorVM> readyVms  = new ArrayList<>();
+        for (Map.Entry<Integer, Double> e : pendingVmCreations.entrySet()) {
+            if (now >= e.getValue()) {
+                CondorVM vm = vmPool.getVmById(e.getKey());
+                if (vm != null && !getVmList().contains(vm)) readyVms.add(vm);
+                toRemove.add(e.getKey());
+            }
+        }
+        toRemove.forEach(pendingVmCreations::remove);
+        if (!readyVms.isEmpty()) {
+            submitVmList(readyVms);
+            createVmsInDatacenter(getDatacenterIdsList().get(0));
+            CBMWLogger.log("VM-PROVISION-READY",
+                    String.format("registered %d on-demand VMs at t=%.1f (opd=%.0fs)",
+                            readyVms.size(), now,
+                            HybridVmPool.ON_DEMAND_PROVISIONING_DELAY));
+        }
+    }
+
     protected void dispatchScheduledJobs(List<Cloudlet> toSchedule) {
-        List<CondorVM> newVms          = new ArrayList<>();
         List<Cloudlet> actuallySubmitted = new ArrayList<>();
 
         for (Cloudlet cl : toSchedule) {
             int vmId = cl.getVmId();
             Integer dcId = getVmsToDatacentersMap().get(vmId);
             if (dcId == null) {
-                // VM provisioned but not yet registered with the datacenter —
-                // batch-register; the cloudlet stays in the ready queue and
-                // will be retried on the next CLOUDLET_UPDATE.
-                // Note: for reserved VMs this path is only reached after
-                // reservedVmsAcknowledged == NUM_RESERVED (guard in processEvent),
-                // meaning only on-demand VMs can be unregistered at this point.
+                // VM provisioned but not yet registered with the datacenter.
+                // If it hasn't been ordered yet, start the OPD countdown and
+                // schedule a wake-up at the exact moment it becomes available.
+                // The cloudlet stays in the ready queue and will be retried on
+                // the next CLOUDLET_UPDATE (which fires at readyAt + ~0.1s).
                 CondorVM provVm = vmPool.getVmById(vmId);
-                if (provVm != null) {
-                    if (!getVmList().contains(provVm)) newVms.add(provVm);
+                if (provVm != null
+                        && !pendingVmCreations.containsKey(vmId)
+                        && !getVmList().contains(provVm)) {
+                    double readyAt = CloudSim.clock()
+                            + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY;
+                    pendingVmCreations.put(vmId, readyAt);
+                    schedule(getId(), HybridVmPool.ON_DEMAND_PROVISIONING_DELAY,
+                            WorkflowSimTags.CLOUDLET_UPDATE);
+                    CBMWLogger.log("VM-PROVISION-ORDERED",
+                            String.format("on-demand vm=%d orderedAt=%.1f readyAt=%.1f",
+                                    vmId, CloudSim.clock(), readyAt));
                 }
                 continue;
             }
@@ -238,11 +277,6 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
             actuallySubmitted.add(cl);
             CBMWLogger.log("DISPATCH", String.format("wf=%d task=%d vm=%d",
                     workflowIdForJob((Job) cl), cl.getCloudletId(), cl.getVmId()));
-        }
-
-        if (!newVms.isEmpty()) {
-            submitVmList(newVms);
-            createVmsInDatacenter(getDatacenterIdsList().get(0));
         }
 
         getCloudletList().removeAll(actuallySubmitted);

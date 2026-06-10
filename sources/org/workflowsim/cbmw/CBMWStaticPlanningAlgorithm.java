@@ -83,19 +83,24 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
             if (bestVm != ON_DEMAND_SENTINEL) {
                 task.setVmId(bestVm);
                 wfr.setAssignedVm(task.getCloudletId(), bestVm);
+                wfr.setScheduledStart(task.getCloudletId(), bestSlot);
                 pool.bookSlot(bestVm, task.getCloudletId(), bestSlot, bestSlot + dur);
                 CBMWLogger.log("PLAN-ASSIGN-RESERVED",
                         String.format("wf=%d task=%d -> vm=%d slot=[%.4f, %.4f]",
                                 wfr.getWorkflowId(), task.getCloudletId(),
                                 bestVm, bestSlot, bestSlot + dur));
             } else {
+                // sstji = lstji - OPD (paper Algorithm 1 line 9); clamp to arrivalTime
+                double sst = Math.max(wfr.getArrivalTime(),
+                        lst - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
                 task.setVmId(ON_DEMAND_SENTINEL);
                 wfr.setAssignedVm(task.getCloudletId(), ON_DEMAND_SENTINEL);
+                wfr.setScheduledStart(task.getCloudletId(), sst);
                 CBMWLogger.log("PLAN-ASSIGN-ONDEMAND",
-                        String.format("wf=%d task=%d lst=%.4f dur=%.4f"
+                        String.format("wf=%d task=%d lst=%.4f sst=%.4f dur=%.4f"
                                 + " (no reserved slot fits before deadline=%.4f)",
                                 wfr.getWorkflowId(), task.getCloudletId(),
-                                lst, dur, deadline));
+                                lst, sst, dur, deadline));
             }
         }
 

@@ -90,7 +90,13 @@
       "Bash(javac -cp \"lib/*\" -d bin @sources_list.txt)",
       "Bash(java -cp \"bin;lib/*\" org.workflowsim.examples.cbmw.CBMWSimulation)",
       "Bash(\"C:\\\\Users\\\\AsiaLapTop.Com\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" plot_comparison.py)",
-      "Bash(sort -t= -k2 -n)"
+      "Bash(sort -t= -k2 -n)",
+      "Bash(\"C:\\\\Users\\\\AsiaLapTop.Com\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" -c \"import pdfplumber; pdf = pdfplumber.open\\('CBMW- JCluster.pdf'\\); [print\\(f'=== PAGE {i+1} ===\\\\n{p.extract_text\\(\\)}'\\) for i, p in enumerate\\(pdf.pages[:6]\\)]\")",
+      "Read(//c/Users/AsiaLapTop.Com/AppData/Local/Microsoft/WinGet/**)",
+      "Read(//c/Users/AsiaLapTop.Com/AppData/Local/Programs/**)",
+      "Bash(dir sources *)",
+      "Bash(findstr \"\\\\.java$\")",
+      "PowerShell(cd \"P:\\\\University\\\\CBMW_Workflow_Simulation\"; Select-String -Path \"Output\\\\CBMW_t2.0_detail.log\" -Pattern \"wf=18\" | Where-Object { $_ -match \"TASK-COMPLETE|PLAN-ASSIGN|DISPATCH-STUCK\" } | Select-Object -Last 15)"
     ]
   }
 }

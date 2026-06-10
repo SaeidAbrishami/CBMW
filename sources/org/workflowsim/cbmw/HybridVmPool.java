@@ -18,6 +18,8 @@ public class HybridVmPool {
     public static final double RESERVED_MIPS        = 1000.0;
     public static final double RESERVED_HOURLY_COST = 3.26;    // hpc7a.96xlarge $/hr
     public static final double ON_DEMAND_PER_SEC    = 0.000905; // Fargate $/sec
+    /** Modelled on-demand provisioning delay (seconds). sstji = lstji - OPD. */
+    public static final double ON_DEMAND_PROVISIONING_DELAY = 120.0;
 
     private final List<CondorVM> reservedVms  = new ArrayList<>();
     private final List<CondorVM> onDemandVms  = new ArrayList<>();

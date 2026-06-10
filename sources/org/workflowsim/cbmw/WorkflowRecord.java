@@ -16,8 +16,9 @@ public class WorkflowRecord {
     private boolean accepted;
 
     private List<Task> taskList;
-    private final Map<Integer, Double> latestStartTimes = new HashMap<>();  // taskId -> LST
-    private final Map<Integer, Integer> taskVmAssignment = new HashMap<>(); // taskId -> vmId
+    private final Map<Integer, Double> latestStartTimes    = new HashMap<>();  // taskId -> LST
+    private final Map<Integer, Double> scheduledStartTimes = new HashMap<>();  // taskId -> sstji (for on-demand tasks)
+    private final Map<Integer, Integer> taskVmAssignment  = new HashMap<>();  // taskId -> vmId
 
     private boolean deadlineMet;
     private double totalOnDemandCost;
@@ -51,6 +52,11 @@ public class WorkflowRecord {
     public void setLST(int taskId, double lst) { latestStartTimes.put(taskId, lst); }
     public double getLST(int taskId) {
         return latestStartTimes.getOrDefault(taskId, Double.MAX_VALUE);
+    }
+    /** Scheduled start time (sstji). For on-demand: lstji - OPD; 0 if not set. */
+    public void setScheduledStart(int taskId, double sst) { scheduledStartTimes.put(taskId, sst); }
+    public double getScheduledStart(int taskId) {
+        return scheduledStartTimes.getOrDefault(taskId, 0.0);
     }
     public void setAssignedVm(int taskId, int vmId) { taskVmAssignment.put(taskId, vmId); }
     public int getAssignedVm(int taskId) {
