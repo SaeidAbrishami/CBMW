@@ -52,6 +52,7 @@ public class CBMWBroker extends AbstractWorkflowBroker {
     @Override
     @SuppressWarnings("unchecked")
     protected void processCloudletUpdate(SimEvent ev) {
+        recordReadyQueue((List<Cloudlet>) getCloudletList());
         dynamicScheduler.setCloudletList(getCloudletList());
         dynamicScheduler.setVmList(getVmsCreatedList());
         dynamicScheduler.getScheduledList().clear();

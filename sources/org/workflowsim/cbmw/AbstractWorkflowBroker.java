@@ -41,6 +41,8 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
     protected final HybridVmPool     vmPool;
     protected final NegotiationModule negotiation;
     protected final ProvisioningModule provisioner;
+    protected final CBMWAccounting accounting = new CBMWAccounting();
+    protected final double tightness;
 
     protected final Map<Integer, WorkflowRecord> activeWorkflows = new HashMap<>();
     protected final List<WorkflowRecord>         allWorkflows    = new ArrayList<>();
@@ -64,6 +66,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
 
     protected AbstractWorkflowBroker(String name, double tightness) throws Exception {
         super(name);
+        this.tightness = tightness;
         this.vmPool      = new HybridVmPool(getId());
         this.negotiation = new NegotiationModule(tightness);
         this.provisioner = new ProvisioningModule(vmPool, getId());
@@ -81,6 +84,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
     public void setSimEndTime(double time) { this.simEndTime = time; }
     public HybridVmPool          getVmPool()      { return vmPool; }
     public List<WorkflowRecord>  getAllWorkflows() { return allWorkflows; }
+    public CBMWAccounting        getAccounting() { return accounting; }
 
     // -----------------------------------------------------------------------
     // CloudSim lifecycle
@@ -150,6 +154,9 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
                                 vmId, vmPool.getReservedVms().size(),
                                 reservedVmsAcknowledged, HybridVmPool.NUM_RESERVED));
             }
+        } else if (result != CloudSimTags.FALSE) {
+            accounting.markOnDemandLaunched(vmId, CloudSim.clock());
+            accounting.snapshotUtilization(vmPool);
         }
         sendNow(getId(), WorkflowSimTags.CLOUDLET_UPDATE);
     }
@@ -176,8 +183,14 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         if (vm != null) vm.setState(WorkflowSimTags.VM_STATUS_IDLE);
 
         int wfId = workflowIdForJob(job);
-        if (provisioner.isOnDemandVm(cl.getVmId())) {
-            provisioner.jobCompleted(cl.getCloudletId());
+        boolean onDemand = provisioner.isOnDemandVm(cl.getVmId());
+        accounting.markTaskFinished(cl, onDemand);
+
+        if (onDemand) {
+            CondorVM idleOnDemand = provisioner.jobCompleted(cl.getCloudletId());
+            if (idleOnDemand != null) {
+                accounting.markOnDemandDestroyed(idleOnDemand.getId(), CloudSim.clock());
+            }
             WorkflowRecord wfr = activeWorkflows.get(wfId);
             double cost = cl.getActualCPUTime() * HybridVmPool.ON_DEMAND_PER_SEC;
             if (wfr != null) wfr.addOnDemandCost(cost);
@@ -192,6 +205,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
                     String.format("task=%d wf=%d vm=%d(reserved) actualCPU=%.4fs",
                             cl.getCloudletId(), wfId, cl.getVmId(), cl.getActualCPUTime()));
         }
+        accounting.snapshotUtilization(vmPool);
 
         updateWorkflowCompletion(job);
 
@@ -203,6 +217,11 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
 
     /** Called when a reserved-VM task completes. Default no-op. */
     protected void onTaskComplete(Cloudlet cl) {}
+
+    /** Records the current ready queue before an algorithm dispatches from it. */
+    protected void recordReadyQueue(List<Cloudlet> readyJobs) {
+        accounting.markReadyQueue(readyJobs);
+    }
 
     // -----------------------------------------------------------------------
     // Simulation end
@@ -263,6 +282,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
                     double readyAt = CloudSim.clock()
                             + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY;
                     pendingVmCreations.put(vmId, readyAt);
+                    accounting.markOnDemandOrdered(vmId, CloudSim.clock(), readyAt);
                     schedule(getId(), HybridVmPool.ON_DEMAND_PROVISIONING_DELAY,
                             WorkflowSimTags.CLOUDLET_UPDATE);
                     CBMWLogger.log("VM-PROVISION-ORDERED",
@@ -275,6 +295,8 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
                     ? Parameters.getOverheadParams().getQueueDelay(cl) : 0.0;
             schedule(dcId, delay, CloudSimTags.CLOUDLET_SUBMIT, cl);
             actuallySubmitted.add(cl);
+            accounting.markTaskSubmitted(cl, provisioner.isOnDemandVm(vmId));
+            accounting.snapshotUtilization(vmPool);
             CBMWLogger.log("DISPATCH", String.format("wf=%d task=%d vm=%d",
                     workflowIdForJob((Job) cl), cl.getCloudletId(), cl.getVmId()));
         }
@@ -333,6 +355,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
             if (engine != null) engine.notifyWorkflowDisposed();
             return;
         }
+        accounting.registerWorkflowTasks(wfr, tasks, tightness);
 
         List<Job> jobs = wrapTasksAsJobs(tasks, wfr);
         activeWorkflows.put(wfId, wfr);
@@ -453,6 +476,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         if (allDone) {
             boolean met = wfr.getCompletionTime() <= wfr.getDeadline();
             wfr.setDeadlineMet(met);
+            accounting.markWorkflowComplete(wfr, tightness);
             activeWorkflows.remove(wfId);
             CBMWLogger.log("WF-COMPLETE",
                     String.format("wf=%d completionTime=%.4f deadline=%.4f -> %s",

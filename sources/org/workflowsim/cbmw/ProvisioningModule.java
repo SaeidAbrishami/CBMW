@@ -51,16 +51,21 @@ public class ProvisioningModule {
         return vmJobCount.containsKey(vmId) && vmJobCount.get(vmId) == 1;
     }
 
-    /** Called when a job on an on-demand VM completes. Marks the VM idle for reuse. */
-    public void jobCompleted(int jobId) {
+    /**
+     * Called when a job on an on-demand VM completes. Marks the VM idle for
+     * reuse and returns the VM when it has no remaining running jobs.
+     */
+    public CondorVM jobCompleted(int jobId) {
         CondorVM vm = jobToVm.remove(jobId);
         if (vm != null) {
             int count = vmJobCount.merge(vm.getId(), -1, Integer::sum);
             if (count <= 0) {
                 vmJobCount.remove(vm.getId());
                 vm.setState(org.workflowsim.WorkflowSimTags.VM_STATUS_IDLE);
+                return vm;
             }
         }
+        return null;
     }
 
     public boolean isOnDemandVm(int vmId) {

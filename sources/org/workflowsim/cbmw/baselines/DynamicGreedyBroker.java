@@ -67,6 +67,7 @@ public class DynamicGreedyBroker extends AbstractWorkflowBroker {
     @SuppressWarnings("unchecked")
     protected void processCloudletUpdate(SimEvent ev) {
         double now = CloudSim.clock();
+        recordReadyQueue((List<Cloudlet>) getCloudletList());
 
         // Delayed ready queue: all pending tasks sorted by SST ascending.
         List<Cloudlet> readyJobs = new ArrayList<>((List<Cloudlet>) getCloudletList());

@@ -149,6 +149,7 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
     @Override
     @SuppressWarnings("unchecked")
     protected void processCloudletUpdate(SimEvent ev) {
+        recordReadyQueue((List<Cloudlet>) getCloudletList());
         dispatcher.setCloudletList(getCloudletList());
         dispatcher.setVmList(getVmsCreatedList());
         dispatcher.getScheduledList().clear();

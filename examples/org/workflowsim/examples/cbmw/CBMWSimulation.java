@@ -52,16 +52,16 @@ public class CBMWSimulation {
     private static final String[] ALGORITHMS      = {"CBMW", "StaticGreedy", "DynamicGreedy"};
 
     // ---- SMALL RUN (20 workflows, 100-task only, arrivals ~500s) ----
-    private static final String WORKFLOW_DIR    = "test_workflows";
-    private static final String POISSON_FILE    = "poisson_small.json";
-    private static final double TIGHTNESS       = 2.0;
-    private static final double SIM_BUFFER_SECS = 2000.0;
+    // private static final String WORKFLOW_DIR    = "test_workflows";
+    // private static final String POISSON_FILE    = "poisson_small.json";
+    // private static final double TIGHTNESS       = 2.0;
+    // private static final double SIM_BUFFER_SECS = 2000.0;
 
     // ---- FULL RUN (200 workflows, 100+1000-task, arrivals ~7500s) ----
-    // private static final String WORKFLOW_DIR    = "test_workflows";
-    // private static final String POISSON_FILE    = "poisson_distribution.json";
-    // private static final double TIGHTNESS       = 2.0;
-    // private static final double SIM_BUFFER_SECS = 5000.0;
+    private static final String WORKFLOW_DIR    = "test_workflows";
+    private static final String POISSON_FILE    = "poisson_distribution.json";
+    private static final double TIGHTNESS       = 2.0;
+    private static final double SIM_BUFFER_SECS = 5000.0;
 
     public static void main(String[] args) throws Exception {
         new File(OUTPUT_DIR).mkdirs();
