@@ -40,10 +40,12 @@ public class CBMWResultCollector {
 
     /** CSV header for batch output. */
     public static String csvHeader() {
-        return "scenario,algorithm,lambda,tightness,run,total,accepted,deadlineRate,onDemandCost,reservedCost,makespan,reservedUtil";
+        return "scenario,load,deadlineClass,algorithm,arrivalScale,tightness,run,total,accepted,deadlineRate,onDemandCost,reservedCost,totalCost,makespan,reservedUtil,onDemandUsageRatio";
     }
 
-    public String toCsvRow(String algorithm, double lambda, double tightness, int run) {
+    public String toCsvRow(String scenario, String load, String deadlineClass,
+                           String algorithm, double arrivalScale,
+                           double tightness, int run, double onDemandUsageRatio) {
         long total    = allWorkflows.size();
         long accepted = allWorkflows.stream().filter(WorkflowRecord::isAccepted).count();
         long met      = allWorkflows.stream()
@@ -57,11 +59,12 @@ public class CBMWResultCollector {
         double hours = Math.ceil(simulationDurationSeconds() / 3600.0);
         double reservedCost = HybridVmPool.NUM_RESERVED * HybridVmPool.RESERVED_HOURLY_COST * hours;
         double reservedUtil = reservedUtilization();
+        double totalCost = odCost + reservedCost;
 
-        return String.format("%s_%s_lam%.0f_t%.1f,%s,%.1f,%.1f,%d,%d,%d,%.4f,%.4f,%.2f,%.2f,%.4f",
-                algorithm, tightness > 2 ? "loose" : "tight", lambda, tightness,
-                algorithm, lambda, tightness, run, total, accepted,
-                deadlineRate, odCost, reservedCost, makespan, reservedUtil);
+        return String.format("%s,%s,%s,%s,%.4f,%.1f,%d,%d,%d,%.4f,%.4f,%.2f,%.4f,%.2f,%.4f,%.4f",
+                scenario, load, deadlineClass, algorithm, arrivalScale, tightness,
+                run, total, accepted, deadlineRate, odCost, reservedCost,
+                totalCost, makespan, reservedUtil, onDemandUsageRatio);
     }
 
     private double reservedUtilization() {

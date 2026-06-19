@@ -30,7 +30,9 @@ import org.workflowsim.cbmw.CBMWResultCollector;
 import org.workflowsim.cbmw.HybridVmPool;
 import org.workflowsim.cbmw.WorkflowArrivalData;
 import org.workflowsim.cbmw.WorkflowLoader;
+import org.workflowsim.cbmw.baselines.CEWBBroker;
 import org.workflowsim.cbmw.baselines.DynamicGreedyBroker;
+import org.workflowsim.cbmw.baselines.NOSFBroker;
 import org.workflowsim.cbmw.baselines.StaticGreedyBroker;
 import org.workflowsim.utils.ClusteringParameters;
 import org.workflowsim.utils.OverheadParameters;
@@ -40,46 +42,71 @@ import org.workflowsim.utils.ReplicaCatalog;
 /**
  * Main simulation driver for CBMW paper experiments.
  *
- * Runs one scenario: all three algorithms (CBMW, StaticGreedy, DynamicGreedy)
- * against the same real workflow arrivals from test_workflows/.
+ * Runs the new experiment matrix: CBMW plus paper and greedy baselines across
+ * low/moderate/heavy load and tight/medium/loose
+ * deadlines against the same 200 real workflow arrivals from test_workflows/.
  * Arrival times come from poisson_distribution.json; deadlines are
- * arrivalTime + criticalPath * TIGHTNESS; task runtimes use the perturbed
+ * arrivalTime + criticalPath * tightness; task runtimes use the perturbed
  * values from the matching .txt files.
  */
 public class CBMWSimulation {
 
     private static final String   OUTPUT_DIR      = "Output";
     private static final String   CSV_OUTPUT      = OUTPUT_DIR + File.separator + "results.csv";
-    private static final String[] ALGORITHMS      = {"CBMW", "StaticGreedy", "DynamicGreedy"};
+    private static final String[] ALGORITHMS      = {
+            "CBMW", "NOSF", "CEWB", "StaticGreedy", "DynamicGreedy"
+    };
 
-    // ---- SMALL RUN (20 workflows, 100-task only, arrivals ~500s) ----
-    // private static final String WORKFLOW_DIR    = "test_workflows";
-    // private static final String POISSON_FILE    = "poisson_small.json";
-    // private static final double TIGHTNESS       = 2.0;
-    // private static final double SIM_BUFFER_SECS = 2000.0;
-
-    // ---- FULL RUN (200 workflows, 100+1000-task, arrivals ~7500s) ----
     private static final String WORKFLOW_DIR    = "test_workflows";
     private static final String POISSON_FILE    = "poisson_distribution.json";
-    private static final double TIGHTNESS       = 2.0;
     private static final double SIM_BUFFER_SECS = 5000.0;
+    private static final boolean GENERATE_GANTT = Boolean.parseBoolean(
+            System.getProperty("cbmw.generate.gantt", "false"));
+    private static final boolean EXPORT_DETAILS = Boolean.parseBoolean(
+            System.getProperty("cbmw.export.details", "true"));
+
+    private static final DeadlineClass[] DEADLINES = {
+            new DeadlineClass("tight", 1.2),
+            new DeadlineClass("medium", 2.0),
+            new DeadlineClass("loose", 4.0)
+    };
+
+    /**
+     * Arrival scale changes only inter-arrival spacing. Smaller scale means
+     * denser arrivals and heavier load.
+     */
+    private static final LoadScenario[] LOADS = {
+            new LoadScenario("low", 2.0),
+            new LoadScenario("moderate", 1.0),
+            new LoadScenario("heavy", 0.5)
+    };
 
     public static void main(String[] args) throws Exception {
         new File(OUTPUT_DIR).mkdirs();
 
-        List<WorkflowArrivalData> arrivals = WorkflowLoader.load(WORKFLOW_DIR, POISSON_FILE, TIGHTNESS);
-        if (arrivals.isEmpty()) {
-            System.out.println("No arrivals loaded. Check "
-                    + WORKFLOW_DIR + File.separator + "poisson_distribution.json");
-            return;
-        }
-
-        double simDuration = arrivals.get(arrivals.size() - 1).getArrivalTime() + SIM_BUFFER_SECS;
         StringBuilder csv = new StringBuilder(CBMWResultCollector.csvHeader()).append("\n");
 
-        for (String algo : ALGORITHMS) {
-            runScenario(algo, arrivals, simDuration, csv);
-            System.out.println("Completed: " + algo);
+        for (DeadlineClass deadline : DEADLINES) {
+            List<WorkflowArrivalData> baseArrivals =
+                    WorkflowLoader.load(WORKFLOW_DIR, POISSON_FILE, deadline.tightness);
+            if (baseArrivals.isEmpty()) {
+                System.out.println("No arrivals loaded. Check "
+                        + WORKFLOW_DIR + File.separator + POISSON_FILE);
+                return;
+            }
+
+            for (LoadScenario load : LOADS) {
+                List<WorkflowArrivalData> arrivals =
+                        scaleArrivals(baseArrivals, load.arrivalScale);
+                double simDuration = arrivals.get(arrivals.size() - 1).getArrivalTime()
+                        + SIM_BUFFER_SECS;
+
+                for (String algo : ALGORITHMS) {
+                    runScenario(algo, load, deadline, arrivals, simDuration, csv);
+                    System.out.println("Completed: " + load.name + " "
+                            + deadline.name + " " + algo);
+                }
+            }
         }
 
         saveCsv(csv.toString());
@@ -91,10 +118,12 @@ public class CBMWSimulation {
     // -----------------------------------------------------------------------
 
     private static void runScenario(String algorithm,
+                                     LoadScenario load,
+                                     DeadlineClass deadline,
                                      List<WorkflowArrivalData> arrivals,
                                      double simDuration,
                                      StringBuilder csv) throws Exception {
-        Parameters.setTightness(TIGHTNESS);
+        Parameters.setTightness(deadline.tightness);
         Parameters.setSimDuration(simDuration);
         Parameters.setCostModel(Parameters.CostModel.VM);
 
@@ -115,7 +144,7 @@ public class CBMWSimulation {
         WorkflowPlanner planner = new WorkflowPlanner("planner_0", 1);
         WorkflowEngine  engine  = planner.getWorkflowEngine();
 
-        AbstractWorkflowBroker broker = createBroker(algorithm, TIGHTNESS);
+        AbstractWorkflowBroker broker = createBroker(algorithm, deadline.tightness);
         engine.replaceScheduler(broker);
         broker.submitVmList(broker.getVmPool().getReservedVms());
         engine.bindSchedulerDatacenter(datacenter.getId(), 0);
@@ -127,7 +156,8 @@ public class CBMWSimulation {
         }
         broker.setSimEndTime(simDuration);
 
-        String label   = algorithm + "_t" + TIGHTNESS;
+        String scenario = load.name + "_" + deadline.name;
+        String label   = scenario + "_" + algorithm + "_t" + deadline.tightness;
         String logFile = OUTPUT_DIR + File.separator + label + "_detail.log";
         CBMWLogger.init(logFile);
         CloudSim.startSimulation();
@@ -136,19 +166,25 @@ public class CBMWSimulation {
 
         CBMWResultCollector collector = new CBMWResultCollector(broker.getAllWorkflows());
         collector.printReport(label);
-        csv.append(collector.toCsvRow(algorithm, 0.0, TIGHTNESS, 0)).append("\n");
+        csv.append(collector.toCsvRow(scenario, load.name, deadline.name,
+                algorithm, load.arrivalScale, deadline.tightness, 0,
+                broker.getAccounting().getOnDemandUsageRatio())).append("\n");
 
-        File detailsDir = new File(OUTPUT_DIR, label + "_details");
-        new CBMWDetailedResultExporter(
-                broker.getAllWorkflows(),
-                broker.getAccounting(),
-                broker.getVmPool(),
-                algorithm,
-                TIGHTNESS,
-                simDuration).export(detailsDir);
-        System.out.println("[details] Saved to " + detailsDir.getAbsolutePath());
+        if (EXPORT_DETAILS) {
+            File detailsDir = new File(OUTPUT_DIR, label + "_details");
+            new CBMWDetailedResultExporter(
+                    broker.getAllWorkflows(),
+                    broker.getAccounting(),
+                    broker.getVmPool(),
+                    algorithm,
+                    deadline.tightness,
+                    simDuration).export(detailsDir);
+            System.out.println("[details] Saved to " + detailsDir.getAbsolutePath());
+        }
 
-        generateGanttChart(label);
+        if (GENERATE_GANTT) {
+            generateGanttChart(label);
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -159,6 +195,8 @@ public class CBMWSimulation {
                                                         double tightness) throws Exception {
         switch (algorithm) {
             case "CBMW":          return new CBMWBroker("CBMWBroker_0", tightness);
+            case "NOSF":          return new NOSFBroker("NOSFBroker_0", tightness);
+            case "CEWB":          return new CEWBBroker("CEWBBroker_0", tightness);
             case "StaticGreedy":  return new StaticGreedyBroker("StaticGreedyBroker_0", tightness);
             case "DynamicGreedy": return new DynamicGreedyBroker("DynamicGreedyBroker_0", tightness);
             default: throw new IllegalArgumentException("Unknown algorithm: " + algorithm);
@@ -212,7 +250,39 @@ public class CBMWSimulation {
     }
 
     private static void generateComparisonCharts() {
-        runPython("plot_comparison.py", CSV_OUTPUT);
+        runPython("plot_new_experiment.py", CSV_OUTPUT);
+    }
+
+    private static List<WorkflowArrivalData> scaleArrivals(
+            List<WorkflowArrivalData> arrivals, double arrivalScale) {
+        List<WorkflowArrivalData> scaled = new ArrayList<>();
+        for (WorkflowArrivalData arrival : arrivals) {
+            double deadlineSlack = arrival.getUserDeadline() - arrival.getArrivalTime();
+            double scaledArrival = arrival.getArrivalTime() * arrivalScale;
+            scaled.add(new WorkflowArrivalData(arrival.getDaxPath(),
+                    scaledArrival, scaledArrival + deadlineSlack));
+        }
+        return scaled;
+    }
+
+    private static class LoadScenario {
+        final String name;
+        final double arrivalScale;
+
+        LoadScenario(String name, double arrivalScale) {
+            this.name = name;
+            this.arrivalScale = arrivalScale;
+        }
+    }
+
+    private static class DeadlineClass {
+        final String name;
+        final double tightness;
+
+        DeadlineClass(String name, double tightness) {
+            this.name = name;
+            this.tightness = tightness;
+        }
     }
 
     private static void runPython(String... scriptAndArgs) {

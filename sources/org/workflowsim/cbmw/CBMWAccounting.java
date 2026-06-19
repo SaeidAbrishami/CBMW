@@ -125,6 +125,20 @@ public class CBMWAccounting {
         return Collections.unmodifiableList(utilizationSnapshots);
     }
 
+    public double getOnDemandUsageRatio() {
+        double onDemandTime = 0.0;
+        double totalTime = 0.0;
+        for (TaskExecutionRecord record : taskRecords.values()) {
+            if (!Double.isFinite(record.getFinishTime())) continue;
+            double execTime = record.getExecutionTime();
+            totalTime += execTime;
+            if ("On-Demand".equals(record.getVmType())) {
+                onDemandTime += execTime;
+            }
+        }
+        return totalTime > 0.0 ? onDemandTime / totalTime : 0.0;
+    }
+
     private int primaryTaskId(Cloudlet cl) {
         if (cl instanceof Job) {
             Job job = (Job) cl;
