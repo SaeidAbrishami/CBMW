@@ -70,7 +70,7 @@ public class CBMWResultCollector {
         double makespan = allWorkflows.stream()
                 .mapToDouble(WorkflowRecord::getCompletionTime)
                 .filter(t -> t < Double.MAX_VALUE).max().orElse(0);
-        double capacity = HybridVmPool.NUM_RESERVED * makespan;
+        double capacity = HybridVmPool.NUM_RESERVED * HybridVmPool.RESERVED_CORES * makespan;
         return capacity > 0 ? totalCpu / capacity : 0.0;
     }
 

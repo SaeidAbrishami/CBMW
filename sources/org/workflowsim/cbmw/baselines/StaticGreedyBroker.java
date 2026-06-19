@@ -137,6 +137,8 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
         for (double[] interval : sorted) {
             if (interval[1] <= candidate) continue;     // booking already passed
             if (interval[0] >= candidate + dur) break;  // task fits before this booking
+            if (vmPool.overlapCount(vmId, candidate, candidate + dur)
+                    < HybridVmPool.RESERVED_CORES) break;
             candidate = interval[1];                     // push past the conflict
         }
         return candidate;

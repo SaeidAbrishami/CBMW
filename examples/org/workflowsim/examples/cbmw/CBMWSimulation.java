@@ -24,6 +24,7 @@ import org.workflowsim.WorkflowEngine;
 import org.workflowsim.WorkflowPlanner;
 import org.workflowsim.cbmw.AbstractWorkflowBroker;
 import org.workflowsim.cbmw.CBMWBroker;
+import org.workflowsim.cbmw.CBMWDetailedResultExporter;
 import org.workflowsim.cbmw.CBMWLogger;
 import org.workflowsim.cbmw.CBMWResultCollector;
 import org.workflowsim.cbmw.HybridVmPool;
@@ -136,6 +137,16 @@ public class CBMWSimulation {
         CBMWResultCollector collector = new CBMWResultCollector(broker.getAllWorkflows());
         collector.printReport(label);
         csv.append(collector.toCsvRow(algorithm, 0.0, TIGHTNESS, 0)).append("\n");
+
+        File detailsDir = new File(OUTPUT_DIR, label + "_details");
+        new CBMWDetailedResultExporter(
+                broker.getAllWorkflows(),
+                broker.getAccounting(),
+                broker.getVmPool(),
+                algorithm,
+                TIGHTNESS,
+                simDuration).export(detailsDir);
+        System.out.println("[details] Saved to " + detailsDir.getAbsolutePath());
 
         generateGanttChart(label);
     }

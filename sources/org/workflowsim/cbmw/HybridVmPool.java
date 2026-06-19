@@ -14,12 +14,28 @@ import org.workflowsim.WorkflowSimTags;
  */
 public class HybridVmPool {
 
-    public static final int    NUM_RESERVED        = 50;
+    public static final int    NUM_RESERVED = Integer.getInteger(
+            "cbmw.reserved.instances", 50);
+    public static final int    RESERVED_CORES = Integer.getInteger(
+            "cbmw.reserved.cores", 192);
+    public static final int    RESERVED_RAM_MB = Integer.getInteger(
+            "cbmw.reserved.ram.mb", 768 * 1024);
+    public static final int    ON_DEMAND_CORES = Integer.getInteger(
+            "cbmw.ondemand.cores", 32);
+    public static final int    ON_DEMAND_RAM_MB = Integer.getInteger(
+            "cbmw.ondemand.ram.mb", 64000);
+    public static final int    TASK_CORES = Integer.getInteger(
+            "cbmw.task.cores", 1);
+    public static final int    TASK_RAM_MB = Integer.getInteger(
+            "cbmw.task.ram.mb", 0);
     public static final double RESERVED_MIPS        = 1000.0;
-    public static final double RESERVED_HOURLY_COST = 3.26;    // hpc7a.96xlarge $/hr
-    public static final double ON_DEMAND_PER_SEC    = 0.000905; // Fargate $/sec
+    public static final double RESERVED_HOURLY_COST = Double.parseDouble(
+            System.getProperty("cbmw.reserved.hourly.cost", "3.26"));
+    public static final double ON_DEMAND_PER_SEC    = Double.parseDouble(
+            System.getProperty("cbmw.ondemand.per.sec", "0.000340"));
     /** Modelled on-demand provisioning delay (seconds). sstji = lstji - OPD. */
-    public static final double ON_DEMAND_PROVISIONING_DELAY = 120.0;
+    public static final double ON_DEMAND_PROVISIONING_DELAY = Double.parseDouble(
+            System.getProperty("cbmw.ondemand.delay.sec", "120.0"));
 
     private final List<CondorVM> reservedVms  = new ArrayList<>();
     private final List<CondorVM> onDemandVms  = new ArrayList<>();
@@ -30,15 +46,18 @@ public class HybridVmPool {
     private final Map<Integer, List<double[]>> reservedBookings = new HashMap<>();
     // taskId -> [vmId, start, end] so we can release by taskId on completion
     private final Map<Integer, double[]> taskBookingIndex = new HashMap<>();
+    // Runtime core occupancy per VM. This is separate from booking profiles.
+    private final Map<Integer, Integer> runningTasksByVm = new HashMap<>();
 
     public HybridVmPool(int userId) {
         for (int i = 0; i < NUM_RESERVED; i++) {
-            CondorVM vm = new CondorVM(i, userId, RESERVED_MIPS, 1,
-                    4096, 10000, 100000, "Xen",
+            CondorVM vm = new CondorVM(i, userId, RESERVED_MIPS, RESERVED_CORES,
+                    RESERVED_RAM_MB, 10000, 100000, "Xen",
                     0.0, 0.0, 0.0, 0.0,
                     new CloudletSchedulerSpaceShared());
             reservedVms.add(vm);
             reservedBookings.put(i, new ArrayList<>());
+            runningTasksByVm.put(i, 0);
         }
     }
 
@@ -61,6 +80,7 @@ public class HybridVmPool {
         reservedVms.removeIf(vm -> vm.getId() == vmId);
         reservedBookings.remove(vmId);
         taskBookingIndex.entrySet().removeIf(e -> (int) e.getValue()[0] == vmId);
+        runningTasksByVm.remove(vmId);
         CBMWLogger.log("VM-REMOVE",
                 String.format("reserved vm=%d removed from pool remainingReserved=%d",
                         vmId, reservedVms.size()));
@@ -68,7 +88,7 @@ public class HybridVmPool {
 
     public CondorVM getAnyIdleReservedVm() {
         for (CondorVM vm : reservedVms) {
-            if (vm.getState() == WorkflowSimTags.VM_STATUS_IDLE) return vm;
+            if (hasRuntimeCapacity(vm.getId())) return vm;
         }
         return null;
     }
@@ -79,21 +99,13 @@ public class HybridVmPool {
      * falls back to any idle VM if none are conflict-free.
      */
     public CondorVM getIdleReservedVmForAdvance(double now, double execEndTime) {
-        CondorVM anyIdle = null;
+        CondorVM anyCapacity = null;
         for (CondorVM vm : reservedVms) {
-            if (vm.getState() != WorkflowSimTags.VM_STATUS_IDLE) continue;
-            if (anyIdle == null) anyIdle = vm;
-            boolean conflict = false;
-            for (double[] interval : getBookings(vm.getId())) {
-                if (interval[1] <= now) continue; // stale booking
-                if (now < interval[1] && execEndTime > interval[0]) {
-                    conflict = true;
-                    break;
-                }
-            }
-            if (!conflict) return vm; // prefer first conflict-free idle VM
+            if (!hasRuntimeCapacity(vm.getId())) continue;
+            if (anyCapacity == null) anyCapacity = vm;
+            if (overlapCount(vm.getId(), now, execEndTime) < RESERVED_CORES) return vm;
         }
-        return anyIdle; // fall back to any idle VM
+        return anyCapacity;
     }
 
     public CondorVM getAnyIdleOnDemandVm() {
@@ -105,8 +117,8 @@ public class HybridVmPool {
 
     public CondorVM provisionOnDemandVm(int userId) {
         int id = nextOnDemandId++;
-        CondorVM vm = new CondorVM(id, userId, RESERVED_MIPS, 1,
-                4096, 10000, 100000, "Xen",
+        CondorVM vm = new CondorVM(id, userId, RESERVED_MIPS, ON_DEMAND_CORES,
+                ON_DEMAND_RAM_MB, 10000, 100000, "Xen",
                 ON_DEMAND_PER_SEC, 0.0, 0.0, 0.0,
                 new CloudletSchedulerSpaceShared());
         onDemandVms.add(vm);
@@ -117,6 +129,7 @@ public class HybridVmPool {
 
     public void terminateOnDemandVm(int vmId) {
         onDemandVms.removeIf(vm -> vm.getId() == vmId);
+        runningTasksByVm.remove(vmId);
         CBMWLogger.log("VM-TERMINATE",
                 String.format("on-demand vmId=%d terminated remainingOnDemand=%d", vmId, onDemandVms.size()));
     }
@@ -135,6 +148,37 @@ public class HybridVmPool {
     public List<double[]> getBookings(int vmId) {
         List<double[]> list = reservedBookings.get(vmId);
         return list != null ? new ArrayList<>(list) : new ArrayList<>();
+    }
+
+    public boolean hasRuntimeCapacity(int vmId) {
+        int running = runningTasksByVm.getOrDefault(vmId, 0);
+        int capacity = isReserved(vmId) ? RESERVED_CORES : ON_DEMAND_CORES;
+        return running + TASK_CORES <= capacity;
+    }
+
+    public void taskStarted(int vmId) {
+        runningTasksByVm.merge(vmId, 1, Integer::sum);
+        CondorVM vm = getVmById(vmId);
+        if (vm != null) vm.setState(WorkflowSimTags.VM_STATUS_BUSY);
+    }
+
+    public void taskFinished(int vmId) {
+        int running = Math.max(0, runningTasksByVm.getOrDefault(vmId, 0) - 1);
+        runningTasksByVm.put(vmId, running);
+        CondorVM vm = getVmById(vmId);
+        if (vm != null && running == 0) vm.setState(WorkflowSimTags.VM_STATUS_IDLE);
+    }
+
+    public int getRunningTaskCount(int vmId) {
+        return runningTasksByVm.getOrDefault(vmId, 0);
+    }
+
+    public int overlapCount(int vmId, double start, double end) {
+        int count = 0;
+        for (double[] interval : getBookings(vmId)) {
+            if (start < interval[1] && end > interval[0]) count++;
+        }
+        return count;
     }
 
     /**

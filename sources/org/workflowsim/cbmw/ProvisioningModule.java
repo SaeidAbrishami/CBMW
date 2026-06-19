@@ -26,8 +26,7 @@ public class ProvisioningModule {
     }
 
     /**
-     * Returns the on-demand VM for this job, reusing an idle one if available,
-     * provisioning a new one only when none are free.
+     * Returns a dedicated on-demand VM/container for this job.
      * New VMs must be registered with the datacenter before use (caller's
      * responsibility via dispatchScheduledJobs).
      */
@@ -36,10 +35,7 @@ public class ProvisioningModule {
         if (jobToVm.containsKey(jobId)) {
             return jobToVm.get(jobId);
         }
-        CondorVM vm = pool.getAnyIdleOnDemandVm();
-        if (vm == null) {
-            vm = pool.provisionOnDemandVm(userId);
-        }
+        CondorVM vm = pool.provisionOnDemandVm(userId);
         vm.setState(org.workflowsim.WorkflowSimTags.VM_STATUS_BUSY);
         jobToVm.put(jobId, vm);
         vmJobCount.merge(vm.getId(), 1, Integer::sum);

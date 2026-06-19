@@ -131,7 +131,9 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
             boolean conflict = false;
             for (double[] interval : sorted) {
                 if (interval[1] <= now) continue; // already past
-                if (candidate < interval[1] && candidate + dur > interval[0]) {
+                if (candidate < interval[1] && candidate + dur > interval[0]
+                        && pool.overlapCount(vmId, candidate, candidate + dur)
+                                >= HybridVmPool.RESERVED_CORES) {
                     conflict = true;
                     candidate = interval[0] - dur - 1e-9;
                     break;

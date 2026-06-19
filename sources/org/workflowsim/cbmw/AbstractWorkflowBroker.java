@@ -180,7 +180,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         cloudletsSubmitted--;
 
         CondorVM vm = (CondorVM) VmList.getById(getVmsCreatedList(), cl.getVmId());
-        if (vm != null) vm.setState(WorkflowSimTags.VM_STATUS_IDLE);
+        vmPool.taskFinished(cl.getVmId());
 
         int wfId = workflowIdForJob(job);
         boolean onDemand = provisioner.isOnDemandVm(cl.getVmId());
@@ -190,9 +190,12 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
             CondorVM idleOnDemand = provisioner.jobCompleted(cl.getCloudletId());
             if (idleOnDemand != null) {
                 accounting.markOnDemandDestroyed(idleOnDemand.getId(), CloudSim.clock());
+                vmPool.terminateOnDemandVm(idleOnDemand.getId());
             }
             WorkflowRecord wfr = activeWorkflows.get(wfId);
-            double cost = cl.getActualCPUTime() * HybridVmPool.ON_DEMAND_PER_SEC;
+            double uptime = accounting.getOnDemandUptime(cl.getVmId());
+            double cost = (Double.isFinite(uptime) ? uptime : cl.getActualCPUTime())
+                    * HybridVmPool.ON_DEMAND_PER_SEC;
             if (wfr != null) wfr.addOnDemandCost(cost);
             CBMWLogger.log("TASK-COMPLETE",
                     String.format("task=%d wf=%d vm=%d(on-demand) actualCPU=%.4fs cost=$%.6f",
@@ -291,10 +294,14 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
                 }
                 continue;
             }
+            if (vmPool.isReserved(vmId) && !vmPool.hasRuntimeCapacity(vmId)) {
+                continue;
+            }
             double delay = Parameters.getOverheadParams().getQueueDelay() != null
                     ? Parameters.getOverheadParams().getQueueDelay(cl) : 0.0;
             schedule(dcId, delay, CloudSimTags.CLOUDLET_SUBMIT, cl);
             actuallySubmitted.add(cl);
+            vmPool.taskStarted(vmId);
             accounting.markTaskSubmitted(cl, provisioner.isOnDemandVm(vmId));
             accounting.snapshotUtilization(vmPool);
             CBMWLogger.log("DISPATCH", String.format("wf=%d task=%d vm=%d",

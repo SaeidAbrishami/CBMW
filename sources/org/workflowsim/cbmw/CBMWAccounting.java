@@ -25,8 +25,7 @@ public class CBMWAccounting {
         for (Task task : tasks) {
             int taskId = task.getCloudletId();
             double execTime = task.getCloudletLength() / HybridVmPool.RESERVED_MIPS;
-            double subDeadline = wfr.getLST(taskId);
-            if (Double.isFinite(subDeadline)) subDeadline += execTime;
+            double subDeadline = Double.NaN;
             List<Integer> parentIds = new ArrayList<>();
             for (Task parent : task.getParentList()) parentIds.add(parent.getCloudletId());
             taskRecords.put(taskId, new TaskExecutionRecord(
@@ -62,8 +61,7 @@ public class CBMWAccounting {
             double finish = cl.getFinishTime() > 0 ? cl.getFinishTime() : CloudSim.clock();
             double start = cl.getExecStartTime() > 0 ? cl.getExecStartTime()
                     : Math.max(0.0, finish - cl.getActualCPUTime());
-            double subDeadline = record.getSubDeadlineTime();
-            String status = finish <= subDeadline ? "SUCCESS" : "SUB DEADLINE MISSED";
+            String status = cl.getCloudletStatus() == Cloudlet.SUCCESS ? "SUCCESS" : "FAILED";
             record.markFinished(start, finish, status);
         }
         if (onDemand) runningOnDemandTasks.remove(taskId);
@@ -93,13 +91,22 @@ public class CBMWAccounting {
                 .markDestroyed(destroyTime);
     }
 
+    public double getOnDemandUptime(int vmId) {
+        OnDemandInstanceRecord record = onDemandRecords.get(vmId);
+        return record != null ? record.getUptime() : Double.NaN;
+    }
+
     public void snapshotUtilization(HybridVmPool pool) {
         utilizationSnapshots.add(new UtilizationSnapshot(
                 CloudSim.clock(),
-                pool.getReservedVms().size(),
-                pool.getOnDemandVms().size(),
-                runningReservedTasks.size(),
-                runningOnDemandTasks.size()));
+                pool.getReservedVms().size() * HybridVmPool.RESERVED_CORES,
+                pool.getOnDemandVms().size() * HybridVmPool.ON_DEMAND_CORES,
+                pool.getReservedVms().size() * HybridVmPool.RESERVED_RAM_MB,
+                pool.getOnDemandVms().size() * HybridVmPool.ON_DEMAND_RAM_MB,
+                runningReservedTasks.size() * HybridVmPool.TASK_CORES,
+                runningOnDemandTasks.size() * HybridVmPool.TASK_CORES,
+                runningReservedTasks.size() * HybridVmPool.TASK_RAM_MB,
+                runningOnDemandTasks.size() * HybridVmPool.TASK_RAM_MB));
     }
 
     public List<TaskExecutionRecord> getTaskRecords() {

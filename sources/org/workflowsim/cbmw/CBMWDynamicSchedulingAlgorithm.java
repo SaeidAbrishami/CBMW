@@ -106,7 +106,7 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
             } else {
                 // arij = reserved VM. Try Provisioner(tji, arij).
                 CondorVM planned = pool.getVmById(plannedVm);
-                if (planned != null && planned.getState() == WorkflowSimTags.VM_STATUS_IDLE) {
+                if (planned != null && pool.hasRuntimeCapacity(plannedVm)) {
                     // Provisioner returns true — dispatch to planned reserved VM.
                     assign(job, planned);
                     toSchedule.add(job);
@@ -165,7 +165,6 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
     }
 
     private void assign(Job job, CondorVM vm) {
-        vm.setState(WorkflowSimTags.VM_STATUS_BUSY);
         job.setVmId(vm.getId());
     }
 

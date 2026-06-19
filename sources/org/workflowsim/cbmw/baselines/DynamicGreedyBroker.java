@@ -82,7 +82,6 @@ public class DynamicGreedyBroker extends AbstractWorkflowBroker {
             // Events (a) and (b): idle reserved VM available → dispatch immediately.
             CondorVM reserved = vmPool.getAnyIdleReservedVm();
             if (reserved != null) {
-                reserved.setState(WorkflowSimTags.VM_STATUS_BUSY);
                 cl.setVmId(reserved.getId());
                 toSchedule.add(cl);
                 CBMWLogger.log("DG-DISPATCH",
