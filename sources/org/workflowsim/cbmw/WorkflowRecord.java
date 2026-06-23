@@ -18,8 +18,11 @@ public class WorkflowRecord {
     private boolean accepted;
 
     private List<Task> taskList;
-    private final Map<Integer, Double> latestStartTimes    = new HashMap<>();  // taskId -> LST
-    private final Map<Integer, Double> scheduledStartTimes = new HashMap<>();  // taskId -> sstji (for on-demand tasks)
+    private final Map<Integer, Double> earliestStartTimes  = new HashMap<>();  // taskId -> estji
+    private final Map<Integer, Double> earliestFinishTimes = new HashMap<>();  // taskId -> eftji
+    private final Map<Integer, Double> latestStartTimes    = new HashMap<>();  // taskId -> lstji
+    private final Map<Integer, Double> latestFinishTimes   = new HashMap<>();  // taskId -> lftji
+    private final Map<Integer, Double> scheduledStartTimes = new HashMap<>();  // taskId -> sstji
     private final Map<Integer, Integer> taskVmAssignment  = new HashMap<>();  // taskId -> vmId
     private final Set<Integer> completedTaskIds = new HashSet<>();
 
@@ -58,11 +61,23 @@ public class WorkflowRecord {
     }
 
     // --- static planner output ---
+    public void setEST(int taskId, double est) { earliestStartTimes.put(taskId, est); }
+    public double getEST(int taskId) {
+        return earliestStartTimes.getOrDefault(taskId, arrivalTime);
+    }
+    public void setEFT(int taskId, double eft) { earliestFinishTimes.put(taskId, eft); }
+    public double getEFT(int taskId) {
+        return earliestFinishTimes.getOrDefault(taskId, arrivalTime);
+    }
     public void setLST(int taskId, double lst) { latestStartTimes.put(taskId, lst); }
     public double getLST(int taskId) {
         return latestStartTimes.getOrDefault(taskId, Double.MAX_VALUE);
     }
-    /** Scheduled start time (sstji). For on-demand: lstji - OPD; 0 if not set. */
+    public void setLFT(int taskId, double lft) { latestFinishTimes.put(taskId, lft); }
+    public double getLFT(int taskId) {
+        return latestFinishTimes.getOrDefault(taskId, Double.MAX_VALUE);
+    }
+    /** Scheduled start time (sstji). */
     public void setScheduledStart(int taskId, double sst) { scheduledStartTimes.put(taskId, sst); }
     public double getScheduledStart(int taskId) {
         return scheduledStartTimes.getOrDefault(taskId, 0.0);

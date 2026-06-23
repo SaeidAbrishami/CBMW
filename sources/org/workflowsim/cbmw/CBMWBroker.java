@@ -40,6 +40,7 @@ public class CBMWBroker extends AbstractWorkflowBroker {
             planner.run();
         } catch (Exception e) {
             Log.printLine(getName() + ": static planner error: " + e.getMessage());
+            wfr.setAccepted(false);
             return false;
         }
         return true;

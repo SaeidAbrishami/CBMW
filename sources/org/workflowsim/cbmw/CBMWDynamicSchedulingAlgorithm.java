@@ -84,6 +84,8 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                 // No workflow record — best-effort dispatch to any idle reserved VM.
                 CondorVM vm = pool.getAnyIdleReservedVm();
                 if (vm != null) {
+                    double execTime = job.getCloudletLength() / HybridVmPool.RESERVED_MIPS;
+                    pool.rebookSlot(taskId, vm.getId(), now, now + execTime);
                     assign(job, vm);
                     toSchedule.add(job);
                     CBMWLogger.log("DISPATCH",
@@ -105,9 +107,11 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
 
             } else {
                 // arij = reserved VM. Try Provisioner(tji, arij).
+                double execTime = job.getCloudletLength() / HybridVmPool.RESERVED_MIPS;
                 CondorVM planned = pool.getVmById(plannedVm);
                 if (planned != null && pool.hasRuntimeCapacity(plannedVm)) {
                     // Provisioner returns true — dispatch to planned reserved VM.
+                    pool.rebookSlot(taskId, plannedVm, now, now + execTime);
                     assign(job, planned);
                     toSchedule.add(job);
                     CBMWLogger.log("DISPATCH",
@@ -115,9 +119,9 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                                     wfId, taskId, plannedVm));
                 } else {
                     // Provisioner returns false — CheckReserved(tji, CT): find another idle reserved VM.
-                    double execTime = job.getCloudletLength() / HybridVmPool.RESERVED_MIPS;
                     CondorVM other = pool.getIdleReservedVmForAdvance(now, now + execTime);
                     if (other != null) {
+                        pool.rebookSlot(taskId, other.getId(), now, now + execTime);
                         assign(job, other);
                         toSchedule.add(job);
                         CBMWLogger.log("DISPATCH",
@@ -125,6 +129,7 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                                         wfId, taskId, plannedVm, other.getId()));
                     } else {
                         // CheckReserved = ∅: arij ← o0, fall back to on-demand.
+                        pool.releaseSlot(taskId);
                         CondorVM vm = provisioner.getOrProvision(job);
                         assign(job, vm);
                         toSchedule.add(job);
@@ -148,6 +153,7 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
 
             CondorVM res = pool.getIdleReservedVmForAdvance(now, now + execTime);
             if (res != null) {
+                pool.rebookSlot(taskId, res.getId(), now, now + execTime);
                 assign(job, res);
                 toSchedule.add(job);
                 CBMWLogger.log("DISPATCH-ADVANCE",

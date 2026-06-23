@@ -144,6 +144,12 @@ public class HybridVmPool {
                         vmId, taskId, start, end, list.size()));
     }
 
+    /** Replaces any existing booking for taskId with the actual reserved slot. */
+    public void rebookSlot(int taskId, int vmId, double start, double end) {
+        releaseSlot(taskId);
+        bookSlot(vmId, taskId, start, end);
+    }
+
     /** Returns a snapshot of booked [start, end] intervals for a reserved VM. */
     public List<double[]> getBookings(int vmId) {
         List<double[]> list = reservedBookings.get(vmId);
