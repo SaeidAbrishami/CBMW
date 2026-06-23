@@ -1,115 +1,255 @@
 # CBMW Workflow Simulation
 
-University research project implementing the **CBMW** (Cost-efficient Broker for Multiple Workflows) algorithm on top of WorkflowSim 1.0 / CloudSim 3.0.3.
+University research project implementing the CBMW (Cost-efficient Broker for
+Multiple Workflows) algorithm on top of WorkflowSim 1.0 / CloudSim 3.0.3.
 
-**Goal:** Simulate a cloud broker that schedules scientific workflows on a hybrid reserved/on-demand VM pool, then compare deadline satisfaction rate and cost against two baselines (StaticGreedy, DynamicGreedy).
+Goal: simulate a cloud broker that schedules scientific workflows on a hybrid
+reserved/on-demand VM pool, then compare deadline satisfaction rate and cost
+against paper-style baselines and greedy baselines.
 
 ---
 
-## Build & Run
+## Build And Run
+
+Compile from the project root on Windows PowerShell:
+
+```powershell
+$files = Get-ChildItem -Path sources,examples -Recurse -Filter *.java | ForEach-Object { $_.FullName }
+javac -cp "lib/*" -d bin $files
+```
+
+Run from compiled classes:
+
+```powershell
+java -cp "bin;lib/*" org.workflowsim.examples.cbmw.CBMWSimulation
+```
+
+Fast CBMW-only smoke run:
+
+```powershell
+java '-Dcbmw.algorithms=CBMW' '-Dcbmw.max.workflows=5' '-Dcbmw.export.details=false' '-Dcbmw.detail.log=false' '-Dcbmw.quiet=true' -cp "bin;lib/*" org.workflowsim.examples.cbmw.CBMWSimulation
+```
+
+Entry point:
+
+`examples/org/workflowsim/examples/cbmw/CBMWSimulation.java`
+
+---
+
+## Current Experiment Driver
+
+`CBMWSimulation` now supports the new experiment matrix:
+
+- Deadline classes: `tight=1.2`, `medium=2.0`, `loose=4.0`
+- Load classes: `low=2.0`, `moderate=1.0`, `heavy=0.5`
+- Algorithms: `CBMW`, `NOSF`, `CEWB`, `StaticGreedy`, `DynamicGreedy`
+- Default workflow source: `test_workflows/poisson_distribution.json`
+- Default workflow count per scenario: 200
+- Full default run size: 3 deadlines x 3 loads x 5 algorithms = 45 scenarios
+
+Useful JVM switches:
+
+| Switch | Purpose |
+|--------|---------|
+| `-Dcbmw.algorithms=CBMW` | Run only selected algorithms, comma-separated. |
+| `-Dcbmw.output.dir=Output` | Root output folder; algorithm and comparison subfolders are created inside it. |
+| `-Dcbmw.max.workflows=5` | Cap workflows per scenario for smoke/debug runs. |
+| `-Dcbmw.max.scenarios=1` | Stop after N completed scenarios. |
+| `-Dcbmw.export.details=false` | Skip `.rar-style` detailed export folders. |
+| `-Dcbmw.detail.log=false` | Disable `_detail.log` event logging. |
+| `-Dcbmw.quiet=true` | Disable CloudSim console logs. |
+| `-Dcbmw.generate.gantt=true` | Generate Gantt charts; normally keep false for speed. |
+| `-Dcbmw.generate.comparison=false` | Skip comparison chart generation during per-VM runs. |
+| `-Dcbmw.python=python3` | Python executable used for optional chart generation. |
+
+Linux VM helper for one algorithm:
 
 ```bash
-# Compile (from project root)
-javac -cp "lib/*" -d bin $(find sources examples -name "*.java")
-
-# Package
-jar -cvmf manifest.mf WorkflowSim.jar -C bin .
-
-# Run
-java -cp "WorkflowSim.jar:lib/*" org.workflowsim.examples.cbmw.CBMWSimulation
+scripts/run_algorithm.sh CBMW
+scripts/run_algorithm.sh NOSF
+scripts/run_algorithm.sh CEWB
+scripts/run_algorithm.sh StaticGreedy
+scripts/run_algorithm.sh DynamicGreedy
 ```
 
-Entry point: `examples/org/workflowsim/examples/cbmw/CBMWSimulation.java`
+Current Ferdowsi VM inventory:
+
+| VM | Algorithm | IP | SSH user | Local key path |
+|----|-----------|----|----------|----------------|
+| VM1 | `CBMW` | `193.93.169.129` | `ubuntu` | `.secrets/CBMW-simulation-privateKey.pem` |
+| VM2 | `NOSF` | `193.93.169.137` | `ubuntu` | `.secrets/vm2.pem` |
+| VM3 | `CEWB` | `193.93.169.106` | `ubuntu` | `.secrets/vm3.pem` |
+| VM4 | `StaticGreedy` | `193.93.169.86` | `ubuntu` | `.secrets/vm4.pem` |
+| VM5 | `DynamicGreedy` | `193.93.169.53` | `ubuntu` | `.secrets/vm5.pem` |
+
+All current VMs have been verified with SSH as `ubuntu` and passwordless
+`sudo`. The previous VM4 IP `193.93.169.114` was replaced because SSH timed out
+during banner exchange.
+
+After collecting `Output/algorithms/<algorithm>/` folders from separate VMs
+onto one machine, rebuild combined comparison CSVs and charts:
+
+```bash
+python scripts/merge_algorithm_outputs.py Output
+```
+
+Results are now saved after each completed scenario, not only at the end of the
+full run.
 
 ---
 
-## Source layout
+## Outputs
 
-```
+Main outputs:
+
+- `Output/algorithms/<algorithm>/results.csv`
+- `Output/algorithms/<algorithm>/results_aggregate.csv`
+- `Output/comparison/results.csv`
+- `Output/comparison/results_aggregate.csv`
+- `Output/comparison/new_experiment_low.png`
+- `Output/comparison/new_experiment_moderate.png`
+- `Output/comparison/new_experiment_heavy.png`
+
+Detailed `.rar-style` outputs, when `cbmw.export.details=true`:
+
+- `results.txt`
+- `TASK_EXECUTION_SUMMARY.xlsx`
+- `WORKFLOW_COMPLETION_SUMMARY.xlsx`
+- `ON_DEMAND_INSTANCE_USAGE.xlsx`
+
+`Output/` is ignored by git.
+
+`plot_new_experiment.py` reads `Output/results_aggregate.csv` by default and
+falls back to `Output/results.csv` if the aggregate file is missing. It uses
+line charts for the 5-algorithm comparison.
+
+---
+
+## Source Layout
+
+```text
 sources/org/workflowsim/cbmw/
-  AbstractWorkflowBroker.java     ← base class for all three brokers
-  CBMWBroker.java                 ← CBMW algorithm (extends AbstractWorkflowBroker)
+  AbstractWorkflowBroker.java
+  CBMWBroker.java
   CBMWStaticPlanningAlgorithm.java
   CBMWDynamicSchedulingAlgorithm.java
-  HybridVmPool.java               ← 50 reserved VMs + on-demand pool
-  NegotiationModule.java          ← Module 1: CP computation + accept/reject
-  ProvisioningModule.java         ← on-demand VM lifecycle
-  WorkflowLoader.java             ← reads poisson_distribution.json + computes CP
+  HybridVmPool.java
+  NegotiationModule.java
+  ProvisioningModule.java
+  WorkflowLoader.java
   WorkflowArrivalData.java
   WorkflowRecord.java
+  CBMWAccounting.java
+  CBMWDetailedResultExporter.java
   CBMWResultCollector.java
   CBMWLogger.java
   baselines/
-    StaticGreedyBroker.java       ← round-robin static planning, no deadline awareness
-    DynamicGreedyBroker.java      ← no planning, FCFS dispatch at runtime
+    NOSFBroker.java
+    CEWBBroker.java
+    StaticGreedyBroker.java
+    DynamicGreedyBroker.java
 
 examples/org/workflowsim/examples/cbmw/
-  CBMWSimulation.java             ← main driver
+  CBMWSimulation.java
 
-test_workflows/                   ← real scientific workflow DAX files
+test_workflows/
   CyberShake_100_1.xml .. _25.xml
   CyberShake_1000_1.xml .. _25.xml
-  Inspiral_100/1000 × 25 variants
-  Montage_100/1000 × 25 variants
-  Sipht_100/1000 × 25 variants
-  (+ matching .txt perturbed runtime files for each)
-  poisson_distribution.json       ← pre-computed arrival timestamps (seconds)
+  Inspiral_100/1000 x 25 variants
+  Montage_100/1000 x 25 variants
+  Sipht_100/1000 x 25 variants
+  matching .txt perturbed runtime files
+  poisson_distribution.json
 ```
 
 ---
 
-## Simulation design
+## Simulation Design
 
-### Workflow input
-- `WorkflowLoader` reads `test_workflows/poisson_distribution.json` for arrival timestamps.
-- For each entry it parses the matching `.xml` (Pegasus DAX 2.1 format) to compute the critical path, then sets `deadline = arrivalTime + CP × TIGHTNESS`.
-- After `WorkflowParser` creates task objects, `applyPerturbedRuntimes()` replaces each task's `cloudletLength` with the value from the matching `.txt` file (Normal(nominal, nominal/10) distribution), making the 25 variants genuinely distinct.
+### Workflow Input
 
-### VM model
-- **50 reserved VMs**, MIPS = 1000, cost $3.26/hr (fixed regardless of utilisation).
-- **On-demand VMs**, MIPS = 1000, cost $0.000905/sec (pay per task CPU time).
-- `cloudletLength = runtime_seconds × 1000` so `execTime = cloudletLength / MIPS = runtime_seconds`.
+- `WorkflowLoader` reads `test_workflows/poisson_distribution.json`.
+- Each entry parses the matching DAX XML and computes critical path.
+- Deadline is `arrivalTime + criticalPath * tightness`.
+- `applyPerturbedRuntimes()` replaces each task runtime from the matching
+  `.txt` file.
+- `cloudletLength = runtime_seconds * 1000`.
 
-### Broker hierarchy
-All three brokers extend `AbstractWorkflowBroker`, which provides:
-- CloudSim event wiring, DAX parsing, `.txt` override, negotiation, job wrapping, completion tracking.
-- Template method `planWorkflow(wfr, tasks)` — subclass assigns VMs.
-- Abstract `processCloudletUpdate(ev)` — subclass dispatches ready jobs.
-- `dispatchScheduledJobs(toSchedule)` helper for on-demand VM registration.
+### VM Model
+
+Current configurable defaults in `HybridVmPool`:
+
+| Property | Default |
+|----------|---------|
+| `cbmw.reserved.instances` | 50 |
+| `cbmw.reserved.cores` | 192 |
+| `cbmw.reserved.ram.mb` | 786432 |
+| `cbmw.ondemand.cores` | 32 |
+| `cbmw.ondemand.ram.mb` | 64000 |
+| `cbmw.task.cores` | 1 |
+| `cbmw.task.ram.mb` | 0 |
+| `cbmw.reserved.hourly.cost` | 3.26 |
+| `cbmw.ondemand.per.sec` | 0.000340 |
+| `cbmw.ondemand.delay.sec` | 120.0 |
+
+Reserved cost is fixed by makespan. On-demand cost is based on instance uptime.
+
+### Broker Hierarchy
+
+All brokers extend `AbstractWorkflowBroker`.
 
 | Broker | planWorkflow | processCloudletUpdate |
-|--------|-------------|----------------------|
-| CBMW | Backward sweep-line, LST-aware slot booking | LST/deadline-aware, advance logic, on-demand fallback |
-| StaticGreedy | Round-robin reserved VM assignment | Assigned VM → any reserved → on-demand |
-| DynamicGreedy | None (workflow ID stamp only) | First idle reserved → on-demand FCFS |
+|--------|--------------|-----------------------|
+| CBMW | Backward sweep-line, LST-aware slot booking | LST-aware dynamic dispatch with on-demand fallback |
+| NOSF | On-demand-only approximation | Dispatch to on-demand |
+| CEWB | Low-cost/revocable approximation | Reserved/spot-style dispatch |
+| StaticGreedy | Static round-robin reserved planning | Assigned VM, any reserved, then on-demand |
+| DynamicGreedy | No static planning | First idle reserved, then on-demand FCFS |
 
-### Current experiment
-Single scenario: `TIGHTNESS = 2.0`, all three algorithms, one run.
-Sim duration = `max(arrivalTime from JSON) + 5000s`.
-Output per algorithm: `Output/<algo>_t2.0_detail.log`, `_gantt.png`, row in `results.csv`.
-
----
-
-## Key constants
-
-| Constant | Location | Value |
-|----------|----------|-------|
-| `NUM_RESERVED` | `HybridVmPool` | 50 |
-| `RESERVED_MIPS` | `HybridVmPool` | 1000.0 |
-| `ON_DEMAND_PER_SEC` | `HybridVmPool` | $0.000905 |
-| `RESERVED_HOURLY_COST` | `HybridVmPool` | $3.26 |
-| `BETA` (negotiation safety factor) | `NegotiationModule` | 1.1 |
-| `TIGHTNESS` | `CBMWSimulation` | 2.0 |
-| `SIM_BUFFER_SECS` | `CBMWSimulation` | 5000.0 |
+CEWB is an approximation because the simulator does not have a true spot-market
+pool.
 
 ---
 
-## Known defects (from prior analysis)
+## Latest Run Findings
 
-- **D6 (critical):** `findLatestFeasibleSlot` in `CBMWStaticPlanningAlgorithm` uses `>= 0` guards instead of `>= CloudSim.clock()` — can book slots in the past.
-- **D1:** `Math.log(1.0 - rng.nextDouble())` (now removed — arrivals come from JSON).
-- **D3:** `getCloudletReceivedList()` never cleared — O(n²) completion check at high workflow counts.
-- **D4:** No cycle detection in `NegotiationModule.remainingCP()`.
-- **D10:** Float equality in `releaseSlot` (`s[0] == start`).
+CBMW-only full-size runs are still too slow:
 
-Full defect list in memory file `project_cbmw_layers.md`.
+- `-Dcbmw.algorithms=CBMW` with 200 workflows did not finish the first scenario
+  before timeout.
+- `-Dcbmw.algorithms=CBMW -Dcbmw.max.workflows=40` also did not finish the
+  first scenario within 15 minutes.
+- `-Dcbmw.algorithms=CBMW -Dcbmw.max.workflows=5` completed all 9 load/deadline
+  scenarios in about 3 minutes and generated CSVs/plots.
+
+Reason: each full scenario has about 200 workflows and roughly 110,000 tasks
+(100 small workflows plus 100 large workflows). CBMW static planning does
+task-by-task reserved slot search, so full-size scenarios are currently
+computationally expensive.
+
+Current generated outputs are therefore valid CBMW-only smoke/subset outputs
+when `cbmw.max.workflows=5`; they are not full 200-workflow paper-scale results.
+
+---
+
+## Recent Performance Fixes
+
+- `CBMWLogger` can be disabled with `-Dcbmw.detail.log=false`.
+- `CBMWLogger` no longer flushes on every event write.
+- `WorkflowRecord` tracks completed task IDs.
+- `AbstractWorkflowBroker.updateWorkflowCompletion()` no longer scans all
+  received cloudlets for every task completion.
+- `CBMWStaticPlanningAlgorithm.findLatestFeasibleSlot()` avoids repeated
+  `overlapCount()` rescans inside the candidate loop.
+- `CBMWSimulation` saves `results.csv` and `results_aggregate.csv` after each
+  completed scenario.
+
+---
+
+## Known Remaining Issues
+
+- CBMW full 200-workflow scenarios remain too slow; optimize static planning
+  before attempting the full 45-scenario experiment.
+- `releaseSlot` still uses exact floating-point equality for slot removal.
+- `NegotiationModule.remainingCP()` still needs cycle detection.
+- Task sub-deadlines are intentionally not used in this project.

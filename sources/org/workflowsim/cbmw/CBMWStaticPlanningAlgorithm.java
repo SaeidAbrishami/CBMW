@@ -128,18 +128,19 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
         Collections.sort(sorted, Comparator.comparingDouble(s -> s[0]));
 
         while (candidate >= now) {
-            boolean conflict = false;
+            double end = candidate + dur;
+            int overlaps = 0;
+            double earliestOverlapStart = Double.POSITIVE_INFINITY;
             for (double[] interval : sorted) {
                 if (interval[1] <= now) continue; // already past
-                if (candidate < interval[1] && candidate + dur > interval[0]
-                        && pool.overlapCount(vmId, candidate, candidate + dur)
-                                >= HybridVmPool.RESERVED_CORES) {
-                    conflict = true;
-                    candidate = interval[0] - dur - 1e-9;
-                    break;
+                if (candidate < interval[1] && end > interval[0]) {
+                    overlaps++;
+                    earliestOverlapStart = Math.min(earliestOverlapStart, interval[0]);
+                    if (overlaps >= HybridVmPool.RESERVED_CORES) break;
                 }
             }
-            if (!conflict) return candidate;
+            if (overlaps < HybridVmPool.RESERVED_CORES) return candidate;
+            candidate = earliestOverlapStart - dur - 1e-9;
         }
         return -1.0;
     }

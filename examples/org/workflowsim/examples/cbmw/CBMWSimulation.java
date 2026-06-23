@@ -6,11 +6,16 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.InputStreamReader;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
+import java.util.Map;
 import org.cloudbus.cloudsim.DatacenterCharacteristics;
 import org.cloudbus.cloudsim.Host;
+import org.cloudbus.cloudsim.Log;
 import org.cloudbus.cloudsim.Pe;
 import org.cloudbus.cloudsim.Storage;
 import org.cloudbus.cloudsim.VmAllocationPolicySimple;
@@ -51,19 +56,38 @@ import org.workflowsim.utils.ReplicaCatalog;
  */
 public class CBMWSimulation {
 
-    private static final String   OUTPUT_DIR      = "Output";
-    private static final String   CSV_OUTPUT      = OUTPUT_DIR + File.separator + "results.csv";
-    private static final String[] ALGORITHMS      = {
+    private static final String OUTPUT_ROOT = System.getProperty("cbmw.output.dir", "Output");
+    private static final String ALGORITHM_OUTPUT_ROOT =
+            OUTPUT_ROOT + File.separator + "algorithms";
+    private static final String COMPARISON_OUTPUT_DIR =
+            OUTPUT_ROOT + File.separator + "comparison";
+    private static final String COMPARISON_CSV_OUTPUT =
+            COMPARISON_OUTPUT_DIR + File.separator + "results.csv";
+    private static final String COMPARISON_AGGREGATE_CSV_OUTPUT =
+            COMPARISON_OUTPUT_DIR + File.separator + "results_aggregate.csv";
+    private static final String[] DEFAULT_ALGORITHMS = {
             "CBMW", "NOSF", "CEWB", "StaticGreedy", "DynamicGreedy"
     };
+    private static final List<String> ALGORITHMS = configuredAlgorithms();
 
     private static final String WORKFLOW_DIR    = "test_workflows";
     private static final String POISSON_FILE    = "poisson_distribution.json";
     private static final double SIM_BUFFER_SECS = 5000.0;
     private static final boolean GENERATE_GANTT = Boolean.parseBoolean(
             System.getProperty("cbmw.generate.gantt", "false"));
+    private static final boolean GENERATE_COMPARISON = Boolean.parseBoolean(
+            System.getProperty("cbmw.generate.comparison", "true"));
     private static final boolean EXPORT_DETAILS = Boolean.parseBoolean(
             System.getProperty("cbmw.export.details", "true"));
+    private static final boolean DETAIL_LOG = Boolean.parseBoolean(
+            System.getProperty("cbmw.detail.log",
+                    Boolean.toString(EXPORT_DETAILS || GENERATE_GANTT)));
+    private static final int MAX_SCENARIOS = Integer.getInteger(
+            "cbmw.max.scenarios", Integer.MAX_VALUE);
+    private static final int MAX_WORKFLOWS = Integer.getInteger(
+            "cbmw.max.workflows", Integer.MAX_VALUE);
+    private static final boolean QUIET = Boolean.parseBoolean(
+            System.getProperty("cbmw.quiet", "false"));
 
     private static final DeadlineClass[] DEADLINES = {
             new DeadlineClass("tight", 1.2),
@@ -82,13 +106,32 @@ public class CBMWSimulation {
     };
 
     public static void main(String[] args) throws Exception {
-        new File(OUTPUT_DIR).mkdirs();
+        if (QUIET) Log.disable();
+        ensureDir(new File(OUTPUT_ROOT));
+        ensureDir(new File(ALGORITHM_OUTPUT_ROOT));
+        ensureDir(new File(COMPARISON_OUTPUT_DIR));
+        System.out.println("[run] Algorithms: " + ALGORITHMS);
+        System.out.println("[run] Algorithm outputs: "
+                + new File(ALGORITHM_OUTPUT_ROOT).getAbsolutePath());
+        System.out.println("[run] Comparison outputs: "
+                + new File(COMPARISON_OUTPUT_DIR).getAbsolutePath());
+        if (MAX_WORKFLOWS != Integer.MAX_VALUE) {
+            System.out.println("[run] Max workflows per scenario: " + MAX_WORKFLOWS);
+        }
 
-        StringBuilder csv = new StringBuilder(CBMWResultCollector.csvHeader()).append("\n");
+        StringBuilder comparisonCsv =
+                new StringBuilder(CBMWResultCollector.csvHeader()).append("\n");
+        List<CBMWResultCollector.ScenarioMetrics> comparisonMetrics = new ArrayList<>();
+        Map<String, StringBuilder> algorithmCsv = new LinkedHashMap<>();
+        Map<String, List<CBMWResultCollector.ScenarioMetrics>> algorithmMetrics =
+                new LinkedHashMap<>();
+        int completedScenarios = 0;
 
+        scenarioLoop:
         for (DeadlineClass deadline : DEADLINES) {
             List<WorkflowArrivalData> baseArrivals =
                     WorkflowLoader.load(WORKFLOW_DIR, POISSON_FILE, deadline.tightness);
+            baseArrivals = limitWorkflows(baseArrivals);
             if (baseArrivals.isEmpty()) {
                 System.out.println("No arrivals loaded. Check "
                         + WORKFLOW_DIR + File.separator + POISSON_FILE);
@@ -102,27 +145,61 @@ public class CBMWSimulation {
                         + SIM_BUFFER_SECS;
 
                 for (String algo : ALGORITHMS) {
-                    runScenario(algo, load, deadline, arrivals, simDuration, csv);
+                    File algorithmDir = algorithmOutputDir(algo);
+                    CBMWResultCollector.ScenarioMetrics row =
+                            runScenario(algo, load, deadline, arrivals, simDuration,
+                                    algorithmDir);
+
+                    comparisonCsv.append(CBMWResultCollector.toCsvRow(row)).append("\n");
+                    comparisonMetrics.add(row);
+                    saveCsv(COMPARISON_CSV_OUTPUT, comparisonCsv.toString());
+                    saveCsv(COMPARISON_AGGREGATE_CSV_OUTPUT,
+                            buildAggregateCsv(comparisonMetrics));
+
+                    StringBuilder algoCsv = algorithmCsv.computeIfAbsent(algo,
+                            unused -> new StringBuilder(CBMWResultCollector.csvHeader())
+                                    .append("\n"));
+                    List<CBMWResultCollector.ScenarioMetrics> algoMetrics =
+                            algorithmMetrics.computeIfAbsent(algo, unused -> new ArrayList<>());
+                    algoCsv.append(CBMWResultCollector.toCsvRow(row)).append("\n");
+                    algoMetrics.add(row);
+                    saveCsv(new File(algorithmDir, "results.csv").getPath(),
+                            algoCsv.toString());
+                    saveCsv(new File(algorithmDir, "results_aggregate.csv").getPath(),
+                            buildAggregateCsv(algoMetrics));
+
                     System.out.println("Completed: " + load.name + " "
                             + deadline.name + " " + algo);
+                    completedScenarios++;
+                    if (completedScenarios >= MAX_SCENARIOS) {
+                        System.out.println("[run] Stopped after " + completedScenarios
+                                + " scenario(s) because cbmw.max.scenarios="
+                                + MAX_SCENARIOS);
+                        break scenarioLoop;
+                    }
                 }
             }
         }
 
-        saveCsv(csv.toString());
-        generateComparisonCharts();
+        saveCsv(COMPARISON_CSV_OUTPUT, comparisonCsv.toString());
+        saveCsv(COMPARISON_AGGREGATE_CSV_OUTPUT, buildAggregateCsv(comparisonMetrics));
+        if (GENERATE_COMPARISON) {
+            generateComparisonCharts();
+        }
     }
 
     // -----------------------------------------------------------------------
     // Scenario runner
     // -----------------------------------------------------------------------
 
-    private static void runScenario(String algorithm,
-                                     LoadScenario load,
-                                     DeadlineClass deadline,
-                                     List<WorkflowArrivalData> arrivals,
-                                     double simDuration,
-                                     StringBuilder csv) throws Exception {
+    private static CBMWResultCollector.ScenarioMetrics runScenario(
+                                      String algorithm,
+                                      LoadScenario load,
+                                      DeadlineClass deadline,
+                                      List<WorkflowArrivalData> arrivals,
+                                      double simDuration,
+                                      File algorithmDir) throws Exception {
+        ensureDir(algorithmDir);
         Parameters.setTightness(deadline.tightness);
         Parameters.setSimDuration(simDuration);
         Parameters.setCostModel(Parameters.CostModel.VM);
@@ -158,20 +235,25 @@ public class CBMWSimulation {
 
         String scenario = load.name + "_" + deadline.name;
         String label   = scenario + "_" + algorithm + "_t" + deadline.tightness;
-        String logFile = OUTPUT_DIR + File.separator + label + "_detail.log";
-        CBMWLogger.init(logFile);
+        String logFile = new File(algorithmDir, label + "_detail.log").getPath();
+        if (DETAIL_LOG) {
+            CBMWLogger.init(logFile);
+        } else {
+            CBMWLogger.disable(logFile);
+        }
         CloudSim.startSimulation();
         CloudSim.stopSimulation();
         CBMWLogger.close();
 
         CBMWResultCollector collector = new CBMWResultCollector(broker.getAllWorkflows());
         collector.printReport(label);
-        csv.append(collector.toCsvRow(scenario, load.name, deadline.name,
+        CBMWResultCollector.ScenarioMetrics metrics = collector.toScenarioMetrics(
+                scenario, load.name, deadline.name,
                 algorithm, load.arrivalScale, deadline.tightness, 0,
-                broker.getAccounting().getOnDemandUsageRatio())).append("\n");
+                broker.getAccounting().getOnDemandUsageRatio());
 
         if (EXPORT_DETAILS) {
-            File detailsDir = new File(OUTPUT_DIR, label + "_details");
+            File detailsDir = new File(algorithmDir, label + "_details");
             new CBMWDetailedResultExporter(
                     broker.getAllWorkflows(),
                     broker.getAccounting(),
@@ -183,8 +265,9 @@ public class CBMWSimulation {
         }
 
         if (GENERATE_GANTT) {
-            generateGanttChart(label);
+            generateGanttChart(label, algorithmDir);
         }
+        return metrics;
     }
 
     // -----------------------------------------------------------------------
@@ -234,23 +317,64 @@ public class CBMWSimulation {
     // Output helpers
     // -----------------------------------------------------------------------
 
-    private static void saveCsv(String content) {
-        try (BufferedWriter bw = new BufferedWriter(new FileWriter(CSV_OUTPUT, false))) {
+    private static void saveCsv(String path, String content) {
+        File file = new File(path);
+        ensureDir(file.getParentFile());
+        try (BufferedWriter bw = new BufferedWriter(new FileWriter(path, false))) {
             bw.write(content);
-            System.out.println("[csv] Saved to " + new File(CSV_OUTPUT).getAbsolutePath());
+            System.out.println("[csv] Saved to " + file.getAbsolutePath());
         } catch (Exception e) {
             System.out.println("[csv] Could not save: " + e.getMessage());
         }
     }
 
-    private static void generateGanttChart(String label) {
+    private static void generateGanttChart(String label, File algorithmDir) {
         runPython("plot_gantt.py",
                 CBMWLogger.getLogFile(),
-                OUTPUT_DIR + File.separator + label + "_gantt.png");
+                new File(algorithmDir, label + "_gantt.png").getPath());
     }
 
     private static void generateComparisonCharts() {
-        runPython("plot_new_experiment.py", CSV_OUTPUT);
+        runPython("plot_new_experiment.py",
+                COMPARISON_AGGREGATE_CSV_OUTPUT,
+                COMPARISON_OUTPUT_DIR);
+    }
+
+    private static File algorithmOutputDir(String algorithm) {
+        File dir = new File(ALGORITHM_OUTPUT_ROOT, safePathName(algorithm));
+        ensureDir(dir);
+        return dir;
+    }
+
+    private static String safePathName(String value) {
+        return value.replaceAll("[^A-Za-z0-9._-]", "_");
+    }
+
+    private static void ensureDir(File dir) {
+        if (dir != null && !dir.exists() && !dir.mkdirs()) {
+            System.out.println("[output] Could not create directory: "
+                    + dir.getAbsolutePath());
+        }
+    }
+
+    private static String buildAggregateCsv(
+            List<CBMWResultCollector.ScenarioMetrics> rows) {
+        Map<String, Aggregate> groups = new LinkedHashMap<>();
+        for (CBMWResultCollector.ScenarioMetrics row : rows) {
+            String key = row.scenario + "|" + row.load + "|" + row.deadlineClass
+                    + "|" + row.algorithm;
+            groups.computeIfAbsent(key, unused -> new Aggregate(row)).add(row);
+        }
+
+        StringBuilder csv = new StringBuilder();
+        csv.append("scenario,load,deadlineClass,algorithm,arrivalScale,tightness,runs,")
+                .append("avgTotal,avgAccepted,avgDeadlineRate,avgOnDemandCost,")
+                .append("avgReservedCost,avgTotalCost,avgMakespan,")
+                .append("avgReservedUtil,avgOnDemandUsageRatio\n");
+        for (Aggregate aggregate : groups.values()) {
+            csv.append(aggregate.toCsvRow()).append("\n");
+        }
+        return csv.toString();
     }
 
     private static List<WorkflowArrivalData> scaleArrivals(
@@ -263,6 +387,28 @@ public class CBMWSimulation {
                     scaledArrival, scaledArrival + deadlineSlack));
         }
         return scaled;
+    }
+
+    private static List<WorkflowArrivalData> limitWorkflows(
+            List<WorkflowArrivalData> arrivals) {
+        if (MAX_WORKFLOWS == Integer.MAX_VALUE || arrivals.size() <= MAX_WORKFLOWS) {
+            return arrivals;
+        }
+        return new ArrayList<>(arrivals.subList(0, MAX_WORKFLOWS));
+    }
+
+    private static List<String> configuredAlgorithms() {
+        String configured = System.getProperty("cbmw.algorithms", "").trim();
+        if (configured.isEmpty()) {
+            return Arrays.asList(DEFAULT_ALGORITHMS);
+        }
+
+        List<String> algorithms = new ArrayList<>();
+        for (String item : configured.split(",")) {
+            String algorithm = item.trim();
+            if (!algorithm.isEmpty()) algorithms.add(algorithm);
+        }
+        return algorithms.isEmpty() ? Arrays.asList(DEFAULT_ALGORITHMS) : algorithms;
     }
 
     private static class LoadScenario {
@@ -285,9 +431,60 @@ public class CBMWSimulation {
         }
     }
 
+    private static class Aggregate {
+        private final String scenario;
+        private final String load;
+        private final String deadlineClass;
+        private final String algorithm;
+        private final double arrivalScale;
+        private final double tightness;
+        private int runs;
+        private double total;
+        private double accepted;
+        private double deadlineRate;
+        private double onDemandCost;
+        private double reservedCost;
+        private double totalCost;
+        private double makespan;
+        private double reservedUtil;
+        private double onDemandUsageRatio;
+
+        Aggregate(CBMWResultCollector.ScenarioMetrics first) {
+            this.scenario = first.scenario;
+            this.load = first.load;
+            this.deadlineClass = first.deadlineClass;
+            this.algorithm = first.algorithm;
+            this.arrivalScale = first.arrivalScale;
+            this.tightness = first.tightness;
+        }
+
+        void add(CBMWResultCollector.ScenarioMetrics row) {
+            runs++;
+            total += row.total;
+            accepted += row.accepted;
+            deadlineRate += row.deadlineRate;
+            onDemandCost += row.onDemandCost;
+            reservedCost += row.reservedCost;
+            totalCost += row.totalCost;
+            makespan += row.makespan;
+            reservedUtil += row.reservedUtil;
+            onDemandUsageRatio += row.onDemandUsageRatio;
+        }
+
+        String toCsvRow() {
+            return String.format(Locale.US,
+                    "%s,%s,%s,%s,%.4f,%.1f,%d,%.2f,%.2f,%.4f,%.4f,%.2f,%.4f,%.2f,%.4f,%.4f",
+                    scenario, load, deadlineClass, algorithm, arrivalScale,
+                    tightness, runs, total / runs, accepted / runs,
+                    deadlineRate / runs, onDemandCost / runs,
+                    reservedCost / runs, totalCost / runs, makespan / runs,
+                    reservedUtil / runs, onDemandUsageRatio / runs);
+        }
+    }
+
     private static void runPython(String... scriptAndArgs) {
         String[] cmd = new String[scriptAndArgs.length + 1];
-        cmd[0] = "C:\\Users\\AsiaLapTop.Com\\AppData\\Local\\Programs\\Python\\Python312\\python.exe";
+        cmd[0] = pythonExecutable();
         System.arraycopy(scriptAndArgs, 0, cmd, 1, scriptAndArgs.length);
         try {
             ProcessBuilder pb = new ProcessBuilder(cmd);
@@ -304,5 +501,14 @@ public class CBMWSimulation {
         } catch (Exception e) {
             System.out.println("[python] " + e.getMessage());
         }
+    }
+
+    private static String pythonExecutable() {
+        String configured = System.getProperty("cbmw.python", "").trim();
+        if (!configured.isEmpty()) {
+            return configured;
+        }
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.US);
+        return os.contains("win") ? "python" : "python3";
     }
 }

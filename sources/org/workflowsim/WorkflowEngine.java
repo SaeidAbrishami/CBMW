@@ -17,9 +17,11 @@ package org.workflowsim;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.cloudbus.cloudsim.Cloudlet;
 import org.cloudbus.cloudsim.Log;
 import org.cloudbus.cloudsim.Vm;
@@ -52,6 +54,7 @@ public final class WorkflowEngine extends SimEntity {
      * The job received list.
      */
     protected List<? extends Cloudlet> jobsReceivedList;
+    private final Set<Integer> jobsReceivedIds = new HashSet<>();
     /**
      * The job submitted.
      */
@@ -239,6 +242,7 @@ public final class WorkflowEngine extends SimEntity {
         }
 
         getJobsReceivedList().add(job);
+        jobsReceivedIds.add(job.getCloudletId());
         jobsSubmitted--;
         if (getJobsList().isEmpty() && jobsSubmitted == 0 && simulationComplete) {
             tryTerminate();
@@ -294,14 +298,8 @@ public final class WorkflowEngine extends SimEntity {
      * @param id the job id
      * @return
      */
-    private boolean hasJobListContainsID(List jobList, int id) {
-        for (Iterator it = jobList.iterator(); it.hasNext();) {
-            Job job = (Job) it.next();
-            if (job.getCloudletId() == id) {
-                return true;
-            }
-        }
-        return false;
+    private boolean hasJobBeenReceived(int id) {
+        return jobsReceivedIds.contains(id);
     }
 
     /**
@@ -318,16 +316,14 @@ public final class WorkflowEngine extends SimEntity {
             List<Job> submittedList = new ArrayList<>();
             allocationList.put(getSchedulerId(i), submittedList);
         }
-        int num = list.size();
-        for (int i = 0; i < num; i++) {
-            //at the beginning
-            Job job = list.get(i);
+        for (Iterator<Job> it = list.iterator(); it.hasNext();) {
+            Job job = it.next();
             //Dont use job.isFinished() it is not right
-            if (!hasJobListContainsID(this.getJobsReceivedList(), job.getCloudletId())) {
+            if (!hasJobBeenReceived(job.getCloudletId())) {
                 List<Job> parentList = job.getParentList();
                 boolean flag = true;
                 for (Job parent : parentList) {
-                    if (!hasJobListContainsID(this.getJobsReceivedList(), parent.getCloudletId())) {
+                    if (!hasJobBeenReceived(parent.getCloudletId())) {
                         flag = false;
                         break;
                     }
@@ -341,9 +337,7 @@ public final class WorkflowEngine extends SimEntity {
                     submittedList.add(job);
                     jobsSubmitted++;
                     getJobsSubmittedList().add(job);
-                    list.remove(job);
-                    i--;
-                    num--;
+                    it.remove();
                 }
             }
 

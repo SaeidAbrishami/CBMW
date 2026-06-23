@@ -1,8 +1,9 @@
 """
 New experiment comparison plots.
 
-Reads Output/results.csv from CBMWSimulation and writes one figure per load
-scenario. Each figure compares CBMW, StaticGreedy, and DynamicGreedy across
+Reads Output/results_aggregate.csv from CBMWSimulation and writes one figure
+per load scenario. If the aggregate file is not available, it falls back to
+Output/results.csv. Each figure compares all experiment algorithms across
 tight/medium/loose deadlines for:
   - total cost
   - deadline success rate
@@ -20,16 +21,18 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-CSV_FILE = sys.argv[1] if len(sys.argv) > 1 else "Output/results.csv"
+DEFAULT_CSV = "Output/results_aggregate.csv"
+FALLBACK_CSV = "Output/results.csv"
+CSV_FILE = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_CSV
 OUT_DIR = sys.argv[2] if len(sys.argv) > 2 else "Output"
 
 ALGORITHMS = ["CBMW", "NOSF", "CEWB", "StaticGreedy", "DynamicGreedy"]
 DEADLINES = ["tight", "medium", "loose"]
 METRICS = [
     ("totalCost", "Total Cost", "Cost ($)", "dollar"),
-    ("deadlineRate", "Deadline Success Rate", "Rate", "rate"),
-    ("reservedUtil", "Reserved Utilization", "Utilization (%)", "percent"),
-    ("onDemandUsageRatio", "On-Demand Usage Ratio", "Ratio", "rate"),
+    ("deadlineRate", "Deadline Success Rate", "Success (%)", "percent_ratio"),
+    ("reservedUtil", "Reserved Utilization", "Utilization (%)", "percent_ratio"),
+    ("onDemandUsageRatio", "On-Demand Usage Ratio", "Usage (%)", "percent_ratio"),
 ]
 COLORS = {
     "CBMW": "#2563EB",
@@ -38,14 +41,33 @@ COLORS = {
     "StaticGreedy": "#F97316",
     "DynamicGreedy": "#16A34A",
 }
+MARKERS = {
+    "CBMW": "o",
+    "NOSF": "s",
+    "CEWB": "^",
+    "StaticGreedy": "D",
+    "DynamicGreedy": "P",
+}
+AGGREGATE_KEYS = {
+    "totalCost": "avgTotalCost",
+    "deadlineRate": "avgDeadlineRate",
+    "reservedUtil": "avgReservedUtil",
+    "onDemandUsageRatio": "avgOnDemandUsageRatio",
+}
 
 
 def load_rows(path):
+    if not os.path.exists(path) and path == DEFAULT_CSV and os.path.exists(FALLBACK_CSV):
+        print(f"[new-experiment] {DEFAULT_CSV} not found; using {FALLBACK_CSV}")
+        path = FALLBACK_CSV
     with open(path, newline="", encoding="utf-8") as f:
         return list(csv.DictReader(f))
 
 
 def numeric(row, key):
+    aggregate_key = AGGREGATE_KEYS.get(key)
+    if aggregate_key and aggregate_key in row:
+        return float(row.get(aggregate_key, 0) or 0)
     if key == "totalCost" and key not in row:
         return float(row.get("onDemandCost", 0)) + float(row.get("reservedCost", 0))
     return float(row.get(key, 0) or 0)
@@ -57,71 +79,48 @@ def value_for(rows, load, deadline, algorithm, metric):
                 and row.get("deadlineClass") == deadline
                 and row.get("algorithm") == algorithm):
             value = numeric(row, metric)
-            if metric == "reservedUtil":
+            if metric in {"deadlineRate", "reservedUtil", "onDemandUsageRatio"}:
                 value *= 100.0
             return value
     return 0.0
 
 
-def label_for(value, fmt):
-    if fmt == "dollar":
-        return f"${value:,.1f}"
-    if fmt == "percent":
-        return f"{value:.1f}%"
-    if fmt == "rate":
-        return f"{value:.3f}"
-    return f"{value:,.1f}"
-
-
 def plot_load(rows, load):
     fig, axes = plt.subplots(2, 2, figsize=(15, 9))
-    fig.suptitle(f"New Experiment - {load.title()} Load", fontsize=15)
+    fig.suptitle(f"New Experiment - {load.title()} Load", fontsize=16, fontweight="bold")
 
     x = np.arange(len(DEADLINES))
-    width = 0.14
-    offsets = np.linspace(-2 * width, 2 * width, len(ALGORITHMS))
 
     for ax, (metric, title, ylabel, fmt) in zip(axes.flat, METRICS):
         max_value = 0.0
-        for offset, algorithm in zip(offsets, ALGORITHMS):
+        for algorithm in ALGORITHMS:
             values = [value_for(rows, load, d, algorithm, metric) for d in DEADLINES]
             max_value = max(max_value, max(values or [0]))
-            bars = ax.bar(
-                x + offset,
+            ax.plot(
+                x,
                 values,
-                width,
                 label=algorithm,
                 color=COLORS.get(algorithm, "#666666"),
-                edgecolor="black",
-                linewidth=0.5,
+                linewidth=2.2,
+                marker=MARKERS.get(algorithm, "o"),
+                markersize=7,
             )
-            for bar, value in zip(bars, values):
-                if value <= 0:
-                    continue
-                ax.text(
-                    bar.get_x() + bar.get_width() / 2,
-                    bar.get_height() + max(max_value, 1.0) * 0.015,
-                    label_for(value, fmt),
-                    ha="center",
-                    va="bottom",
-                    fontsize=8,
-                    rotation=0,
-                )
 
-        ax.set_title(title, fontsize=11)
+        ax.set_title(title, fontsize=12)
         ax.set_ylabel(ylabel, fontsize=10)
         ax.set_xticks(x)
-        ax.set_xticklabels(DEADLINES)
-        ax.grid(axis="y", linestyle="--", alpha=0.35)
-        if fmt == "rate":
-            ax.set_ylim(0, 1.05)
-        elif fmt == "percent":
-            ax.set_ylim(0, max(max_value * 1.25, 5))
+        ax.set_xticklabels([d.title() for d in DEADLINES])
+        ax.grid(axis="both", linestyle="--", alpha=0.25)
+        if fmt == "percent_ratio":
+            ax.set_ylim(0, max(min(max_value * 1.18, 110), 5))
+            ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0f}%")
         else:
-            ax.set_ylim(0, max(max_value * 1.25, 1))
+            ax.set_ylim(0, max(max_value * 1.18, 1))
+            ax.yaxis.set_major_formatter(lambda v, _: f"${v:,.0f}")
 
-    axes[0, 0].legend(loc="upper left", fontsize=8)
-    plt.tight_layout()
+    handles, labels = axes[0, 0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center", ncol=len(ALGORITHMS), fontsize=9)
+    plt.tight_layout(rect=[0, 0.06, 1, 0.96])
     os.makedirs(OUT_DIR, exist_ok=True)
     out_file = os.path.join(OUT_DIR, f"new_experiment_{load}.png")
     plt.savefig(out_file, dpi=150, bbox_inches="tight")

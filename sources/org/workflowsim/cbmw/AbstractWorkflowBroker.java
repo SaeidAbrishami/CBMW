@@ -4,11 +4,14 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.cloudbus.cloudsim.Cloudlet;
 import org.cloudbus.cloudsim.Log;
+import org.cloudbus.cloudsim.Vm;
 import org.cloudbus.cloudsim.core.CloudSim;
 import org.cloudbus.cloudsim.core.CloudSimTags;
 import org.cloudbus.cloudsim.core.SimEvent;
@@ -59,6 +62,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
     // On-demand VMs waiting for their OPD to expire before being registered.
     // vmId -> simTime at which the VM becomes available (now + OPD when ordered).
     private final Map<Integer, Double> pendingVmCreations = new HashMap<>();
+    private final Set<Integer> submittedVmIds = new HashSet<>();
 
     private final List<WorkflowArrivalData> pendingArrivals     = new ArrayList<>();
     private final List<Double>              pendingArrivalTimes = new ArrayList<>();
@@ -85,6 +89,14 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
     public HybridVmPool          getVmPool()      { return vmPool; }
     public List<WorkflowRecord>  getAllWorkflows() { return allWorkflows; }
     public CBMWAccounting        getAccounting() { return accounting; }
+
+    @Override
+    public void submitVmList(List<? extends Vm> list) {
+        super.submitVmList(list);
+        for (Vm vm : list) {
+            submittedVmIds.add(vm.getId());
+        }
+    }
 
     // -----------------------------------------------------------------------
     // CloudSim lifecycle
@@ -188,7 +200,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
 
         if (onDemand) {
             CondorVM idleOnDemand = provisioner.jobCompleted(cl.getCloudletId());
-            if (idleOnDemand != null) {
+            if (idleOnDemand != null && terminateOnDemandWhenIdle()) {
                 accounting.markOnDemandDestroyed(idleOnDemand.getId(), CloudSim.clock());
                 vmPool.terminateOnDemandVm(idleOnDemand.getId());
             }
@@ -221,6 +233,8 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
     /** Called when a reserved-VM task completes. Default no-op. */
     protected void onTaskComplete(Cloudlet cl) {}
 
+    protected boolean terminateOnDemandWhenIdle() { return true; }
+
     /** Records the current ready queue before an algorithm dispatches from it. */
     protected void recordReadyQueue(List<Cloudlet> readyJobs) {
         accounting.markReadyQueue(readyJobs);
@@ -251,7 +265,9 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         for (Map.Entry<Integer, Double> e : pendingVmCreations.entrySet()) {
             if (now >= e.getValue()) {
                 CondorVM vm = vmPool.getVmById(e.getKey());
-                if (vm != null && !getVmList().contains(vm)) readyVms.add(vm);
+                if (vm != null && !submittedVmIds.contains(vm.getId())) {
+                    readyVms.add(vm);
+                }
                 toRemove.add(e.getKey());
             }
         }
@@ -281,7 +297,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
                 CondorVM provVm = vmPool.getVmById(vmId);
                 if (provVm != null
                         && !pendingVmCreations.containsKey(vmId)
-                        && !getVmList().contains(provVm)) {
+                        && !submittedVmIds.contains(vmId)) {
                     double readyAt = CloudSim.clock()
                             + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY;
                     pendingVmCreations.put(vmId, readyAt);
@@ -475,12 +491,9 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         if (now > wfr.getCompletionTime() || wfr.getCompletionTime() == Double.MAX_VALUE) {
             wfr.setCompletionTime(now);
         }
+        wfr.markTaskCompleted(primaryTaskId(job));
 
-        boolean allDone = wfr.getTaskList().stream().allMatch(t ->
-                getCloudletReceivedList().stream()
-                        .anyMatch(cl -> cl.getCloudletId() == t.getCloudletId()));
-
-        if (allDone) {
+        if (wfr.isComplete()) {
             boolean met = wfr.getCompletionTime() <= wfr.getDeadline();
             wfr.setDeadlineMet(met);
             accounting.markWorkflowComplete(wfr, tightness);

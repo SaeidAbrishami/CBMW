@@ -46,6 +46,17 @@ public class CBMWResultCollector {
     public String toCsvRow(String scenario, String load, String deadlineClass,
                            String algorithm, double arrivalScale,
                            double tightness, int run, double onDemandUsageRatio) {
+        return toCsvRow(toScenarioMetrics(scenario, load, deadlineClass, algorithm,
+                arrivalScale, tightness, run, onDemandUsageRatio));
+    }
+
+    public ScenarioMetrics toScenarioMetrics(String scenario, String load,
+                                             String deadlineClass,
+                                             String algorithm,
+                                             double arrivalScale,
+                                             double tightness,
+                                             int run,
+                                             double onDemandUsageRatio) {
         long total    = allWorkflows.size();
         long accepted = allWorkflows.stream().filter(WorkflowRecord::isAccepted).count();
         long met      = allWorkflows.stream()
@@ -61,10 +72,20 @@ public class CBMWResultCollector {
         double reservedUtil = reservedUtilization();
         double totalCost = odCost + reservedCost;
 
+        return new ScenarioMetrics(scenario, load, deadlineClass, algorithm,
+                arrivalScale, tightness, run, total, accepted, deadlineRate,
+                odCost, reservedCost, totalCost, makespan, reservedUtil,
+                onDemandUsageRatio);
+    }
+
+    public static String toCsvRow(ScenarioMetrics metrics) {
         return String.format("%s,%s,%s,%s,%.4f,%.1f,%d,%d,%d,%.4f,%.4f,%.2f,%.4f,%.2f,%.4f,%.4f",
-                scenario, load, deadlineClass, algorithm, arrivalScale, tightness,
-                run, total, accepted, deadlineRate, odCost, reservedCost,
-                totalCost, makespan, reservedUtil, onDemandUsageRatio);
+                metrics.scenario, metrics.load, metrics.deadlineClass,
+                metrics.algorithm, metrics.arrivalScale, metrics.tightness,
+                metrics.run, metrics.total, metrics.accepted,
+                metrics.deadlineRate, metrics.onDemandCost,
+                metrics.reservedCost, metrics.totalCost, metrics.makespan,
+                metrics.reservedUtil, metrics.onDemandUsageRatio);
     }
 
     private double reservedUtilization() {
@@ -79,5 +100,51 @@ public class CBMWResultCollector {
 
     private double simulationDurationSeconds() {
         return org.workflowsim.utils.Parameters.getSimDuration();
+    }
+
+    /** Raw per-run metrics that can be aggregated after the experiment. */
+    public static class ScenarioMetrics {
+        public final String scenario;
+        public final String load;
+        public final String deadlineClass;
+        public final String algorithm;
+        public final double arrivalScale;
+        public final double tightness;
+        public final int run;
+        public final long total;
+        public final long accepted;
+        public final double deadlineRate;
+        public final double onDemandCost;
+        public final double reservedCost;
+        public final double totalCost;
+        public final double makespan;
+        public final double reservedUtil;
+        public final double onDemandUsageRatio;
+
+        public ScenarioMetrics(String scenario, String load, String deadlineClass,
+                               String algorithm, double arrivalScale,
+                               double tightness, int run, long total,
+                               long accepted, double deadlineRate,
+                               double onDemandCost, double reservedCost,
+                               double totalCost, double makespan,
+                               double reservedUtil,
+                               double onDemandUsageRatio) {
+            this.scenario = scenario;
+            this.load = load;
+            this.deadlineClass = deadlineClass;
+            this.algorithm = algorithm;
+            this.arrivalScale = arrivalScale;
+            this.tightness = tightness;
+            this.run = run;
+            this.total = total;
+            this.accepted = accepted;
+            this.deadlineRate = deadlineRate;
+            this.onDemandCost = onDemandCost;
+            this.reservedCost = reservedCost;
+            this.totalCost = totalCost;
+            this.makespan = makespan;
+            this.reservedUtil = reservedUtil;
+            this.onDemandUsageRatio = onDemandUsageRatio;
+        }
     }
 }

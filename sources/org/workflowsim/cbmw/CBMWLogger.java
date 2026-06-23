@@ -44,6 +44,16 @@ public class CBMWLogger {
         }
     }
 
+    /** Disables detail logging for fast runs while preserving the current path. */
+    public static void disable(String logFile) {
+        currentLogFile = logFile;
+        if (writer != null) {
+            writer.flush();
+            writer.close();
+            writer = null;
+        }
+    }
+
     /**
      * Writes one log line if tag is in LOGGED_TAGS.
      * Safe to call at any time; silently does nothing if init() was not called.
@@ -66,6 +76,5 @@ public class CBMWLogger {
         double t;
         try { t = CloudSim.clock(); } catch (Exception e) { t = -1.0; }
         writer.printf("[t=%12.4f][%-22s] %s%n", t, tag, message);
-        writer.flush();
     }
 }

@@ -1,7 +1,6 @@
 package org.workflowsim.cbmw.baselines;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import org.cloudbus.cloudsim.Cloudlet;
@@ -22,6 +21,11 @@ import org.workflowsim.cbmw.WorkflowRecord;
  * ready tasks to dedicated on-demand containers in FCFS/SST order.
  */
 public class NOSFBroker extends AbstractWorkflowBroker {
+
+    private static final int MAX_ON_DEMAND_VMS = Integer.getInteger(
+            "cbmw.nosf.max.ondemand.vms",
+            Math.max(1, (HybridVmPool.NUM_RESERVED * HybridVmPool.RESERVED_CORES)
+                    / HybridVmPool.ON_DEMAND_CORES));
 
     public NOSFBroker(String name, double tightness) throws Exception {
         super(name, tightness);
@@ -52,19 +56,16 @@ public class NOSFBroker extends AbstractWorkflowBroker {
     protected void processCloudletUpdate(SimEvent ev) {
         recordReadyQueue((List<Cloudlet>) getCloudletList());
 
-        List<Cloudlet> readyJobs = new ArrayList<>((List<Cloudlet>) getCloudletList());
-        readyJobs.sort(Comparator.<Cloudlet>comparingDouble(cl -> getSst((Job) cl))
-                .thenComparingInt(cl -> cl.getCloudletId()));
-
         List<Cloudlet> toSchedule = new ArrayList<>();
         double now = CloudSim.clock();
 
-        for (Cloudlet cl : readyJobs) {
+        for (Cloudlet cl : (List<Cloudlet>) getCloudletList()) {
             Job job = (Job) cl;
             double sst = getSst(job);
             if (now < sst) continue;
 
-            CondorVM vm = provisioner.getOrProvision(job);
+            CondorVM vm = provisioner.getOrProvisionShared(job, MAX_ON_DEMAND_VMS);
+            if (vm == null) break;
             cl.setVmId(vm.getId());
             toSchedule.add(cl);
             CBMWLogger.log("NOSF-DISPATCH",
@@ -73,6 +74,11 @@ public class NOSFBroker extends AbstractWorkflowBroker {
         }
 
         dispatchScheduledJobs(toSchedule);
+    }
+
+    @Override
+    protected boolean terminateOnDemandWhenIdle() {
+        return false;
     }
 
     private double getSst(Job job) {

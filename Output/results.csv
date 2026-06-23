@@ -1,4 +1,10 @@
-scenario,algorithm,lambda,tightness,run,total,accepted,deadlineRate,onDemandCost,reservedCost,makespan,reservedUtil
-CBMW_tight_lam0_t2.0,CBMW,0.0,2.0,0,20,20,0.6500,37.5100,163.00,6683.90,0.5205
-StaticGreedy_tight_lam0_t2.0,StaticGreedy,0.0,2.0,0,20,20,0.8000,114.1321,163.00,5024.62,0.3554
-DynamicGreedy_tight_lam0_t2.0,DynamicGreedy,0.0,2.0,0,20,20,0.6000,16.3477,163.00,7216.93,0.5468
+scenario,load,deadlineClass,algorithm,arrivalScale,tightness,run,total,accepted,deadlineRate,onDemandCost,reservedCost,totalCost,makespan,reservedUtil,onDemandUsageRatio
+low_tight,low,tight,CBMW,2.0000,1.2,0,5,4,0.5000,0.3458,326.00,326.3458,4856.64,0.0053,0.0041
+moderate_tight,moderate,tight,CBMW,1.0000,1.2,0,5,4,0.5000,0.3459,326.00,326.3459,4664.79,0.0055,0.0041
+heavy_tight,heavy,tight,CBMW,0.5000,1.2,0,5,4,0.5000,0.3458,326.00,326.3458,4568.87,0.0057,0.0041
+low_medium,low,medium,CBMW,2.0000,2.0,0,5,5,1.0000,0.0000,326.00,326.0000,4856.64,0.0056,0.0000
+moderate_medium,moderate,medium,CBMW,1.0000,2.0,0,5,5,1.0000,0.0000,326.00,326.0000,4664.79,0.0058,0.0000
+heavy_medium,heavy,medium,CBMW,0.5000,2.0,0,5,5,1.0000,0.0000,326.00,326.0000,4568.87,0.0059,0.0000
+low_loose,low,loose,CBMW,2.0000,4.0,0,5,5,1.0000,0.0000,326.00,326.0000,4856.64,0.0056,0.0000
+moderate_loose,moderate,loose,CBMW,1.0000,4.0,0,5,5,1.0000,0.0000,326.00,326.0000,4664.79,0.0058,0.0000
+heavy_loose,heavy,loose,CBMW,0.5000,4.0,0,5,5,1.0000,0.0000,326.00,326.0000,4568.87,0.0059,0.0000

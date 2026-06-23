@@ -1,8 +1,10 @@
 package org.workflowsim.cbmw;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.workflowsim.Task;
 
 /** Holds per-workflow state across planning, scheduling, and result collection. */
@@ -19,6 +21,7 @@ public class WorkflowRecord {
     private final Map<Integer, Double> latestStartTimes    = new HashMap<>();  // taskId -> LST
     private final Map<Integer, Double> scheduledStartTimes = new HashMap<>();  // taskId -> sstji (for on-demand tasks)
     private final Map<Integer, Integer> taskVmAssignment  = new HashMap<>();  // taskId -> vmId
+    private final Set<Integer> completedTaskIds = new HashSet<>();
 
     private boolean deadlineMet;
     private double totalOnDemandCost;
@@ -47,6 +50,12 @@ public class WorkflowRecord {
     // --- tasks ---
     public List<Task> getTaskList() { return taskList; }
     public void setTaskList(List<Task> tasks) { this.taskList = tasks; }
+    public int getTaskCount() { return taskList != null ? taskList.size() : 0; }
+    public boolean markTaskCompleted(int taskId) { return completedTaskIds.add(taskId); }
+    public int getCompletedTaskCount() { return completedTaskIds.size(); }
+    public boolean isComplete() {
+        return getTaskCount() > 0 && completedTaskIds.size() >= getTaskCount();
+    }
 
     // --- static planner output ---
     public void setLST(int taskId, double lst) { latestStartTimes.put(taskId, lst); }
