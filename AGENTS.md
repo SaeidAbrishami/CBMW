@@ -207,6 +207,8 @@ Current configurable defaults in `HybridVmPool`:
 | `cbmw.task.ram.mb` | 1 |
 | `cbmw.reserved.hourly.cost` | 3.26 |
 | `cbmw.ondemand.per.sec` | 0.000340 |
+| `cbmw.ondemand.cpu.per.core.sec` | Value of `cbmw.ondemand.per.sec` |
+| `cbmw.ondemand.memory.per.gb.sec` | 0.0 |
 | `cbmw.ondemand.delay.sec` | 120.0 |
 | `cbmw.scheduling.period.sec` | 5.0 |
 | `cbmw.provisioner.period.sec` | 15.0 |
@@ -214,12 +216,24 @@ Current configurable defaults in `HybridVmPool`:
 
 Reserved cost is fixed by makespan. On-demand cost is based on instance uptime.
 Following the paper, every on-demand assignment creates one dedicated logical
-container sized exactly like its task (`cbmw.task.cores` and
-`cbmw.task.ram.mb`). The supplied DAX files do not contain per-task CPU/RAM
-metadata, so these configurable task defaults apply uniformly. Logical
+container sized exactly like its task. Per-task requirements are read from
+common DAX attributes/profile keys (`cores`, `cpu`, `num_procs`, `ram`, or
+`memory`); `cbmw.task.cores` and `cbmw.task.ram.mb` are explicit fallbacks.
+The supplied DAX files do not contain CPU/RAM metadata, so those defaults still
+apply uniformly unless enriched workflows are supplied. On-demand prices scale
+with task cores and RAM using the configurable CPU/memory per-second rates.
+Logical
 containers keep independent IDs, OPD, lifecycle, one-minute billing, and
 output rows, but bypass CloudSim host registration to avoid treating
 serverless containers as heavyweight VMs.
+
+Supported task metadata examples:
+
+```xml
+<job ... cores="4" memory="2048MB" />
+<profile namespace="pegasus" key="cores">4</profile>
+<profile namespace="pegasus" key="ram">2GB</profile>
+```
 
 ### Broker Hierarchy
 
@@ -274,7 +288,9 @@ The run compiled and completed, producing the `.rar-style` detailed folder.
 - `AbstractWorkflowBroker.updateWorkflowCompletion()` no longer scans all
   received cloudlets for every task completion.
 - `CBMWStaticPlanningAlgorithm.findLatestFeasibleSlot()` avoids repeated
-  `overlapCount()` rescans inside the candidate loop.
+  `overlapCount()` rescans inside the candidate loop and checks true concurrent
+  CPU/RAM usage with an event-based resource profile rather than summing serial
+  bookings as if they overlapped.
 - `CBMWSimulation` saves `results.csv` and `results_aggregate.csv` after each
   completed scenario.
 

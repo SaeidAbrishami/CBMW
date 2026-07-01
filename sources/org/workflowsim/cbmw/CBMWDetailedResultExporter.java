@@ -8,8 +8,10 @@ import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.workflowsim.utils.Parameters;
@@ -78,15 +80,40 @@ public class CBMWDetailedResultExporter {
         List<OnDemandInstanceRecord> onDemand = accounting.getOnDemandRecords();
         Stat uptime = Stat.fromValues(finiteUptimes(onDemand));
         double totalUptime = finiteUptimes(onDemand).stream().mapToDouble(Double::doubleValue).sum();
+        Map<Integer, TaskExecutionRecord> onDemandTasks = new HashMap<>();
+        List<Double> onDemandCoreSizes = new ArrayList<>();
+        List<Double> onDemandRamSizes = new ArrayList<>();
+        for (TaskExecutionRecord record : accounting.getTaskRecords()) {
+            if ("On-Demand".equals(record.getVmType()) && record.getVmId() >= 0) {
+                onDemandTasks.put(record.getVmId(), record);
+                onDemandCoreSizes.add((double) record.getTaskCores());
+                onDemandRamSizes.add((double) record.getTaskRamMb());
+            }
+        }
+        Stat onDemandCores = Stat.fromValues(onDemandCoreSizes);
+        Stat onDemandRam = Stat.fromValues(onDemandRamSizes);
 
-        double onDemandCost = totalUptime * HybridVmPool.ON_DEMAND_PER_SEC;
+        double onDemandCost = 0.0;
+        for (OnDemandInstanceRecord instance : onDemand) {
+            TaskExecutionRecord task = onDemandTasks.get(instance.getVmId());
+            if (task != null && Double.isFinite(instance.getUptime())) {
+                onDemandCost += instance.getUptime()
+                        * HybridVmPool.onDemandPricePerSecond(
+                                task.getTaskCores(), task.getTaskRamMb());
+            }
+        }
         double reservedCost = HybridVmPool.NUM_RESERVED
                 * HybridVmPool.RESERVED_HOURLY_COST
                 * Math.ceil(simDuration / 3600.0);
         double reservedCoresWithTime = HybridVmPool.NUM_RESERVED
                 * HybridVmPool.RESERVED_CORES * simDuration;
-        double onDemandCoresWithTime = onDemand.size()
-                * HybridVmPool.ON_DEMAND_CORES * totalUptime;
+        double onDemandCoresWithTime = 0.0;
+        for (OnDemandInstanceRecord instance : onDemand) {
+            TaskExecutionRecord task = onDemandTasks.get(instance.getVmId());
+            if (task != null && Double.isFinite(instance.getUptime())) {
+                onDemandCoresWithTime += task.getTaskCores() * instance.getUptime();
+            }
+        }
         double makespan = workflows.stream()
                 .mapToDouble(WorkflowRecord::getCompletionTime)
                 .filter(t -> t < Double.MAX_VALUE)
@@ -146,15 +173,17 @@ public class CBMWDetailedResultExporter {
             writer.write("On-Demand Instances:\n");
             writer.write(String.format(Locale.US, "  Total Count: %d%n", onDemand.size()));
             writer.write(String.format(Locale.US,
-                    "  Cores per Instance: %d%n", HybridVmPool.ON_DEMAND_CORES));
+                    "  Cores per Instance (mean/min/max): %.2f / %.0f / %.0f%n",
+                    onDemandCores.mean, onDemandCores.min, onDemandCores.max));
             writer.write(String.format(Locale.US,
-                    "  RAM per Instance: %d MB%n", HybridVmPool.ON_DEMAND_RAM_MB));
+                    "  RAM per Instance MB (mean/min/max): %.2f / %.0f / %.0f%n",
+                    onDemandRam.mean, onDemandRam.min, onDemandRam.max));
             writer.write(String.format(Locale.US,
-                    "  Total On-Demand Cores: %d%n",
-                    onDemand.size() * HybridVmPool.ON_DEMAND_CORES));
+                    "  Total On-Demand Cores: %.0f%n",
+                    onDemandCoreSizes.stream().mapToDouble(Double::doubleValue).sum()));
             writer.write(String.format(Locale.US,
-                    "  Total On-Demand RAM: %d MB%n%n",
-                    onDemand.size() * HybridVmPool.ON_DEMAND_RAM_MB));
+                    "  Total On-Demand RAM: %.0f MB%n%n",
+                    onDemandRamSizes.stream().mapToDouble(Double::doubleValue).sum()));
             writer.write(String.format(Locale.US,
                     "  Total On-Demand Cores With Time: %.6E%n%n",
                     onDemandCoresWithTime));
@@ -259,7 +288,9 @@ public class CBMWDetailedResultExporter {
     private List<Object> taskHeader() {
         return row("Algorithm", "Scenario", "Workflow ID", "Workflow",
                 "Workflow Disposition", "Task ID", "Task Name", "Parents ID",
-                "Task Cores", "Task RAM (MB)", "Nominal Runtime mu (s)",
+                "Task Cores", "Task RAM (MB)", "Resource Requirement Source",
+                "On-Demand Price Per Second",
+                "Nominal Runtime mu (s)",
                 "Runtime Stddev sigma (s)", "Conservative Runtime cet (s)",
                 "Planning Runtime Used (s)", "Actual Runtime Sample (s)",
                 "EST (s)", "EFT (s)", "LST (s)", "LFT (s)",
@@ -280,8 +311,11 @@ public class CBMWDetailedResultExporter {
                 normalizePath(record.getWorkflowPath()),
                 record.getWorkflowDisposition(), formatTaskId(record.getTaskId()),
                 emptyToUnknown(record.getTaskName()),
-                formatParentIds(record.getParentIds()), HybridVmPool.TASK_CORES,
-                HybridVmPool.TASK_RAM_MB, fmtPrecise(record.getNominalRuntime()),
+                formatParentIds(record.getParentIds()), record.getTaskCores(),
+                record.getTaskRamMb(), record.getResourceRequirementSource(),
+                fmtRate(HybridVmPool.onDemandPricePerSecond(
+                        record.getTaskCores(), record.getTaskRamMb())),
+                fmtPrecise(record.getNominalRuntime()),
                 fmtPrecise(record.getRuntimeStddev()),
                 fmtPrecise(record.getConservativeRuntime()),
                 fmtPrecise(record.getPlanningRuntime()),
@@ -385,6 +419,11 @@ public class CBMWDetailedResultExporter {
     private static String fmtPrecise(double value) {
         if (!Double.isFinite(value)) return "";
         return String.format(Locale.US, "%.4f", value);
+    }
+
+    private static String fmtRate(double value) {
+        if (!Double.isFinite(value)) return "";
+        return String.format(Locale.US, "%.8f", value);
     }
 
     private static List<Object> row(Object... values) {

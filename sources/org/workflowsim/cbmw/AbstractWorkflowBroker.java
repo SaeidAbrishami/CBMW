@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import javax.xml.parsers.DocumentBuilderFactory;
 import org.cloudbus.cloudsim.Cloudlet;
 import org.cloudbus.cloudsim.Log;
 import org.cloudbus.cloudsim.Vm;
@@ -23,6 +24,10 @@ import org.workflowsim.WorkflowParser;
 import org.workflowsim.WorkflowScheduler;
 import org.workflowsim.WorkflowSimTags;
 import org.workflowsim.utils.Parameters;
+import org.w3c.dom.Element;
+import org.w3c.dom.NamedNodeMap;
+import org.w3c.dom.Node;
+import org.w3c.dom.NodeList;
 
 /**
  * Shared base for all CBMW-family brokers.
@@ -196,7 +201,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         getCloudletSubmittedList().remove(cl);
         cloudletsSubmitted--;
 
-        vmPool.taskFinished(cl.getVmId());
+        vmPool.taskFinished(cl.getVmId(), primaryTaskId(job));
 
         int wfId = workflowIdForJob(job);
         boolean onDemand = provisioner.isOnDemandVm(cl.getVmId());
@@ -212,8 +217,10 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
             }
             WorkflowRecord wfr = activeWorkflows.get(wfId);
             double uptime = accounting.getOnDemandUptime(cl.getVmId());
+            double pricePerSecond = vmPool.getOnDemandPricePerSecond(
+                    primaryTaskId(job));
             double cost = (Double.isFinite(uptime) ? uptime : cl.getActualCPUTime())
-                    * HybridVmPool.ON_DEMAND_PER_SEC;
+                    * pricePerSecond;
             if (wfr != null) wfr.addOnDemandCost(cost);
             CBMWLogger.logf("TASK-COMPLETE",
                     "task=%d wf=%d vm=%d(on-demand) actualCPU=%.4fs cost=$%.6f",
@@ -327,14 +334,16 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
                 }
                 continue;
             }
-            if (vmPool.isReserved(vmId) && !vmPool.hasRuntimeCapacity(vmId)) {
+            int taskId = primaryTaskId((Job) cl);
+            if (vmPool.isReserved(vmId)
+                    && !vmPool.hasRuntimeCapacity(vmId, taskId)) {
                 continue;
             }
             double delay = Parameters.getOverheadParams().getQueueDelay() != null
                     ? Parameters.getOverheadParams().getQueueDelay(cl) : 0.0;
             schedule(dcId, delay, CloudSimTags.CLOUDLET_SUBMIT, cl);
             actuallySubmitted.add(cl);
-            vmPool.taskStarted(vmId);
+            vmPool.taskStarted(vmId, taskId);
             accounting.markTaskSubmitted(cl, provisioner.isOnDemandVm(vmId));
             accounting.snapshotUtilization(vmPool);
             CBMWLogger.logf("DISPATCH", "wf=%d task=%d vm=%d",
@@ -352,7 +361,8 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
                 ? Parameters.getOverheadParams().getQueueDelay(cl) : 0.0;
         double executionTime = cl.getCloudletLength() / HybridVmPool.RESERVED_MIPS;
         try {
-            cl.setResourceParameter(getId(), HybridVmPool.ON_DEMAND_PER_SEC);
+            cl.setResourceParameter(getId(), vmPool.getOnDemandPricePerSecond(
+                    primaryTaskId((Job) cl)));
             cl.setSubmissionTime(now);
             cl.setExecStartTime(now + queueDelay);
             cl.setCloudletStatus(Cloudlet.INEXEC);
@@ -362,7 +372,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         }
         schedule(getId(), queueDelay + executionTime,
                 WorkflowSimTags.ON_DEMAND_TASK_COMPLETE, cl);
-        vmPool.taskStarted(cl.getVmId());
+        vmPool.taskStarted(cl.getVmId(), primaryTaskId((Job) cl));
         accounting.markTaskSubmitted(cl, true);
         accounting.snapshotUtilization(vmPool);
         CBMWLogger.logf("DISPATCH", "wf=%d task=%d container=%d",
@@ -415,6 +425,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
 
         WorkflowRecord wfr = new WorkflowRecord(wfId, data.getDaxPath(), data.getArrivalTime());
         wfr.setTaskList(tasks);
+        captureTaskResourceRequirements(data.getDaxPath(), wfr, tasks);
         captureEstimatedRuntimes(wfr, tasks);
         wfr.setDeadline(data.getUserDeadline());
         allWorkflows.add(wfr);
@@ -520,6 +531,102 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         }
     }
 
+    /**
+     * Loads the paper's rigid per-task core and RAM requirements. Common DAX
+     * attributes and profile keys are supported; absent metadata uses the
+     * explicit experiment defaults.
+     */
+    private void captureTaskResourceRequirements(String daxPath,
+                                                 WorkflowRecord wfr,
+                                                 List<Task> tasks) {
+        try {
+            NodeList jobs = DocumentBuilderFactory.newInstance()
+                    .newDocumentBuilder().parse(new File(daxPath))
+                    .getElementsByTagName("job");
+            for (int i = 0; i < tasks.size(); i++) {
+                Element job = i < jobs.getLength() ? (Element) jobs.item(i) : null;
+                ResourceValue cores = readResource(job, false,
+                        "cores", "core", "cpus", "cpu", "num_procs", "numcores");
+                ResourceValue ram = readResource(job, true,
+                        "ram", "memory", "memorymb", "rammb");
+                int taskCores = cores.present ? cores.value : HybridVmPool.TASK_CORES;
+                int taskRamMb = ram.present ? ram.value : HybridVmPool.TASK_RAM_MB;
+                String source = cores.present || ram.present ? "DAX" : "DEFAULT";
+                Task task = tasks.get(i);
+                task.setNumberOfPes(taskCores);
+                wfr.setTaskResources(task.getCloudletId(), taskCores, taskRamMb, source);
+                vmPool.registerTaskResources(task.getCloudletId(), taskCores, taskRamMb);
+            }
+        } catch (Exception e) {
+            Log.printLine(getName() + ": could not read task resources from "
+                    + daxPath + ": " + e.getMessage());
+            for (Task task : tasks) {
+                task.setNumberOfPes(HybridVmPool.TASK_CORES);
+                wfr.setTaskResources(task.getCloudletId(), HybridVmPool.TASK_CORES,
+                        HybridVmPool.TASK_RAM_MB, "DEFAULT");
+                vmPool.registerTaskResources(task.getCloudletId(),
+                        HybridVmPool.TASK_CORES, HybridVmPool.TASK_RAM_MB);
+            }
+        }
+    }
+
+    private ResourceValue readResource(Element job, boolean memory,
+                                       String... acceptedKeys) {
+        if (job == null) return ResourceValue.missing();
+        NamedNodeMap attributes = job.getAttributes();
+        for (int i = 0; i < attributes.getLength(); i++) {
+            Node attribute = attributes.item(i);
+            if (matchesKey(attribute.getNodeName(), acceptedKeys)) {
+                return ResourceValue.of(parseResourceValue(attribute.getNodeValue(), memory));
+            }
+        }
+        NodeList profiles = job.getElementsByTagName("profile");
+        for (int i = 0; i < profiles.getLength(); i++) {
+            Element profile = (Element) profiles.item(i);
+            if (matchesKey(profile.getAttribute("key"), acceptedKeys)) {
+                return ResourceValue.of(parseResourceValue(
+                        profile.getTextContent(), memory));
+            }
+        }
+        return ResourceValue.missing();
+    }
+
+    private boolean matchesKey(String candidate, String... acceptedKeys) {
+        String normalized = candidate == null ? ""
+                : candidate.toLowerCase().replace("-", "").replace("_", "");
+        for (String key : acceptedKeys) {
+            if (normalized.equals(key.replace("_", ""))) return true;
+        }
+        return false;
+    }
+
+    private int parseResourceValue(String raw, boolean memory) {
+        String value = raw.trim().toLowerCase().replace(" ", "");
+        double multiplier = 1.0;
+        if (memory && (value.endsWith("gib") || value.endsWith("gb"))) {
+            multiplier = 1024.0;
+            value = value.replaceFirst("gib$|gb$", "");
+        } else if (memory && (value.endsWith("mib") || value.endsWith("mb"))) {
+            value = value.replaceFirst("mib$|mb$", "");
+        }
+        int parsed = (int) Math.ceil(Double.parseDouble(value) * multiplier);
+        if (parsed <= 0) throw new IllegalArgumentException("resource value must be > 0");
+        return parsed;
+    }
+
+    private static class ResourceValue {
+        final boolean present;
+        final int value;
+
+        private ResourceValue(boolean present, int value) {
+            this.present = present;
+            this.value = value;
+        }
+
+        static ResourceValue of(int value) { return new ResourceValue(true, value); }
+        static ResourceValue missing() { return new ResourceValue(false, 0); }
+    }
+
     /** Allows an algorithm to replace the DAX mean with its planning estimate. */
     protected double estimatePlanningRuntime(double meanExecutionTime) {
         return meanExecutionTime;
@@ -549,6 +656,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
 
         for (Task t : tasks) {
             Job job = new Job(t.getCloudletId(), t.getCloudletLength());
+            job.setNumberOfPes(wfr.getTaskCores(t.getCloudletId()));
             job.setUserId(getId());
             job.setVmId(t.getVmId());
             List<Task> tl = new ArrayList<>();

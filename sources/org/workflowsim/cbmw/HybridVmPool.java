@@ -6,6 +6,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import org.cloudbus.cloudsim.CloudletSchedulerSpaceShared;
 import org.workflowsim.CondorVM;
 import org.workflowsim.WorkflowSimTags;
@@ -34,6 +35,11 @@ public class HybridVmPool {
             System.getProperty("cbmw.reserved.hourly.cost", "3.26"));
     public static final double ON_DEMAND_PER_SEC    = Double.parseDouble(
             System.getProperty("cbmw.ondemand.per.sec", "0.000340"));
+    public static final double ON_DEMAND_CPU_PER_CORE_SEC = Double.parseDouble(
+            System.getProperty("cbmw.ondemand.cpu.per.core.sec",
+                    Double.toString(ON_DEMAND_PER_SEC)));
+    public static final double ON_DEMAND_MEMORY_PER_GB_SEC = Double.parseDouble(
+            System.getProperty("cbmw.ondemand.memory.per.gb.sec", "0.0"));
     /** Modelled on-demand provisioning delay (seconds). sstji = lstji - OPD. */
     public static final double ON_DEMAND_PROVISIONING_DELAY = Double.parseDouble(
             System.getProperty("cbmw.ondemand.delay.sec", "120.0"));
@@ -54,11 +60,16 @@ public class HybridVmPool {
     // Persistent slot bookings for reserved VMs across all workflow planning calls.
     // vmId -> list of [start, end, cores, ramMb] intervals
     private final Map<Integer, List<double[]>> reservedBookings = new HashMap<>();
+    // vmId -> interval-start -> [used cores, used RAM] until the next entry.
+    private final Map<Integer, TreeMap<Double, int[]>> reservedProfiles = new HashMap<>();
     // taskId -> [vmId, start, end, cores, ramMb] so we can release by taskId
     private final Map<Integer, double[]> taskBookingIndex = new HashMap<>();
     // Runtime occupancy per VM. This is separate from booking profiles.
     private final Map<Integer, Integer> runningCoresByVm = new HashMap<>();
     private final Map<Integer, Integer> runningRamByVm = new HashMap<>();
+    private final Map<Integer, Integer> runningTasksByVm = new HashMap<>();
+    private final Map<Integer, Integer> taskCoresById = new HashMap<>();
+    private final Map<Integer, Integer> taskRamById = new HashMap<>();
 
     public HybridVmPool(int userId) {
         for (int i = 0; i < NUM_RESERVED; i++) {
@@ -69,9 +80,35 @@ public class HybridVmPool {
             reservedVms.add(vm);
             vmsById.put(i, vm);
             reservedBookings.put(i, new ArrayList<>());
+            TreeMap<Double, int[]> profile = new TreeMap<>();
+            profile.put(0.0, new int[]{0, 0});
+            reservedProfiles.put(i, profile);
             runningCoresByVm.put(i, 0);
             runningRamByVm.put(i, 0);
+            runningTasksByVm.put(i, 0);
         }
+    }
+
+    public void registerTaskResources(int taskId, int cores, int ramMb) {
+        taskCoresById.put(taskId, cores);
+        taskRamById.put(taskId, ramMb);
+    }
+
+    public int getTaskCores(int taskId) {
+        return taskCoresById.getOrDefault(taskId, TASK_CORES);
+    }
+
+    public int getTaskRamMb(int taskId) {
+        return taskRamById.getOrDefault(taskId, TASK_RAM_MB);
+    }
+
+    public double getOnDemandPricePerSecond(int taskId) {
+        return onDemandPricePerSecond(getTaskCores(taskId), getTaskRamMb(taskId));
+    }
+
+    public static double onDemandPricePerSecond(int cores, int ramMb) {
+        return cores * ON_DEMAND_CPU_PER_CORE_SEC
+                + (ramMb / 1024.0) * ON_DEMAND_MEMORY_PER_GB_SEC;
     }
 
     public CondorVM getVmById(int id) {
@@ -87,17 +124,19 @@ public class HybridVmPool {
         reservedVms.removeIf(vm -> vm.getId() == vmId);
         vmsById.remove(vmId);
         reservedBookings.remove(vmId);
+        reservedProfiles.remove(vmId);
         taskBookingIndex.entrySet().removeIf(e -> (int) e.getValue()[0] == vmId);
         runningCoresByVm.remove(vmId);
         runningRamByVm.remove(vmId);
+        runningTasksByVm.remove(vmId);
         CBMWLogger.log("VM-REMOVE",
                 String.format("reserved vm=%d removed from pool remainingReserved=%d",
                         vmId, reservedVms.size()));
     }
 
-    public CondorVM getAnyIdleReservedVm() {
+    public CondorVM getAnyIdleReservedVm(int taskId) {
         for (CondorVM vm : reservedVms) {
-            if (hasRuntimeCapacity(vm.getId())) return vm;
+            if (hasRuntimeCapacity(vm.getId(), taskId)) return vm;
         }
         return null;
     }
@@ -107,13 +146,16 @@ public class HybridVmPool {
      * [now, execEndTime]. Prefers VMs with no conflicting bookings in that window;
      * falls back to any idle VM if none are conflict-free.
      */
-    public CondorVM getIdleReservedVmForAdvance(double now, double execEndTime) {
+    public CondorVM getIdleReservedVmForAdvance(double now, double execEndTime,
+                                                int taskId) {
         CondorVM anyCapacity = null;
+        int cores = getTaskCores(taskId);
+        int ramMb = getTaskRamMb(taskId);
         for (CondorVM vm : reservedVms) {
-            if (!hasRuntimeCapacity(vm.getId())) continue;
+            if (!hasRuntimeCapacity(vm.getId(), taskId)) continue;
             if (anyCapacity == null) anyCapacity = vm;
             if (hasBookedCapacity(vm.getId(), now, execEndTime,
-                    TASK_CORES, TASK_RAM_MB)) return vm;
+                    cores, ramMb)) return vm;
         }
         return anyCapacity;
     }
@@ -126,17 +168,23 @@ public class HybridVmPool {
     }
 
     /** Creates the paper's dedicated, task-sized on-demand container. */
-    public CondorVM provisionOnDemandVm(int userId) {
+    public CondorVM provisionOnDemandVm(int userId, int taskId) {
         int id = nextOnDemandId++;
-        CondorVM vm = new CondorVM(id, userId, RESERVED_MIPS, ON_DEMAND_CORES,
-                ON_DEMAND_RAM_MB, 10000, 100000, "Xen",
-                ON_DEMAND_PER_SEC, 0.0, 0.0, 0.0,
+        int cores = getTaskCores(taskId);
+        int ramMb = getTaskRamMb(taskId);
+        CondorVM vm = new CondorVM(id, userId, RESERVED_MIPS, cores,
+                ramMb, 10000, 100000, "Xen",
+                onDemandPricePerSecond(cores, ramMb), 0.0, 0.0, 0.0,
                 new CloudletSchedulerSpaceShared());
         onDemandVms.add(vm);
         vmsById.put(id, vm);
         onDemandIndexById.put(id, onDemandVms.size() - 1);
+        runningCoresByVm.put(id, 0);
+        runningRamByVm.put(id, 0);
+        runningTasksByVm.put(id, 0);
         CBMWLogger.logf("VM-PROVISION",
-                "on-demand vmId=%d provisioned totalOnDemand=%d", id, onDemandVms.size());
+                "on-demand vmId=%d task=%d cores=%d ramMb=%d totalOnDemand=%d",
+                id, taskId, cores, ramMb, onDemandVms.size());
         return vm;
     }
 
@@ -154,13 +202,15 @@ public class HybridVmPool {
         vmsById.remove(vmId);
         runningCoresByVm.remove(vmId);
         runningRamByVm.remove(vmId);
+        runningTasksByVm.remove(vmId);
         CBMWLogger.logf("VM-TERMINATE",
                 "on-demand vmId=%d terminated remainingOnDemand=%d", vmId, onDemandVms.size());
     }
 
     /** Records a time-slot booking for a reserved VM task. */
     public void bookSlot(int vmId, int taskId, double start, double end) {
-        bookSlot(vmId, taskId, start, end, TASK_CORES, TASK_RAM_MB);
+        bookSlot(vmId, taskId, start, end,
+                getTaskCores(taskId), getTaskRamMb(taskId));
     }
 
     /** Records a time-slot booking for a reserved VM task. */
@@ -168,6 +218,7 @@ public class HybridVmPool {
                          int cores, int ramMb) {
         List<double[]> list = reservedBookings.computeIfAbsent(vmId, k -> new ArrayList<>());
         list.add(new double[]{start, end, cores, ramMb});
+        updateProfile(vmId, start, end, cores, ramMb);
         taskBookingIndex.put(taskId, new double[]{vmId, start, end, cores, ramMb});
         CBMWLogger.log("BOOK-SLOT",
                 String.format("vm=%d task=%d [%.4f, %.4f] totalBookings=%d",
@@ -177,7 +228,8 @@ public class HybridVmPool {
     /** Replaces any existing booking for taskId with the actual reserved slot. */
     public void rebookSlot(int taskId, int vmId, double start, double end) {
         releaseSlot(taskId);
-        bookSlot(vmId, taskId, start, end, TASK_CORES, TASK_RAM_MB);
+        bookSlot(vmId, taskId, start, end,
+                getTaskCores(taskId), getTaskRamMb(taskId));
     }
 
     /** Returns a snapshot of booked [start, end] intervals for a reserved VM. */
@@ -186,32 +238,38 @@ public class HybridVmPool {
         return list != null ? new ArrayList<>(list) : new ArrayList<>();
     }
 
-    public boolean hasRuntimeCapacity(int vmId) {
-        int coreCapacity = isReserved(vmId) ? RESERVED_CORES : ON_DEMAND_CORES;
-        int ramCapacity = isReserved(vmId) ? RESERVED_RAM_MB : ON_DEMAND_RAM_MB;
-        return runningCoresByVm.getOrDefault(vmId, 0) + TASK_CORES <= coreCapacity
-                && runningRamByVm.getOrDefault(vmId, 0) + TASK_RAM_MB <= ramCapacity;
+    public boolean hasRuntimeCapacity(int vmId, int taskId) {
+        CondorVM vm = getVmById(vmId);
+        if (vm == null) return false;
+        return runningCoresByVm.getOrDefault(vmId, 0) + getTaskCores(taskId)
+                    <= vm.getNumberOfPes()
+                && runningRamByVm.getOrDefault(vmId, 0) + getTaskRamMb(taskId)
+                    <= vm.getRam();
     }
 
-    public void taskStarted(int vmId) {
-        runningCoresByVm.merge(vmId, TASK_CORES, Integer::sum);
-        runningRamByVm.merge(vmId, TASK_RAM_MB, Integer::sum);
+    public void taskStarted(int vmId, int taskId) {
+        runningCoresByVm.merge(vmId, getTaskCores(taskId), Integer::sum);
+        runningRamByVm.merge(vmId, getTaskRamMb(taskId), Integer::sum);
+        runningTasksByVm.merge(vmId, 1, Integer::sum);
         CondorVM vm = getVmById(vmId);
         if (vm != null) vm.setState(WorkflowSimTags.VM_STATUS_BUSY);
     }
 
-    public void taskFinished(int vmId) {
-        int runningCores = Math.max(0, runningCoresByVm.getOrDefault(vmId, 0) - TASK_CORES);
-        int runningRam = Math.max(0, runningRamByVm.getOrDefault(vmId, 0) - TASK_RAM_MB);
+    public void taskFinished(int vmId, int taskId) {
+        int runningCores = Math.max(0, runningCoresByVm.getOrDefault(vmId, 0)
+                - getTaskCores(taskId));
+        int runningRam = Math.max(0, runningRamByVm.getOrDefault(vmId, 0)
+                - getTaskRamMb(taskId));
         runningCoresByVm.put(vmId, runningCores);
         runningRamByVm.put(vmId, runningRam);
+        runningTasksByVm.put(vmId,
+                Math.max(0, runningTasksByVm.getOrDefault(vmId, 0) - 1));
         CondorVM vm = getVmById(vmId);
         if (vm != null && runningCores == 0) vm.setState(WorkflowSimTags.VM_STATUS_IDLE);
     }
 
     public int getRunningTaskCount(int vmId) {
-        int cores = runningCoresByVm.getOrDefault(vmId, 0);
-        return TASK_CORES > 0 ? cores / TASK_CORES : 0;
+        return runningTasksByVm.getOrDefault(vmId, 0);
     }
 
     public int getRunningCores(int vmId) {
@@ -220,6 +278,22 @@ public class HybridVmPool {
 
     public int getRunningRamMb(int vmId) {
         return runningRamByVm.getOrDefault(vmId, 0);
+    }
+
+    public int getTotalRunningCores(boolean onDemand) {
+        int total = 0;
+        for (CondorVM vm : onDemand ? onDemandVms : reservedVms) {
+            total += getRunningCores(vm.getId());
+        }
+        return total;
+    }
+
+    public int getTotalRunningRamMb(boolean onDemand) {
+        int total = 0;
+        for (CondorVM vm : onDemand ? onDemandVms : reservedVms) {
+            total += getRunningRamMb(vm.getId());
+        }
+        return total;
     }
 
     public void activateOnDemandContainer(int vmId) {
@@ -232,6 +306,24 @@ public class HybridVmPool {
         return activeOnDemandIds.size();
     }
 
+    public int getActiveOnDemandCores() {
+        int total = 0;
+        for (Integer vmId : activeOnDemandIds) {
+            CondorVM vm = getVmById(vmId);
+            if (vm != null) total += vm.getNumberOfPes();
+        }
+        return total;
+    }
+
+    public int getActiveOnDemandRamMb() {
+        int total = 0;
+        for (Integer vmId : activeOnDemandIds) {
+            CondorVM vm = getVmById(vmId);
+            if (vm != null) total += vm.getRam();
+        }
+        return total;
+    }
+
     public int overlapCount(int vmId, double start, double end) {
         int count = 0;
         for (double[] interval : getBookings(vmId)) {
@@ -242,16 +334,116 @@ public class HybridVmPool {
 
     public boolean hasBookedCapacity(int vmId, double start, double end,
                                      int cores, int ramMb) {
-        int usedCores = 0;
-        int usedRam = 0;
-        for (double[] interval : getBookings(vmId)) {
-            if (start < interval[1] && end > interval[0]) {
-                usedCores += interval.length > 2 ? (int) interval[2] : TASK_CORES;
-                usedRam += interval.length > 3 ? (int) interval[3] : TASK_RAM_MB;
-            }
+        if (cores > RESERVED_CORES || ramMb > RESERVED_RAM_MB) return false;
+        TreeMap<Double, int[]> profile = reservedProfiles.get(vmId);
+        if (profile == null) return false;
+        double cursor = start;
+        while (cursor < end - 1e-9) {
+            Map.Entry<Double, int[]> segment = profile.floorEntry(cursor);
+            if (segment == null) return false;
+            int[] used = segment.getValue();
+            if (used[0] + cores > RESERVED_CORES
+                    || used[1] + ramMb > RESERVED_RAM_MB) return false;
+            Double next = profile.higherKey(segment.getKey());
+            if (next == null || next >= end) break;
+            cursor = Math.max(cursor + 1e-9, next);
         }
-        return usedCores + cores <= RESERVED_CORES
-                && usedRam + ramMb <= RESERVED_RAM_MB;
+        return true;
+    }
+
+    public double findLatestFeasibleSlot(int vmId, double earliest, double lft,
+                                         double duration, int cores, int ramMb) {
+        if (duration < 0.0 || cores > RESERVED_CORES || ramMb > RESERVED_RAM_MB) {
+            return -1.0;
+        }
+        TreeMap<Double, int[]> profile = reservedProfiles.get(vmId);
+        if (profile == null) return -1.0;
+        double cursor = lft;
+        double feasibleEnd = lft;
+        double feasibleDuration = 0.0;
+        while (cursor > earliest + 1e-9) {
+            Map.Entry<Double, int[]> segment = profile.floorEntry(Math.nextDown(cursor));
+            if (segment == null) break;
+            double segmentStart = Math.max(earliest, segment.getKey());
+            int[] used = segment.getValue();
+            if (used[0] + cores <= RESERVED_CORES
+                    && used[1] + ramMb <= RESERVED_RAM_MB) {
+                feasibleDuration += cursor - segmentStart;
+                if (feasibleDuration + 1e-9 >= duration) {
+                    return feasibleEnd - duration;
+                }
+            } else {
+                feasibleDuration = 0.0;
+                feasibleEnd = segmentStart;
+            }
+            cursor = segmentStart;
+        }
+        return duration == 0.0 && lft >= earliest ? lft : -1.0;
+    }
+
+    public double findEarliestFeasibleSlot(int vmId, double earliest,
+                                           double duration, int cores, int ramMb) {
+        if (duration < 0.0 || cores > RESERVED_CORES || ramMb > RESERVED_RAM_MB) {
+            return Double.MAX_VALUE;
+        }
+        TreeMap<Double, int[]> profile = reservedProfiles.get(vmId);
+        if (profile == null) return Double.MAX_VALUE;
+        double cursor = earliest;
+        double feasibleStart = earliest;
+        double feasibleDuration = 0.0;
+        while (true) {
+            Map.Entry<Double, int[]> segment = profile.floorEntry(cursor);
+            if (segment == null) return Double.MAX_VALUE;
+            Double next = profile.higherKey(segment.getKey());
+            double segmentEnd = next == null ? Double.POSITIVE_INFINITY : next;
+            int[] used = segment.getValue();
+            if (used[0] + cores <= RESERVED_CORES
+                    && used[1] + ramMb <= RESERVED_RAM_MB) {
+                if (!Double.isFinite(segmentEnd)
+                        || feasibleDuration + segmentEnd - cursor + 1e-9 >= duration) {
+                    return feasibleStart;
+                }
+                feasibleDuration += segmentEnd - cursor;
+            } else {
+                feasibleDuration = 0.0;
+                feasibleStart = segmentEnd;
+            }
+            cursor = segmentEnd;
+        }
+    }
+
+    private void updateProfile(int vmId, double start, double end,
+                               int coreDelta, int ramDelta) {
+        TreeMap<Double, int[]> profile = reservedProfiles.get(vmId);
+        if (profile == null || end <= start) return;
+        splitProfile(profile, start);
+        splitProfile(profile, end);
+        for (int[] used : profile.subMap(start, true, end, false).values()) {
+            used[0] += coreDelta;
+            used[1] += ramDelta;
+        }
+        mergeProfileBoundary(profile, start);
+        mergeProfileBoundary(profile, end);
+    }
+
+    private void splitProfile(TreeMap<Double, int[]> profile, double time) {
+        if (profile.containsKey(time)) return;
+        Map.Entry<Double, int[]> previous = profile.floorEntry(time);
+        int[] used = previous == null ? new int[]{0, 0} : previous.getValue();
+        profile.put(time, new int[]{used[0], used[1]});
+    }
+
+    private void mergeProfileBoundary(TreeMap<Double, int[]> profile, double time) {
+        Map.Entry<Double, int[]> current = profile.floorEntry(time);
+        if (current == null) return;
+        Map.Entry<Double, int[]> previous = profile.lowerEntry(current.getKey());
+        if (previous != null && sameUsage(previous.getValue(), current.getValue())) {
+            profile.remove(current.getKey());
+        }
+    }
+
+    private boolean sameUsage(int[] left, int[] right) {
+        return left[0] == right[0] && left[1] == right[1];
     }
 
     /**
@@ -268,6 +460,9 @@ public class HybridVmPool {
         }
         int vmId = (int) entry[0];
         double start = entry[1], end = entry[2];
+        int cores = entry.length > 3 ? (int) entry[3] : TASK_CORES;
+        int ramMb = entry.length > 4 ? (int) entry[4] : TASK_RAM_MB;
+        updateProfile(vmId, start, end, -cores, -ramMb);
         List<double[]> slots = reservedBookings.get(vmId);
         int before = (slots != null) ? slots.size() : 0;
         if (slots != null) {

@@ -80,7 +80,8 @@ public class DynamicGreedyBroker extends AbstractWorkflowBroker {
             double sst = getSst(job);
 
             // Events (a) and (b): idle reserved VM available → dispatch immediately.
-            CondorVM reserved = vmPool.getAnyIdleReservedVm();
+            CondorVM reserved = vmPool.getAnyIdleReservedVm(
+                    primaryTaskId(job));
             if (reserved != null) {
                 cl.setVmId(reserved.getId());
                 toSchedule.add(cl);

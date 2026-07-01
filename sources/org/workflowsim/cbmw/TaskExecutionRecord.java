@@ -11,6 +11,9 @@ public class TaskExecutionRecord {
     private final int workflowId;
     private final String workflowPath;
     private final String workflowDisposition;
+    private final int taskCores;
+    private final int taskRamMb;
+    private final String resourceRequirementSource;
     private final double nominalRuntime;
     private final double runtimeStddev;
     private final double conservativeRuntime;
@@ -40,6 +43,8 @@ public class TaskExecutionRecord {
 
     public TaskExecutionRecord(int taskId, String taskName, int workflowId,
                                String workflowPath, String workflowDisposition,
+                               int taskCores, int taskRamMb,
+                               String resourceRequirementSource,
                                double nominalRuntime, double runtimeStddev,
                                double conservativeRuntime, double planningRuntime,
                                double actualRuntime, double earliestStartTime,
@@ -53,6 +58,9 @@ public class TaskExecutionRecord {
         this.workflowId = workflowId;
         this.workflowPath = workflowPath;
         this.workflowDisposition = workflowDisposition;
+        this.taskCores = taskCores;
+        this.taskRamMb = taskRamMb;
+        this.resourceRequirementSource = resourceRequirementSource;
         this.nominalRuntime = nominalRuntime;
         this.runtimeStddev = runtimeStddev;
         this.conservativeRuntime = conservativeRuntime;
@@ -79,6 +87,9 @@ public class TaskExecutionRecord {
     public int getWorkflowId() { return workflowId; }
     public String getWorkflowPath() { return workflowPath; }
     public String getWorkflowDisposition() { return workflowDisposition; }
+    public int getTaskCores() { return taskCores; }
+    public int getTaskRamMb() { return taskRamMb; }
+    public String getResourceRequirementSource() { return resourceRequirementSource; }
     public double getNominalRuntime() { return nominalRuntime; }
     public double getRuntimeStddev() { return runtimeStddev; }
     public double getConservativeRuntime() { return conservativeRuntime; }

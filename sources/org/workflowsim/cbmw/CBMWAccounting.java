@@ -50,7 +50,9 @@ public class CBMWAccounting {
             for (Task parent : task.getParentList()) parentIds.add(parent.getCloudletId());
             taskRecords.put(taskId, new TaskExecutionRecord(
                     taskId, task.getType(), wfr.getWorkflowId(), wfr.getDaxPath(),
-                    workflowDisposition, nominalRuntime, runtimeStddev,
+                    workflowDisposition, wfr.getTaskCores(taskId),
+                    wfr.getTaskRamMb(taskId), wfr.getTaskResourceSource(taskId),
+                    nominalRuntime, runtimeStddev,
                     conservativeRuntime, planningRuntime, actualRuntime,
                     est, eft, lst, lft, scheduledStart, subDeadline,
                     deadlineTightness, plannedVmId, plannedVmType, parentIds));
@@ -139,13 +141,13 @@ public class CBMWAccounting {
         utilizationSnapshots.add(new UtilizationSnapshot(
                 CloudSim.clock(),
                 pool.getReservedVms().size() * HybridVmPool.RESERVED_CORES,
-                pool.getActiveOnDemandCount() * HybridVmPool.ON_DEMAND_CORES,
+                pool.getActiveOnDemandCores(),
                 pool.getReservedVms().size() * HybridVmPool.RESERVED_RAM_MB,
-                pool.getActiveOnDemandCount() * HybridVmPool.ON_DEMAND_RAM_MB,
-                runningReservedTasks.size() * HybridVmPool.TASK_CORES,
-                runningOnDemandTasks.size() * HybridVmPool.TASK_CORES,
-                runningReservedTasks.size() * HybridVmPool.TASK_RAM_MB,
-                runningOnDemandTasks.size() * HybridVmPool.TASK_RAM_MB));
+                pool.getActiveOnDemandRamMb(),
+                pool.getTotalRunningCores(false),
+                pool.getTotalRunningCores(true),
+                pool.getTotalRunningRamMb(false),
+                pool.getTotalRunningRamMb(true)));
     }
 
     public List<TaskExecutionRecord> getTaskRecords() {

@@ -68,7 +68,7 @@ public class CEWBBroker extends AbstractWorkflowBroker {
         for (Cloudlet cl : readyJobs) {
             Job job = (Job) cl;
             double sst = getSst(job);
-            CondorVM lowCost = findLowCostVm();
+            CondorVM lowCost = findLowCostVm(primaryTaskId(job));
 
             if (lowCost != null && !isRevoked()) {
                 cl.setVmId(lowCost.getId());
@@ -89,8 +89,8 @@ public class CEWBBroker extends AbstractWorkflowBroker {
         dispatchScheduledJobs(toSchedule);
     }
 
-    private CondorVM findLowCostVm() {
-        return vmPool.getAnyIdleReservedVm();
+    private CondorVM findLowCostVm(int taskId) {
+        return vmPool.getAnyIdleReservedVm(taskId);
     }
 
     private boolean isRevoked() {

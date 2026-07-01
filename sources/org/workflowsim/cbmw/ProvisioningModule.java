@@ -32,7 +32,7 @@ public class ProvisioningModule {
         if (jobToVm.containsKey(jobId)) {
             return jobToVm.get(jobId);
         }
-        CondorVM vm = pool.provisionOnDemandVm(userId);
+        CondorVM vm = pool.provisionOnDemandVm(userId, jobId);
         vm.setState(org.workflowsim.WorkflowSimTags.VM_STATUS_BUSY);
         jobToVm.put(jobId, vm);
         return vm;

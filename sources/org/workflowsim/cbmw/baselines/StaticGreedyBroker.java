@@ -5,7 +5,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.PriorityQueue;
 import org.cloudbus.cloudsim.Cloudlet;
 import org.cloudbus.cloudsim.Log;
 import org.cloudbus.cloudsim.core.SimEvent;
@@ -33,20 +32,11 @@ import org.workflowsim.cbmw.WorkflowRecord;
 public class StaticGreedyBroker extends AbstractWorkflowBroker {
 
     private final CBMWDynamicSchedulingAlgorithm dispatcher;
-    private final Map<Integer, PriorityQueue<Double>> resourceAvailability = new HashMap<>();
 
     public StaticGreedyBroker(String name, double tightness) throws Exception {
         super(name, tightness);
         this.dispatcher = new CBMWDynamicSchedulingAlgorithm(
                 vmPool, activeWorkflows, provisioner);
-        int slots = Math.max(1, Math.min(
-                HybridVmPool.RESERVED_CORES / Math.max(1, HybridVmPool.TASK_CORES),
-                HybridVmPool.RESERVED_RAM_MB / Math.max(1, HybridVmPool.TASK_RAM_MB)));
-        for (CondorVM vm : vmPool.getReservedVms()) {
-            PriorityQueue<Double> availability = new PriorityQueue<>();
-            for (int i = 0; i < slots; i++) availability.add(0.0);
-            resourceAvailability.put(vm.getId(), availability);
-        }
     }
 
     // -----------------------------------------------------------------------
@@ -72,6 +62,8 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
         for (Task task : sorted) {
             int    taskId = task.getCloudletId();
             double dur    = wfr.getEstimatedExecTime(task);
+            int taskCores = wfr.getTaskCores(taskId);
+            int taskRamMb = wfr.getTaskRamMb(taskId);
 
             // EST = max over all parents of their planned completion time.
             double est = arrival;
@@ -86,7 +78,8 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
             double bestFinish = Double.MAX_VALUE;
 
             for (CondorVM vm : vmPool.getReservedVms()) {
-                double slot   = findEarliestSlot(vm.getId(), est);
+                double slot = findEarliestSlot(vm.getId(), est, dur,
+                        taskCores, taskRamMb);
                 double finish = slot + dur;
                 if (finish < bestFinish) {
                     bestFinish = finish;
@@ -112,8 +105,7 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
                 wfr.setScheduledStart(taskId, bestStart);
                 wfr.setLST(taskId, bestStart);
                 vmPool.bookSlot(bestVm, taskId, bestStart, bestStart + dur,
-                        HybridVmPool.TASK_CORES, HybridVmPool.TASK_RAM_MB);
-                reserveSlot(bestVm, bestFinish);
+                        taskCores, taskRamMb);
                 plannedEnd.put(taskId, bestStart + dur);
                 CBMWLogger.log("SG-PLAN",
                         String.format("wf=%d task=%d -> vm=%d slot=[%.2f,%.2f]",
@@ -135,17 +127,10 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
         return true;
     }
 
-    private double findEarliestSlot(int vmId, double est) {
-        PriorityQueue<Double> availability = resourceAvailability.get(vmId);
-        return availability == null || availability.isEmpty()
-                ? Double.MAX_VALUE : Math.max(est, availability.peek());
-    }
-
-    private void reserveSlot(int vmId, double finish) {
-        PriorityQueue<Double> availability = resourceAvailability.get(vmId);
-        if (availability == null || availability.isEmpty()) return;
-        availability.poll();
-        availability.add(finish);
+    private double findEarliestSlot(int vmId, double est, double duration,
+                                    int cores, int ramMb) {
+        return vmPool.findEarliestFeasibleSlot(
+                vmId, est, duration, cores, ramMb);
     }
 
     // -----------------------------------------------------------------------

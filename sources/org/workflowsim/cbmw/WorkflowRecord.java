@@ -24,6 +24,9 @@ public class WorkflowRecord {
     private final Map<Integer, Double> latestFinishTimes   = new HashMap<>();  // taskId -> lftji
     private final Map<Integer, Double> nominalExecTimes    = new HashMap<>();  // taskId -> mu
     private final Map<Integer, Double> estimatedExecTimes  = new HashMap<>();  // taskId -> cetji
+    private final Map<Integer, Integer> taskCoreRequirements = new HashMap<>();
+    private final Map<Integer, Integer> taskRamRequirements = new HashMap<>();
+    private final Map<Integer, String> taskResourceSources = new HashMap<>();
     private final Map<Integer, Double> scheduledStartTimes = new HashMap<>();  // taskId -> sstji
     private final Map<Integer, Integer> taskVmAssignment  = new HashMap<>();  // taskId -> vmId
     private final Set<Integer> completedTaskIds = new HashSet<>();
@@ -78,6 +81,21 @@ public class WorkflowRecord {
     }
     public double getEstimatedExecTime(int taskId) {
         return estimatedExecTimes.getOrDefault(taskId, 0.0);
+    }
+
+    public void setTaskResources(int taskId, int cores, int ramMb, String source) {
+        taskCoreRequirements.put(taskId, cores);
+        taskRamRequirements.put(taskId, ramMb);
+        taskResourceSources.put(taskId, source);
+    }
+    public int getTaskCores(int taskId) {
+        return taskCoreRequirements.getOrDefault(taskId, HybridVmPool.TASK_CORES);
+    }
+    public int getTaskRamMb(int taskId) {
+        return taskRamRequirements.getOrDefault(taskId, HybridVmPool.TASK_RAM_MB);
+    }
+    public String getTaskResourceSource(int taskId) {
+        return taskResourceSources.getOrDefault(taskId, "DEFAULT");
     }
 
     // --- static planner output ---

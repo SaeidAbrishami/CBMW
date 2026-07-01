@@ -108,7 +108,7 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
             } else {
                 // arij = reserved VM. Try Provisioner(tji, arij).
                 CondorVM planned = pool.getVmById(plannedVm);
-                if (planned != null && pool.hasRuntimeCapacity(plannedVm)) {
+                if (planned != null && pool.hasRuntimeCapacity(plannedVm, taskId)) {
                     // Provisioner returns true — dispatch to planned reserved VM.
                     pool.rebookSlot(taskId, plannedVm,
                             now, now + planningDuration);
@@ -120,7 +120,7 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                 } else {
                     // Provisioner returns false — CheckReserved(tji, CT): find another idle reserved VM.
                     CondorVM other = pool.getIdleReservedVmForAdvance(
-                            now, now + planningDuration);
+                            now, now + planningDuration, taskId);
                     if (other != null) {
                         pool.rebookSlot(taskId, other.getId(),
                                 now, now + planningDuration);
@@ -164,7 +164,7 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
             }
 
             CondorVM res = pool.getIdleReservedVmForAdvance(
-                    now, now + planningDuration);
+                    now, now + planningDuration, taskId);
             if (res != null) {
                 pool.rebookSlot(taskId, res.getId(),
                         now, now + planningDuration);

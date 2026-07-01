@@ -1,7 +1,6 @@
 package org.workflowsim.cbmw;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -87,8 +86,8 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
         int bestVm = ON_DEMAND_SENTINEL;
         double bestSlot = -1.0;
         int bestLoad = Integer.MAX_VALUE;
-        int taskCores = HybridVmPool.TASK_CORES;
-        int taskRamMb = HybridVmPool.TASK_RAM_MB;
+        int taskCores = wfr.getTaskCores(taskId);
+        int taskRamMb = wfr.getTaskRamMb(taskId);
 
         for (CondorVM vm : pool.getReservedVms()) {
             double slot = findLatestFeasibleSlot(vm.getId(), est, lft, dur,
@@ -147,35 +146,8 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
     private double findLatestFeasibleSlot(int vmId, double est, double lft,
                                           double dur, int cores, int ramMb) {
         double earliest = Math.max(est, CloudSim.clock());
-        double candidate = lft - dur;
-        if (candidate < earliest) return -1.0;
-
-        List<double[]> sorted = new ArrayList<>(pool.getBookings(vmId));
-        Collections.sort(sorted, Comparator.comparingDouble(s -> s[0]));
-
-        while (candidate >= earliest) {
-            double end = candidate + dur;
-            int overlapCores = 0;
-            int overlapRam = 0;
-            double earliestOverlapStart = Double.POSITIVE_INFINITY;
-
-            for (double[] interval : sorted) {
-                if (interval[1] <= earliest) continue;
-                if (candidate < interval[1] && end > interval[0]) {
-                    overlapCores += interval.length > 2 ? (int) interval[2] : HybridVmPool.TASK_CORES;
-                    overlapRam += interval.length > 3 ? (int) interval[3] : HybridVmPool.TASK_RAM_MB;
-                    earliestOverlapStart = Math.min(earliestOverlapStart, interval[0]);
-                    if (overlapCores + cores > HybridVmPool.RESERVED_CORES
-                            || overlapRam + ramMb > HybridVmPool.RESERVED_RAM_MB) break;
-                }
-            }
-
-            if (overlapCores + cores <= HybridVmPool.RESERVED_CORES
-                    && overlapRam + ramMb <= HybridVmPool.RESERVED_RAM_MB) return candidate;
-            candidate = earliestOverlapStart - dur - 1e-9;
-        }
-
-        return -1.0;
+        return pool.findLatestFeasibleSlot(
+                vmId, earliest, lft, dur, cores, ramMb);
     }
 
     private double computeEFT(Task task, Map<Integer, Double> memo) {
