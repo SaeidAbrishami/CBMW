@@ -142,22 +142,19 @@ public class HybridVmPool {
     }
 
     /**
-     * Returns the best idle reserved VM for advancing a task that would occupy
-     * [now, execEndTime]. Prefers VMs with no conflicting bookings in that window;
-     * falls back to any idle VM if none are conflict-free.
+     * Returns a reserved VM only when the task fits both current capacity and
+     * the complete booked resource profile over [now, execEndTime].
      */
     public CondorVM getIdleReservedVmForAdvance(double now, double execEndTime,
                                                 int taskId) {
-        CondorVM anyCapacity = null;
         int cores = getTaskCores(taskId);
         int ramMb = getTaskRamMb(taskId);
         for (CondorVM vm : reservedVms) {
             if (!hasRuntimeCapacity(vm.getId(), taskId)) continue;
-            if (anyCapacity == null) anyCapacity = vm;
             if (hasBookedCapacity(vm.getId(), now, execEndTime,
                     cores, ramMb)) return vm;
         }
-        return anyCapacity;
+        return null;
     }
 
     public CondorVM getAnyIdleOnDemandVm() {
