@@ -22,6 +22,7 @@ public class WorkflowRecord {
     private final Map<Integer, Double> earliestFinishTimes = new HashMap<>();  // taskId -> eftji
     private final Map<Integer, Double> latestStartTimes    = new HashMap<>();  // taskId -> lstji
     private final Map<Integer, Double> latestFinishTimes   = new HashMap<>();  // taskId -> lftji
+    private final Map<Integer, Double> nominalExecTimes    = new HashMap<>();  // taskId -> mu
     private final Map<Integer, Double> estimatedExecTimes  = new HashMap<>();  // taskId -> cetji
     private final Map<Integer, Double> scheduledStartTimes = new HashMap<>();  // taskId -> sstji
     private final Map<Integer, Integer> taskVmAssignment  = new HashMap<>();  // taskId -> vmId
@@ -62,6 +63,12 @@ public class WorkflowRecord {
     }
 
     // --- paper estimated execution times used by negotiation/static planning ---
+    public void setNominalExecTime(int taskId, double execTime) {
+        nominalExecTimes.put(taskId, execTime);
+    }
+    public double getNominalExecTime(int taskId) {
+        return nominalExecTimes.getOrDefault(taskId, Double.NaN);
+    }
     public void setEstimatedExecTime(int taskId, double execTime) {
         estimatedExecTimes.put(taskId, execTime);
     }
@@ -75,27 +82,35 @@ public class WorkflowRecord {
 
     // --- static planner output ---
     public void setEST(int taskId, double est) { earliestStartTimes.put(taskId, est); }
+    public boolean hasEST(int taskId) { return earliestStartTimes.containsKey(taskId); }
     public double getEST(int taskId) {
         return earliestStartTimes.getOrDefault(taskId, arrivalTime);
     }
     public void setEFT(int taskId, double eft) { earliestFinishTimes.put(taskId, eft); }
+    public boolean hasEFT(int taskId) { return earliestFinishTimes.containsKey(taskId); }
     public double getEFT(int taskId) {
         return earliestFinishTimes.getOrDefault(taskId, arrivalTime);
     }
     public void setLST(int taskId, double lst) { latestStartTimes.put(taskId, lst); }
+    public boolean hasLST(int taskId) { return latestStartTimes.containsKey(taskId); }
     public double getLST(int taskId) {
         return latestStartTimes.getOrDefault(taskId, Double.MAX_VALUE);
     }
     public void setLFT(int taskId, double lft) { latestFinishTimes.put(taskId, lft); }
+    public boolean hasLFT(int taskId) { return latestFinishTimes.containsKey(taskId); }
     public double getLFT(int taskId) {
         return latestFinishTimes.getOrDefault(taskId, Double.MAX_VALUE);
     }
     /** Scheduled start time (sstji). */
     public void setScheduledStart(int taskId, double sst) { scheduledStartTimes.put(taskId, sst); }
+    public boolean hasScheduledStart(int taskId) {
+        return scheduledStartTimes.containsKey(taskId);
+    }
     public double getScheduledStart(int taskId) {
         return scheduledStartTimes.getOrDefault(taskId, 0.0);
     }
     public void setAssignedVm(int taskId, int vmId) { taskVmAssignment.put(taskId, vmId); }
+    public boolean hasAssignedVm(int taskId) { return taskVmAssignment.containsKey(taskId); }
     public int getAssignedVm(int taskId) {
         return taskVmAssignment.getOrDefault(taskId, -1);
     }

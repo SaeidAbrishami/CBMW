@@ -21,6 +21,7 @@ public class CBMWDetailedResultExporter {
     private final CBMWAccounting accounting;
     private final HybridVmPool vmPool;
     private final String algorithm;
+    private final String scenario;
     private final double alpha;
     private final double simDuration;
 
@@ -28,12 +29,14 @@ public class CBMWDetailedResultExporter {
                                       CBMWAccounting accounting,
                                       HybridVmPool vmPool,
                                       String algorithm,
+                                      String scenario,
                                       double alpha,
                                       double simDuration) {
         this.workflows = workflows;
         this.accounting = accounting;
         this.vmPool = vmPool;
         this.algorithm = algorithm;
+        this.scenario = scenario;
         this.alpha = alpha;
         this.simDuration = simDuration;
     }
@@ -45,7 +48,13 @@ public class CBMWDetailedResultExporter {
         writeResultsTxt(new File(outputDir, "results.txt"));
         writeWorkflowSummary(new File(outputDir, "WORKFLOW_COMPLETION_SUMMARY.xlsx"));
         writeTaskSummary(new File(outputDir, "TASK_EXECUTION_SUMMARY.xlsx"));
+        writeTaskCsv(new File(outputDir, "TASK_EXECUTION_SUMMARY.csv"), false);
         writeOnDemandUsage(new File(outputDir, "ON_DEMAND_INSTANCE_USAGE.xlsx"));
+    }
+
+    /** Appends this scenario's task rows to the algorithm-level CSV. */
+    public void appendTaskCsv(File file) throws IOException {
+        writeTaskCsv(file, true);
     }
 
     private void writeResultsTxt(File file) throws IOException {
@@ -223,30 +232,97 @@ public class CBMWDetailedResultExporter {
 
     private void writeTaskSummary(File file) throws IOException {
         List<List<Object>> rows = new ArrayList<>();
-        rows.add(row("Task ID", "Task Name", "Workflow", "VM ID", "Ready Time (s)",
-                "Execution Time (s)", "Start Time (s)", "Finish Time (s)",
-                "SubDeadline Time (s)", "Workflow Alpha", "VM Type", "Status",
-                "Parents ID"));
+        rows.add(taskHeader());
+        for (TaskExecutionRecord record : sortedTaskRecords()) rows.add(taskRow(record));
+        SimpleXlsxWriter.write(file, "Task Execution Summary", rows);
+    }
+
+    private void writeTaskCsv(File file, boolean append) throws IOException {
+        boolean writeHeader = !append || !file.exists() || file.length() == 0;
+        try (BufferedWriter writer = new BufferedWriter(new OutputStreamWriter(
+                new FileOutputStream(file, append), StandardCharsets.UTF_8))) {
+            if (writeHeader) writeCsvRow(writer, taskHeader());
+            for (TaskExecutionRecord record : sortedTaskRecords()) {
+                writeCsvRow(writer, taskRow(record));
+            }
+        }
+    }
+
+    private List<TaskExecutionRecord> sortedTaskRecords() {
         List<TaskExecutionRecord> records = new ArrayList<>(accounting.getTaskRecords());
         records.sort(Comparator
-                .comparingDouble((TaskExecutionRecord r) -> safeTime(r.getStartTime()))
+                .comparingInt(TaskExecutionRecord::getWorkflowId)
                 .thenComparingInt(TaskExecutionRecord::getTaskId));
-        for (TaskExecutionRecord record : records) {
-            rows.add(row(formatTaskId(record.getTaskId()),
-                    emptyToUnknown(record.getTaskName()),
-                    normalizePath(record.getWorkflowPath()),
-                    record.getVmId(),
-                    fmt(record.getReadyTime()),
-                    fmt(record.getExecutionTime()),
-                    fmt(record.getStartTime()),
-                    fmt(record.getFinishTime()),
-                    fmt(record.getSubDeadlineTime()),
-                    fmt(record.getWorkflowAlpha()),
-                    record.getVmType(),
-                    record.getStatus(),
-                    formatParentIds(record.getParentIds())));
+        return records;
+    }
+
+    private List<Object> taskHeader() {
+        return row("Algorithm", "Scenario", "Workflow ID", "Workflow",
+                "Workflow Disposition", "Task ID", "Task Name", "Parents ID",
+                "Task Cores", "Task RAM (MB)", "Nominal Runtime mu (s)",
+                "Runtime Stddev sigma (s)", "Conservative Runtime cet (s)",
+                "Planning Runtime Used (s)", "Actual Runtime Sample (s)",
+                "EST (s)", "EFT (s)", "LST (s)", "LFT (s)",
+                "Scheduled Start SST (s)", "SubDeadline (s)",
+                "Planned VM ID", "Planned VM Type", "Actual VM ID",
+                "Actual VM Type", "Provision Order Time (s)",
+                "Container Ready Time (s)", "Provisioning Delay (s)",
+                "Ready Time (s)", "Submit Time (s)", "Start Time (s)",
+                "Finish Time (s)", "Waiting Time (s)", "Queue Delay (s)",
+                "Start Deviation from SST (s)",
+                "Finish Deviation from SubDeadline (s)", "Rescheduled",
+                "Scheduling Reason", "Status", "Deadline Tightness");
+    }
+
+    private List<Object> taskRow(TaskExecutionRecord record) {
+        boolean submitted = Double.isFinite(record.getSubmitTime());
+        return row(algorithm, scenario, record.getWorkflowId(),
+                normalizePath(record.getWorkflowPath()),
+                record.getWorkflowDisposition(), formatTaskId(record.getTaskId()),
+                emptyToUnknown(record.getTaskName()),
+                formatParentIds(record.getParentIds()), HybridVmPool.TASK_CORES,
+                HybridVmPool.TASK_RAM_MB, fmtPrecise(record.getNominalRuntime()),
+                fmtPrecise(record.getRuntimeStddev()),
+                fmtPrecise(record.getConservativeRuntime()),
+                fmtPrecise(record.getPlanningRuntime()),
+                fmtPrecise(record.getActualRuntime()),
+                fmtPrecise(record.getEarliestStartTime()),
+                fmtPrecise(record.getEarliestFinishTime()),
+                fmtPrecise(record.getLatestStartTime()),
+                fmtPrecise(record.getLatestFinishTime()),
+                fmtPrecise(record.getScheduledStartTime()),
+                fmtPrecise(record.getSubDeadlineTime()),
+                record.getPlannedVmId() == null ? "" : record.getPlannedVmId(),
+                record.getPlannedVmType(), submitted ? record.getVmId() : "",
+                submitted ? record.getVmType() : "",
+                fmtPrecise(record.getProvisioningOrderTime()),
+                fmtPrecise(record.getContainerReadyTime()),
+                fmtPrecise(record.getProvisioningDelay()),
+                fmtPrecise(record.getReadyTime()), fmtPrecise(record.getSubmitTime()),
+                fmtPrecise(record.getStartTime()), fmtPrecise(record.getFinishTime()),
+                fmtPrecise(record.getWaitingTime()), fmtPrecise(record.getQueueDelay()),
+                fmtPrecise(record.getStartDeviation()),
+                fmtPrecise(record.getSubDeadlineDeviation()),
+                submitted && record.isRescheduled() ? "YES" : "NO",
+                record.getSchedulingReason().isEmpty()
+                        ? "NOT_DISPATCHED" : record.getSchedulingReason(),
+                record.getStatus().isEmpty() ? "PENDING" : record.getStatus(),
+                fmtPrecise(record.getDeadlineTightness()));
+    }
+
+    private void writeCsvRow(BufferedWriter writer, List<Object> values)
+            throws IOException {
+        for (int i = 0; i < values.size(); i++) {
+            if (i > 0) writer.write(',');
+            writer.write(csv(String.valueOf(values.get(i) == null ? "" : values.get(i))));
         }
-        SimpleXlsxWriter.write(file, "Task Execution Summary", rows);
+        writer.newLine();
+    }
+
+    private String csv(String value) {
+        if (value.indexOf(',') < 0 && value.indexOf('"') < 0
+                && value.indexOf('\n') < 0 && value.indexOf('\r') < 0) return value;
+        return '"' + value.replace("\"", "\"\"") + '"';
     }
 
     private void writeOnDemandUsage(File file) throws IOException {
@@ -304,6 +380,11 @@ public class CBMWDetailedResultExporter {
     private static String fmt(double value) {
         if (!Double.isFinite(value)) return "";
         return String.format(Locale.US, "%.1f", value);
+    }
+
+    private static String fmtPrecise(double value) {
+        if (!Double.isFinite(value)) return "";
+        return String.format(Locale.US, "%.4f", value);
     }
 
     private static List<Object> row(Object... values) {

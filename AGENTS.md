@@ -107,6 +107,7 @@ Main outputs:
 
 - `Output/algorithms/<algorithm>/results.csv`
 - `Output/algorithms/<algorithm>/results_aggregate.csv`
+- `Output/algorithms/<algorithm>/task_execution.csv`
 - `Output/comparison/results.csv`
 - `Output/comparison/results_aggregate.csv`
 - `Output/comparison/new_experiment_low.png`
@@ -117,8 +118,19 @@ Detailed `.rar-style` outputs, when `cbmw.export.details=true`:
 
 - `results.txt`
 - `TASK_EXECUTION_SUMMARY.xlsx`
+- `TASK_EXECUTION_SUMMARY.csv`
 - `WORKFLOW_COMPLETION_SUMMARY.xlsx`
 - `ON_DEMAND_INSTANCE_USAGE.xlsx`
+
+The algorithm-level `task_execution.csv` is always written incrementally after
+each completed scenario, even when detailed XLSX export is disabled. It records
+the scenario and algorithm, workflow disposition, task identity/dependencies,
+`mu`, `sigma`, paper `cet`, the runtime estimate actually used by the selected
+algorithm, sampled actual runtime, EST/EFT/LST/LFT/SST, planned and actual
+resources, provisioning/ready/submit/start/finish times, derived delays,
+rescheduling classification, execution status, and deadline tightness. Tasks
+from rejected workflows are included with a rejection reason and blank actual
+execution fields.
 
 `Output/` is ignored by git.
 

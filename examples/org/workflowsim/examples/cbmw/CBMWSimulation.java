@@ -111,6 +111,12 @@ public class CBMWSimulation {
         ensureDir(new File(OUTPUT_ROOT));
         ensureDir(new File(ALGORITHM_OUTPUT_ROOT));
         ensureDir(new File(COMPARISON_OUTPUT_DIR));
+        for (String algorithm : ALGORITHMS) {
+            File taskCsv = new File(algorithmOutputDir(algorithm), "task_execution.csv");
+            if (taskCsv.exists() && !taskCsv.delete()) {
+                throw new IllegalStateException("Could not reset " + taskCsv);
+            }
+        }
         System.out.println("[run] Algorithms: " + ALGORITHMS);
         System.out.println("[run] Algorithm outputs: "
                 + new File(ALGORITHM_OUTPUT_ROOT).getAbsolutePath());
@@ -263,15 +269,22 @@ public class CBMWSimulation {
                 algorithm, load.arrivalScale, deadline.tightness, 0,
                 broker.getAccounting().getOnDemandUsageRatio());
 
+        CBMWDetailedResultExporter detailedExporter = new CBMWDetailedResultExporter(
+                broker.getAllWorkflows(),
+                broker.getAccounting(),
+                broker.getVmPool(),
+                algorithm,
+                scenario,
+                deadline.tightness,
+                simDuration);
+        detailedExporter.appendTaskCsv(
+                new File(algorithmDir, "task_execution.csv"));
+        System.out.println("[tasks] Appended to "
+                + new File(algorithmDir, "task_execution.csv").getAbsolutePath());
+
         if (EXPORT_DETAILS) {
             File detailsDir = new File(algorithmDir, label + "_details");
-            new CBMWDetailedResultExporter(
-                    broker.getAllWorkflows(),
-                    broker.getAccounting(),
-                    broker.getVmPool(),
-                    algorithm,
-                    deadline.tightness,
-                    simDuration).export(detailsDir);
+            detailedExporter.export(detailsDir);
             System.out.println("[details] Saved to " + detailsDir.getAbsolutePath());
         }
 

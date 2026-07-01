@@ -21,17 +21,39 @@ public class CBMWAccounting {
     private final Set<Integer> runningReservedTasks = new HashSet<>();
     private final Set<Integer> runningOnDemandTasks = new HashSet<>();
 
-    public void registerWorkflowTasks(WorkflowRecord wfr, List<Task> tasks, double alpha) {
+    public void registerWorkflowTasks(WorkflowRecord wfr, List<Task> tasks,
+                                      double deadlineTightness,
+                                      boolean actualRuntimeAvailable,
+                                      String workflowDisposition) {
         for (Task task : tasks) {
             int taskId = task.getCloudletId();
-            double execTime = task.getCloudletLength() / HybridVmPool.RESERVED_MIPS;
-            double subDeadline = wfr.getLFT(taskId);
-            if (!Double.isFinite(subDeadline)) subDeadline = wfr.getDeadline();
+            double nominalRuntime = wfr.getNominalExecTime(taskId);
+            double runtimeStddev = PaperRuntimeModel.STDDEV_RATIO * nominalRuntime;
+            double conservativeRuntime =
+                    PaperRuntimeModel.conservativeEstimate(nominalRuntime);
+            double planningRuntime = wfr.getEstimatedExecTime(taskId);
+            double actualRuntime = actualRuntimeAvailable
+                    ? task.getCloudletLength() / HybridVmPool.RESERVED_MIPS
+                    : Double.NaN;
+            double est = wfr.hasEST(taskId) ? wfr.getEST(taskId) : Double.NaN;
+            double eft = wfr.hasEFT(taskId) ? wfr.getEFT(taskId) : Double.NaN;
+            double lst = wfr.hasLST(taskId) ? wfr.getLST(taskId) : Double.NaN;
+            double lft = wfr.hasLFT(taskId) ? wfr.getLFT(taskId) : Double.NaN;
+            double scheduledStart = wfr.hasScheduledStart(taskId)
+                    ? wfr.getScheduledStart(taskId) : Double.NaN;
+            double subDeadline = Double.isFinite(lft) ? lft : wfr.getDeadline();
+            Integer plannedVmId = wfr.hasAssignedVm(taskId)
+                    ? wfr.getAssignedVm(taskId) : null;
+            String plannedVmType = plannedVmId == null ? "Unassigned"
+                    : plannedVmId < 0 ? "On-Demand" : "Reserved";
             List<Integer> parentIds = new ArrayList<>();
             for (Task parent : task.getParentList()) parentIds.add(parent.getCloudletId());
             taskRecords.put(taskId, new TaskExecutionRecord(
                     taskId, task.getType(), wfr.getWorkflowId(), wfr.getDaxPath(),
-                    execTime, subDeadline, alpha, parentIds));
+                    workflowDisposition, nominalRuntime, runtimeStddev,
+                    conservativeRuntime, planningRuntime, actualRuntime,
+                    est, eft, lst, lft, scheduledStart, subDeadline,
+                    deadlineTightness, plannedVmId, plannedVmType, parentIds));
         }
     }
 
@@ -48,8 +70,9 @@ public class CBMWAccounting {
         TaskExecutionRecord record = taskRecords.get(taskId);
         if (record != null) {
             record.markReady(CloudSim.clock());
-            record.markSubmitted(CloudSim.clock(), cl.getVmId(),
-                    onDemand ? "On-Demand" : "Reserved");
+            String actualVmType = onDemand ? "On-Demand" : "Reserved";
+            record.markSubmitted(CloudSim.clock(), cl.getVmId(), actualVmType,
+                    schedulingReason(record, cl.getVmId(), actualVmType));
         }
         if (onDemand) runningOnDemandTasks.add(taskId);
         else runningReservedTasks.add(taskId);
@@ -67,6 +90,12 @@ public class CBMWAccounting {
         }
         if (onDemand) runningOnDemandTasks.remove(taskId);
         else runningReservedTasks.remove(taskId);
+    }
+
+    public void markTaskProvisioningOrdered(Cloudlet cl, double orderTime,
+                                            double readyTime) {
+        TaskExecutionRecord record = taskRecords.get(primaryTaskId(cl));
+        if (record != null) record.markProvisioningOrdered(orderTime, readyTime);
     }
 
     public void markWorkflowComplete(WorkflowRecord wfr, double alpha) {
@@ -141,6 +170,7 @@ public class CBMWAccounting {
         for (TaskExecutionRecord record : taskRecords.values()) {
             if (!Double.isFinite(record.getFinishTime())) continue;
             double execTime = record.getExecutionTime();
+            if (!Double.isFinite(execTime)) continue;
             totalTime += execTime;
             if ("On-Demand".equals(record.getVmType())) {
                 onDemandTime += execTime;
@@ -157,5 +187,21 @@ public class CBMWAccounting {
             }
         }
         return cl.getCloudletId();
+    }
+
+    private String schedulingReason(TaskExecutionRecord record, int actualVmId,
+                                    String actualVmType) {
+        Integer plannedVmId = record.getPlannedVmId();
+        if (plannedVmId == null) return "DYNAMIC_ASSIGNMENT";
+        String plannedVmType = record.getPlannedVmType();
+        if ("On-Demand".equals(plannedVmType)) {
+            return "On-Demand".equals(actualVmType)
+                    ? "PLANNED_ON_DEMAND" : "ADVANCED_TO_IDLE_RESERVED";
+        }
+        if ("On-Demand".equals(actualVmType)) {
+            return "FALLBACK_ON_DEMAND_NO_RESERVED_CAPACITY";
+        }
+        return plannedVmId == actualVmId
+                ? "PLANNED_RESERVED" : "RESCHEDULED_RESERVED_CAPACITY";
     }
 }

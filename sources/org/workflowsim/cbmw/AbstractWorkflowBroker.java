@@ -317,6 +317,8 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
                             + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
                     pendingVmCreations.put(vmId, readyAt);
                     accounting.markOnDemandOrdered(vmId, CloudSim.clock(), readyAt);
+                    accounting.markTaskProvisioningOrdered(
+                            cl, CloudSim.clock(), readyAt);
                     schedule(getId(), Math.max(0.0, readyAt - CloudSim.clock()),
                             WorkflowSimTags.CLOUDLET_UPDATE);
                     CBMWLogger.logf("VM-PROVISION-ORDERED",
@@ -418,6 +420,8 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         allWorkflows.add(wfr);
 
         if (!negotiation.negotiate(wfr)) {
+            accounting.registerWorkflowTasks(wfr, tasks, tightness, false,
+                    "REJECTED_NEGOTIATION_DEADLINE_INFEASIBLE");
             Log.printLine(CloudSim.clock() + ": " + getName()
                     + ": wf=" + wfId + " rejected");
             if (engine != null) engine.notifyWorkflowDisposed();
@@ -425,13 +429,15 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         }
 
         if (!planWorkflow(wfr, tasks)) {
+            accounting.registerWorkflowTasks(wfr, tasks, tightness, false,
+                    "REJECTED_PLANNING_FAILED");
             Log.printLine(CloudSim.clock() + ": " + getName()
                     + ": wf=" + wfId + " planning failed");
             if (engine != null) engine.notifyWorkflowDisposed();
             return;
         }
         applyPerturbedRuntimes(data.getDaxPath(), tasks);
-        accounting.registerWorkflowTasks(wfr, tasks, tightness);
+        accounting.registerWorkflowTasks(wfr, tasks, tightness, true, "ACCEPTED");
 
         List<Job> jobs = wrapTasksAsJobs(tasks, wfr);
         activeWorkflows.put(wfId, wfr);
@@ -509,6 +515,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         for (Task task : tasks) {
             double mean = task.getCloudletLength() / HybridVmPool.RESERVED_MIPS;
             double estimated = estimatePlanningRuntime(mean);
+            wfr.setNominalExecTime(task.getCloudletId(), mean);
             wfr.setEstimatedExecTime(task.getCloudletId(), estimated);
         }
     }
