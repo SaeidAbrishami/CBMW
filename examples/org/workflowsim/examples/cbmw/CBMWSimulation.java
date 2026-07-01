@@ -262,12 +262,14 @@ public class CBMWSimulation {
         CloudSim.stopSimulation();
         CBMWLogger.close();
 
-        CBMWResultCollector collector = new CBMWResultCollector(broker.getAllWorkflows());
+        CBMWResultCollector collector = new CBMWResultCollector(
+                broker.getAllWorkflows(), broker.getReservedCostMultiplier());
         collector.printReport(label);
         CBMWResultCollector.ScenarioMetrics metrics = collector.toScenarioMetrics(
                 scenario, load.name, deadline.name,
                 algorithm, load.arrivalScale, deadline.tightness, 0,
-                broker.getAccounting().getOnDemandUsageRatio());
+                broker.getAccounting().getOnDemandUsageRatio(),
+                broker.getAccounting().getSpotUsageRatio());
 
         CBMWDetailedResultExporter detailedExporter = new CBMWDetailedResultExporter(
                 broker.getAllWorkflows(),
@@ -276,7 +278,8 @@ public class CBMWSimulation {
                 algorithm,
                 scenario,
                 deadline.tightness,
-                simDuration);
+                simDuration,
+                broker.getReservedCostMultiplier());
         detailedExporter.appendTaskCsv(
                 new File(algorithmDir, "task_execution.csv"));
         System.out.println("[tasks] Appended to "
@@ -393,8 +396,8 @@ public class CBMWSimulation {
         StringBuilder csv = new StringBuilder();
         csv.append("scenario,load,deadlineClass,algorithm,arrivalScale,tightness,runs,")
                 .append("avgTotal,avgAccepted,avgDeadlineRate,avgOnDemandCost,")
-                .append("avgReservedCost,avgTotalCost,avgMakespan,")
-                .append("avgReservedUtil,avgOnDemandUsageRatio\n");
+                .append("avgSpotCost,avgReservedCost,avgTotalCost,avgMakespan,")
+                .append("avgReservedUtil,avgOnDemandUsageRatio,avgSpotUsageRatio\n");
         for (Aggregate aggregate : groups.values()) {
             csv.append(aggregate.toCsvRow()).append("\n");
         }
@@ -467,11 +470,13 @@ public class CBMWSimulation {
         private double accepted;
         private double deadlineRate;
         private double onDemandCost;
+        private double spotCost;
         private double reservedCost;
         private double totalCost;
         private double makespan;
         private double reservedUtil;
         private double onDemandUsageRatio;
+        private double spotUsageRatio;
 
         Aggregate(CBMWResultCollector.ScenarioMetrics first) {
             this.scenario = first.scenario;
@@ -488,21 +493,24 @@ public class CBMWSimulation {
             accepted += row.accepted;
             deadlineRate += row.deadlineRate;
             onDemandCost += row.onDemandCost;
+            spotCost += row.spotCost;
             reservedCost += row.reservedCost;
             totalCost += row.totalCost;
             makespan += row.makespan;
             reservedUtil += row.reservedUtil;
             onDemandUsageRatio += row.onDemandUsageRatio;
+            spotUsageRatio += row.spotUsageRatio;
         }
 
         String toCsvRow() {
             return String.format(Locale.US,
-                    "%s,%s,%s,%s,%.4f,%.1f,%d,%.2f,%.2f,%.4f,%.4f,%.2f,%.4f,%.2f,%.4f,%.4f",
+                    "%s,%s,%s,%s,%.4f,%.1f,%d,%.2f,%.2f,%.4f,%.4f,%.4f,%.2f,%.4f,%.2f,%.4f,%.4f,%.4f",
                     scenario, load, deadlineClass, algorithm, arrivalScale,
                     tightness, runs, total / runs, accepted / runs,
-                    deadlineRate / runs, onDemandCost / runs,
+                    deadlineRate / runs, onDemandCost / runs, spotCost / runs,
                     reservedCost / runs, totalCost / runs, makespan / runs,
-                    reservedUtil / runs, onDemandUsageRatio / runs);
+                    reservedUtil / runs, onDemandUsageRatio / runs,
+                    spotUsageRatio / runs);
         }
     }
 

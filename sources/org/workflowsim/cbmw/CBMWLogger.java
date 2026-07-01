@@ -27,7 +27,11 @@ public class CBMWLogger {
             "WF-COMPLETE",    // workflow done, deadline met or missed
             "NOSF-PREPROCESS",
             "NOSF-ALLOCATE",
-            "NOSF-FEEDBACK"
+            "NOSF-FEEDBACK",
+            "CEWB-SPOT-START",
+            "CEWB-SPOT-COMPLETE",
+            "CEWB-SPOT-INTERRUPT",
+            "CEWB-ON-DEMAND"
     );
 
     private static PrintWriter writer;

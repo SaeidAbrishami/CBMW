@@ -95,6 +95,8 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
     public HybridVmPool          getVmPool()      { return vmPool; }
     public List<WorkflowRecord>  getAllWorkflows() { return allWorkflows; }
     public CBMWAccounting        getAccounting() { return accounting; }
+    /** Fraction of the configured reserved-pool fixed cost charged to this broker. */
+    public double getReservedCostMultiplier() { return 1.0; }
 
     @Override
     public void submitVmList(List<? extends Vm> list) {
@@ -685,7 +687,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         return jobs;
     }
 
-    private void updateWorkflowCompletion(Job job) {
+    protected void updateWorkflowCompletion(Job job) {
         int wfId = workflowIdForJob(job);
         WorkflowRecord wfr = activeWorkflows.get(wfId);
         if (wfr == null) return;

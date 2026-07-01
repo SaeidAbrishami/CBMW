@@ -26,6 +26,7 @@ public class CBMWDetailedResultExporter {
     private final String scenario;
     private final double alpha;
     private final double simDuration;
+    private final double reservedCostMultiplier;
 
     public CBMWDetailedResultExporter(List<WorkflowRecord> workflows,
                                       CBMWAccounting accounting,
@@ -33,7 +34,8 @@ public class CBMWDetailedResultExporter {
                                       String algorithm,
                                       String scenario,
                                       double alpha,
-                                      double simDuration) {
+                                      double simDuration,
+                                      double reservedCostMultiplier) {
         this.workflows = workflows;
         this.accounting = accounting;
         this.vmPool = vmPool;
@@ -41,6 +43,7 @@ public class CBMWDetailedResultExporter {
         this.scenario = scenario;
         this.alpha = alpha;
         this.simDuration = simDuration;
+        this.reservedCostMultiplier = reservedCostMultiplier;
     }
 
     public void export(File outputDir) throws IOException {
@@ -104,7 +107,10 @@ public class CBMWDetailedResultExporter {
         }
         double reservedCost = HybridVmPool.NUM_RESERVED
                 * HybridVmPool.RESERVED_HOURLY_COST
-                * Math.ceil(simDuration / 3600.0);
+                * Math.ceil(simDuration / 3600.0)
+                * reservedCostMultiplier;
+        double spotCost = workflows.stream()
+                .mapToDouble(WorkflowRecord::getTotalSpotCost).sum();
         double reservedCoresWithTime = HybridVmPool.NUM_RESERVED
                 * HybridVmPool.RESERVED_CORES * simDuration;
         double onDemandCoresWithTime = 0.0;
@@ -239,8 +245,9 @@ public class CBMWDetailedResultExporter {
                     "Mean workflow delay (only positive delays averaged): %.1f seconds%n",
                     meanDelay));
             writer.write(String.format(Locale.US,
-                    "Price:  %.4f + %.4f = %.4f%n",
-                    reservedCost, onDemandCost, reservedCost + onDemandCost));
+                    "Price: reserved %.4f + on-demand %.4f + spot %.4f = %.4f%n",
+                    reservedCost, onDemandCost, spotCost,
+                    reservedCost + onDemandCost + spotCost));
         }
     }
 
@@ -302,7 +309,8 @@ public class CBMWDetailedResultExporter {
                 "Finish Time (s)", "Waiting Time (s)", "Queue Delay (s)",
                 "Start Deviation from SST (s)",
                 "Finish Deviation from SubDeadline (s)", "Rescheduled",
-                "Scheduling Reason", "Status", "Deadline Tightness");
+                "Scheduling Reason", "Status", "Deadline Tightness",
+                "Spot Interruptions");
     }
 
     private List<Object> taskRow(TaskExecutionRecord record) {
@@ -341,7 +349,8 @@ public class CBMWDetailedResultExporter {
                 record.getSchedulingReason().isEmpty()
                         ? "NOT_DISPATCHED" : record.getSchedulingReason(),
                 record.getStatus().isEmpty() ? "PENDING" : record.getStatus(),
-                fmtPrecise(record.getDeadlineTightness()));
+                fmtPrecise(record.getDeadlineTightness()),
+                record.getInterruptionCount());
     }
 
     private void writeCsvRow(BufferedWriter writer, List<Object> values)

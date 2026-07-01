@@ -50,6 +50,10 @@ public class WorkflowSimTags {
     public static final int SIM_END          = BASE + 10;
     /** Completion of a lightweight paper-style on-demand container task. */
     public static final int ON_DEMAND_TASK_COMPLETE = BASE + 11;
+    /** Completion of a CEWB logical spot-instance attempt. */
+    public static final int CEWB_SPOT_TASK_COMPLETE = BASE + 12;
+    /** Interruption of a CEWB logical spot-instance attempt. */
+    public static final int CEWB_SPOT_TASK_INTERRUPTED = BASE + 13;
 
     /**
      * Private Constructor

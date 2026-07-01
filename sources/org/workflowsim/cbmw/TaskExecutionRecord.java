@@ -40,6 +40,7 @@ public class TaskExecutionRecord {
     private String vmType = "";
     private String status = "";
     private String schedulingReason = "";
+    private int interruptionCount;
 
     public TaskExecutionRecord(int taskId, String taskName, int workflowId,
                                String workflowPath, String workflowDisposition,
@@ -115,6 +116,7 @@ public class TaskExecutionRecord {
     public String getVmType() { return vmType; }
     public String getStatus() { return status; }
     public String getSchedulingReason() { return schedulingReason; }
+    public int getInterruptionCount() { return interruptionCount; }
     public List<Integer> getParentIds() { return Collections.unmodifiableList(parentIds); }
 
     public double getWaitingTime() {
@@ -164,6 +166,10 @@ public class TaskExecutionRecord {
         this.startTime = startTime;
         this.finishTime = finishTime;
         this.status = status;
+    }
+
+    public void markInterrupted() {
+        interruptionCount++;
     }
 
     private static double finiteDifference(double left, double right) {

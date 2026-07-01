@@ -20,6 +20,7 @@ public class CBMWAccounting {
     private final List<UtilizationSnapshot> utilizationSnapshots = new ArrayList<>();
     private final Set<Integer> runningReservedTasks = new HashSet<>();
     private final Set<Integer> runningOnDemandTasks = new HashSet<>();
+    private final Set<Integer> runningSpotTasks = new HashSet<>();
 
     public void registerWorkflowTasks(WorkflowRecord wfr, List<Task> tasks,
                                       double deadlineTightness,
@@ -68,19 +69,27 @@ public class CBMWAccounting {
     }
 
     public void markTaskSubmitted(Cloudlet cl, boolean onDemand) {
+        markTaskSubmitted(cl, onDemand ? "On-Demand" : "Reserved");
+    }
+
+    public void markTaskSubmitted(Cloudlet cl, String vmType) {
         int taskId = primaryTaskId(cl);
         TaskExecutionRecord record = taskRecords.get(taskId);
         if (record != null) {
             record.markReady(CloudSim.clock());
-            String actualVmType = onDemand ? "On-Demand" : "Reserved";
-            record.markSubmitted(CloudSim.clock(), cl.getVmId(), actualVmType,
-                    schedulingReason(record, cl.getVmId(), actualVmType));
+            record.markSubmitted(CloudSim.clock(), cl.getVmId(), vmType,
+                    schedulingReason(record, cl.getVmId(), vmType));
         }
-        if (onDemand) runningOnDemandTasks.add(taskId);
+        if ("On-Demand".equals(vmType)) runningOnDemandTasks.add(taskId);
+        else if ("Spot".equals(vmType)) runningSpotTasks.add(taskId);
         else runningReservedTasks.add(taskId);
     }
 
     public void markTaskFinished(Cloudlet cl, boolean onDemand) {
+        markTaskFinished(cl, onDemand ? "On-Demand" : "Reserved");
+    }
+
+    public void markTaskFinished(Cloudlet cl, String vmType) {
         int taskId = primaryTaskId(cl);
         TaskExecutionRecord record = taskRecords.get(taskId);
         if (record != null) {
@@ -90,8 +99,16 @@ public class CBMWAccounting {
             String status = cl.getCloudletStatus() == Cloudlet.SUCCESS ? "SUCCESS" : "FAILED";
             record.markFinished(start, finish, status);
         }
-        if (onDemand) runningOnDemandTasks.remove(taskId);
+        if ("On-Demand".equals(vmType)) runningOnDemandTasks.remove(taskId);
+        else if ("Spot".equals(vmType)) runningSpotTasks.remove(taskId);
         else runningReservedTasks.remove(taskId);
+    }
+
+    public void markTaskInterrupted(Cloudlet cl) {
+        int taskId = primaryTaskId(cl);
+        TaskExecutionRecord record = taskRecords.get(taskId);
+        if (record != null) record.markInterrupted();
+        runningSpotTasks.remove(taskId);
     }
 
     public void markTaskProvisioningOrdered(Cloudlet cl, double orderTime,
@@ -181,6 +198,19 @@ public class CBMWAccounting {
         return totalTime > 0.0 ? onDemandTime / totalTime : 0.0;
     }
 
+    public double getSpotUsageRatio() {
+        double spotTime = 0.0;
+        double totalTime = 0.0;
+        for (TaskExecutionRecord record : taskRecords.values()) {
+            if (!Double.isFinite(record.getFinishTime())) continue;
+            double execTime = record.getExecutionTime();
+            if (!Double.isFinite(execTime)) continue;
+            totalTime += execTime;
+            if ("Spot".equals(record.getVmType())) spotTime += execTime;
+        }
+        return totalTime > 0.0 ? spotTime / totalTime : 0.0;
+    }
+
     private int primaryTaskId(Cloudlet cl) {
         if (cl instanceof Job) {
             Job job = (Job) cl;
@@ -195,6 +225,7 @@ public class CBMWAccounting {
                                     String actualVmType) {
         Integer plannedVmId = record.getPlannedVmId();
         if (plannedVmId == null) return "DYNAMIC_ASSIGNMENT";
+        if ("Spot".equals(actualVmType)) return "CEWB_SPOT_SELECTION";
         String plannedVmType = record.getPlannedVmType();
         if ("On-Demand".equals(plannedVmType)) {
             return "On-Demand".equals(actualVmType)

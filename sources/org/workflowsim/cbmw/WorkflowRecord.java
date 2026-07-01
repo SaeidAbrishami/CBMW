@@ -33,6 +33,7 @@ public class WorkflowRecord {
 
     private boolean deadlineMet;
     private double totalOnDemandCost;
+    private double totalSpotCost;
     private double totalReservedCpuTime;
     private double completionTime = Double.MAX_VALUE;
 
@@ -139,6 +140,8 @@ public class WorkflowRecord {
     public void setDeadlineMet(boolean met) { this.deadlineMet = met; }
     public double getTotalOnDemandCost() { return totalOnDemandCost; }
     public void addOnDemandCost(double cost) { this.totalOnDemandCost += cost; }
+    public double getTotalSpotCost() { return totalSpotCost; }
+    public void addSpotCost(double cost) { this.totalSpotCost += cost; }
     public double getTotalReservedCpuTime() { return totalReservedCpuTime; }
     public void addReservedCpuTime(double t) { this.totalReservedCpuTime += t; }
     public double getCompletionTime() { return completionTime; }

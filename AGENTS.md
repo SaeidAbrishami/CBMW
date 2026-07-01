@@ -64,6 +64,9 @@ Useful JVM switches:
 | `-Dcbmw.runtime.quantile=0.90` | Paper alpha quantile used to derive conservative CBMW task durations. |
 | `-Dcbmw.runtime.stddev.ratio=0.10` | Paper runtime uncertainty, sigma divided by mean runtime. |
 | `-Dcbmw.negotiation.beta=1.0` | Workflow-level safety factor applied to the conservative critical path. |
+| `-Dcbmw.cewb.spot.mtbi.sec=3600` | Override mean time between spot interruptions for every CEWB class. |
+| `-Dcbmw.cewb.spot.max.attempts=3` | Spot attempts before CEWB forces on-demand fallback. |
+| `-Dcbmw.cewb.spot.min.success.prob=0.80` | Minimum predicted probability that a spot attempt survives. |
 
 Linux VM helper for one algorithm:
 
@@ -162,6 +165,7 @@ sources/org/workflowsim/cbmw/
     NOSFBroker.java
     NOSFWorkflowPlanner.java
     CEWBBroker.java
+    CEWBSpotMarket.java
     StaticGreedyBroker.java
     DynamicGreedyBroker.java
 
@@ -244,12 +248,16 @@ All brokers extend `AbstractWorkflowBroker`.
 |--------|--------------|-----------------------|
 | CBMW | Paper-style EST/EFT/LFT backward sweep-line using estimated durations | Periodic LST-aware dynamic dispatch with on-demand fallback |
 | NOSF | Paper-informed uncertainty-aware EST/EFT and sub-deadline preprocessing | EST-priority, cost-aware on-demand dispatch with completion feedback |
-| CEWB | Low-cost/revocable approximation | Reserved/spot-style dispatch |
+| CEWB | Computes task safe-start/sub-deadline timing for spot selection | Explicit spot-class selection, interruption/retry, and on-demand fallback |
 | StaticGreedy | Static round-robin reserved planning | Assigned VM, any reserved, then on-demand |
 | DynamicGreedy | No static planning | First idle reserved, then on-demand FCFS |
 
-CEWB is an approximation because the simulator does not have a true spot-market
-pool.
+CEWB has a separate configurable logical spot market with economy, standard,
+and performance classes. Each class has independent cores, RAM, MIPS, base
+price, capacity, and mean time between interruptions. Prices vary per attempt;
+interruptions follow an exponential reliability model and restart the task.
+CEWB is charged no reserved-pool fixed cost, and spot cost/usage are exported
+separately from on-demand cost/usage.
 
 ---
 
@@ -313,5 +321,7 @@ dedicated containers. A full 200-workflow CBMW scenario also completed.
   included and its full pseudocode could not be verified. The current
   single-type dedicated-container environment also collapses heterogeneous VM
   selection and utilization tie-breaking to one candidate.
-- CEWB remains an approximation of an external baseline paper; the CBMW paper
-  does not include its full pseudocode.
+- CEWB's resource behavior is now explicit rather than borrowing reserved VMs,
+  but its configurable spot-market defaults remain simulation assumptions: the
+  external paper's full pseudocode and experimental market constants are not
+  included in this repository.

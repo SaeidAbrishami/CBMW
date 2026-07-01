@@ -43,6 +43,37 @@ configuration. Consequently, NOSF's heterogeneous reusable-VM comparison and
 utilization tie-break reduce to a single feasible candidate here; its deadline,
 priority, uncertainty, cost, and feedback rules are still applied.
 
+### CEWB Spot Baseline
+
+`CEWBBroker` uses an explicit logical spot market instead of treating reserved
+VMs as fake low-cost capacity. For every ready task it:
+
+1. filters spot classes by task cores/RAM, current capacity, bid price,
+   predicted sub-deadline finish, and interruption success probability;
+2. selects the class with the lowest reliability-adjusted expected cost;
+3. samples a volatile spot price and an exponential interruption time;
+4. retries an interrupted task from the beginning, then falls back to a
+   dedicated on-demand container after the configured attempt limit or when
+   the task reaches its safe start time.
+
+Default spot classes are explicit simulation assumptions:
+
+| Class | Cores | RAM | MIPS | Base price/s | MTBI | Capacity |
+|-------|------:|----:|-----:|-------------:|-----:|---------:|
+| economy | 1 | 1024 MB | 900 | 0.000085 | 1800 s | 64 |
+| standard | 2 | 4096 MB | 1000 | 0.000140 | 3600 s | 32 |
+| performance | 4 | 8192 MB | 1500 | 0.000240 | 7200 s | 16 |
+
+Important properties include `cbmw.cewb.spot.startup.sec`,
+`cbmw.cewb.spot.mtbi.sec`, `cbmw.cewb.spot.min.success.prob`,
+`cbmw.cewb.spot.max.bid.ratio`, `cbmw.cewb.spot.max.attempts`, and per-class
+properties under `cbmw.cewb.spot.<class>.*`. Results report `spotCost`,
+`spotUsageRatio`, actual VM type `Spot`, and per-task interruption counts.
+
+The external CEWB paper's complete pseudocode and experimental spot constants
+are not available in this repository. These defaults must therefore be cited as
+the simulator's configurable market model, not as values claimed by the paper.
+
 ---
 
 ## Project Structure

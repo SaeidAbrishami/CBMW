@@ -35,11 +35,13 @@ CSV_HEADER = [
     "accepted",
     "deadlineRate",
     "onDemandCost",
+    "spotCost",
     "reservedCost",
     "totalCost",
     "makespan",
     "reservedUtil",
     "onDemandUsageRatio",
+    "spotUsageRatio",
 ]
 
 AGGREGATE_HEADER = [
@@ -54,11 +56,13 @@ AGGREGATE_HEADER = [
     "avgAccepted",
     "avgDeadlineRate",
     "avgOnDemandCost",
+    "avgSpotCost",
     "avgReservedCost",
     "avgTotalCost",
     "avgMakespan",
     "avgReservedUtil",
     "avgOnDemandUsageRatio",
+    "avgSpotUsageRatio",
 ]
 
 NUMERIC_FIELDS = [
@@ -66,11 +70,13 @@ NUMERIC_FIELDS = [
     "accepted",
     "deadlineRate",
     "onDemandCost",
+    "spotCost",
     "reservedCost",
     "totalCost",
     "makespan",
     "reservedUtil",
     "onDemandUsageRatio",
+    "spotUsageRatio",
 ]
 
 
@@ -144,11 +150,13 @@ def aggregate_rows(rows):
             "avgAccepted": f"{group['accepted'] / runs:.2f}",
             "avgDeadlineRate": f"{group['deadlineRate'] / runs:.4f}",
             "avgOnDemandCost": f"{group['onDemandCost'] / runs:.4f}",
+            "avgSpotCost": f"{group['spotCost'] / runs:.4f}",
             "avgReservedCost": f"{group['reservedCost'] / runs:.2f}",
             "avgTotalCost": f"{group['totalCost'] / runs:.4f}",
             "avgMakespan": f"{group['makespan'] / runs:.2f}",
             "avgReservedUtil": f"{group['reservedUtil'] / runs:.4f}",
             "avgOnDemandUsageRatio": f"{group['onDemandUsageRatio'] / runs:.4f}",
+            "avgSpotUsageRatio": f"{group['spotUsageRatio'] / runs:.4f}",
         })
     return aggregate
 
