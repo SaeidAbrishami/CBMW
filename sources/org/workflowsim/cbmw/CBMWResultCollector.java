@@ -26,6 +26,8 @@ public class CBMWResultCollector {
                 .filter(w -> w.isAccepted() && w.isDeadlineMet()).count();
         double odCost = totalOnDemandCost();
         double spotCost = totalSpotCost();
+        double rawEstimate = totalEstimatedRawCost();
+        double offeredPrice = totalOfferedPrice();
         double makespan = makespan();
         double deadlineRate = accepted == 0 ? 0.0 : (double) met / accepted;
         double reservedCost = reservedCost();
@@ -39,6 +41,8 @@ public class CBMWResultCollector {
                 reservedUtil * 100));
         Log.printLine(String.format("On-demand cost ($)       : %.4f", odCost));
         Log.printLine(String.format("Spot cost ($)            : %.4f", spotCost));
+        Log.printLine(String.format("Negotiated raw cost ($)  : %.4f", rawEstimate));
+        Log.printLine(String.format("Offered price ($)        : %.4f", offeredPrice));
         Log.printLine(String.format("Reserved fixed cost ($)  : %.2f", reservedCost));
         Log.printLine(String.format("Total cost ($)           : %.4f",
                 odCost + spotCost + reservedCost));
@@ -47,7 +51,8 @@ public class CBMWResultCollector {
 
     public static String csvHeader() {
         return "scenario,load,deadlineClass,algorithm,arrivalScale,tightness,run,"
-                + "total,accepted,deadlineRate,onDemandCost,spotCost,reservedCost,"
+                + "total,accepted,deadlineRate,onDemandCost,spotCost,estimatedRawCost,"
+                + "offeredPrice,reservedCost,"
                 + "totalCost,makespan,reservedUtil,onDemandUsageRatio,spotUsageRatio";
     }
 
@@ -74,22 +79,26 @@ public class CBMWResultCollector {
         double deadlineRate = accepted == 0 ? 0.0 : (double) met / accepted;
         double odCost = totalOnDemandCost();
         double spotCost = totalSpotCost();
+        double rawEstimate = totalEstimatedRawCost();
+        double offeredPrice = totalOfferedPrice();
         double reservedCost = reservedCost();
         double totalCost = odCost + spotCost + reservedCost;
 
         return new ScenarioMetrics(scenario, load, deadlineClass, algorithm,
                 arrivalScale, tightness, run, total, accepted, deadlineRate,
-                odCost, spotCost, reservedCost, totalCost, makespan(),
+                odCost, spotCost, rawEstimate, offeredPrice, reservedCost,
+                totalCost, makespan(),
                 reservedUtilization(), onDemandUsageRatio, spotUsageRatio);
     }
 
     public static String toCsvRow(ScenarioMetrics metrics) {
         return String.format("%s,%s,%s,%s,%.4f,%.1f,%d,%d,%d,%.4f,%.4f,%.4f,"
-                        + "%.2f,%.4f,%.2f,%.4f,%.4f,%.4f",
+                        + "%.4f,%.4f,%.2f,%.4f,%.2f,%.4f,%.4f,%.4f",
                 metrics.scenario, metrics.load, metrics.deadlineClass,
                 metrics.algorithm, metrics.arrivalScale, metrics.tightness,
                 metrics.run, metrics.total, metrics.accepted,
                 metrics.deadlineRate, metrics.onDemandCost, metrics.spotCost,
+                metrics.estimatedRawCost, metrics.offeredPrice,
                 metrics.reservedCost, metrics.totalCost, metrics.makespan,
                 metrics.reservedUtil, metrics.onDemandUsageRatio,
                 metrics.spotUsageRatio);
@@ -103,6 +112,16 @@ public class CBMWResultCollector {
     private double totalSpotCost() {
         return allWorkflows.stream()
                 .mapToDouble(WorkflowRecord::getTotalSpotCost).sum();
+    }
+
+    private double totalEstimatedRawCost() {
+        return allWorkflows.stream()
+                .mapToDouble(WorkflowRecord::getEstimatedRawCost).sum();
+    }
+
+    private double totalOfferedPrice() {
+        return allWorkflows.stream()
+                .mapToDouble(WorkflowRecord::getOfferedPrice).sum();
     }
 
     private double reservedCost() {
@@ -143,6 +162,8 @@ public class CBMWResultCollector {
         public final double deadlineRate;
         public final double onDemandCost;
         public final double spotCost;
+        public final double estimatedRawCost;
+        public final double offeredPrice;
         public final double reservedCost;
         public final double totalCost;
         public final double makespan;
@@ -155,6 +176,7 @@ public class CBMWResultCollector {
                                double tightness, int run, long total,
                                long accepted, double deadlineRate,
                                double onDemandCost, double spotCost,
+                               double estimatedRawCost, double offeredPrice,
                                double reservedCost, double totalCost,
                                double makespan, double reservedUtil,
                                double onDemandUsageRatio,
@@ -171,6 +193,8 @@ public class CBMWResultCollector {
             this.deadlineRate = deadlineRate;
             this.onDemandCost = onDemandCost;
             this.spotCost = spotCost;
+            this.estimatedRawCost = estimatedRawCost;
+            this.offeredPrice = offeredPrice;
             this.reservedCost = reservedCost;
             this.totalCost = totalCost;
             this.makespan = makespan;

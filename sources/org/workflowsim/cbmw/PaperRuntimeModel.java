@@ -11,6 +11,8 @@ public final class PaperRuntimeModel {
             "cbmw.runtime.stddev.ratio", 0.10);
     public static final double NEGOTIATION_BETA = readDouble(
             "cbmw.negotiation.beta", 1.0);
+    public static final double NEGOTIATION_GAMMA = readDouble(
+            "cbmw.negotiation.gamma", 1.0);
 
     private static final NormalDistribution STANDARD_NORMAL =
             new NormalDistribution(0.0, 1.0);
@@ -28,6 +30,10 @@ public final class PaperRuntimeModel {
         if (!Double.isFinite(NEGOTIATION_BETA) || NEGOTIATION_BETA < 1.0) {
             throw new IllegalArgumentException(
                     "cbmw.negotiation.beta must be >= 1");
+        }
+        if (!Double.isFinite(NEGOTIATION_GAMMA) || NEGOTIATION_GAMMA < 1.0) {
+            throw new IllegalArgumentException(
+                    "cbmw.negotiation.gamma must be >= 1");
         }
         QUANTILE_Z = STANDARD_NORMAL.inverseCumulativeProbability(QUANTILE);
     }

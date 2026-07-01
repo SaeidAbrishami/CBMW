@@ -16,6 +16,13 @@ public class WorkflowRecord {
     private double criticalPathLength;
     private double deadline;
     private boolean accepted;
+    private boolean deadlineFeasible;
+    private double estimatedReservedCost;
+    private double estimatedOnDemandCost;
+    private double estimatedRawCost;
+    private double priceMarkupGamma = 1.0;
+    private double offeredPrice;
+    private boolean priceAccepted;
 
     private List<Task> taskList;
     private final Map<Integer, Double> earliestStartTimes  = new HashMap<>();  // taskId -> estji
@@ -55,6 +62,26 @@ public class WorkflowRecord {
     public void setDeadline(double d) { this.deadline = d; }
     public boolean isAccepted() { return accepted; }
     public void setAccepted(boolean a) { this.accepted = a; }
+    public boolean isDeadlineFeasible() { return deadlineFeasible; }
+    public void setDeadlineFeasible(boolean feasible) {
+        this.deadlineFeasible = feasible;
+    }
+    public double getEstimatedReservedCost() { return estimatedReservedCost; }
+    public void setEstimatedReservedCost(double cost) {
+        this.estimatedReservedCost = cost;
+    }
+    public double getEstimatedOnDemandCost() { return estimatedOnDemandCost; }
+    public void setEstimatedOnDemandCost(double cost) {
+        this.estimatedOnDemandCost = cost;
+    }
+    public double getEstimatedRawCost() { return estimatedRawCost; }
+    public void setEstimatedRawCost(double cost) { this.estimatedRawCost = cost; }
+    public double getPriceMarkupGamma() { return priceMarkupGamma; }
+    public void setPriceMarkupGamma(double gamma) { this.priceMarkupGamma = gamma; }
+    public double getOfferedPrice() { return offeredPrice; }
+    public void setOfferedPrice(double price) { this.offeredPrice = price; }
+    public boolean isPriceAccepted() { return priceAccepted; }
+    public void setPriceAccepted(boolean accepted) { this.priceAccepted = accepted; }
 
     // --- tasks ---
     public List<Task> getTaskList() { return taskList; }

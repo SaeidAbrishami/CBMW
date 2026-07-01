@@ -126,11 +126,12 @@ public class CBMWSimulation {
             double multiplier = PaperRuntimeModel.conservativeEstimate(1.0);
             System.out.println(String.format(Locale.US,
                     "[run] CBMW runtime model: alpha=%.3f sigma/mu=%.3f"
-                            + " z=%.4f cet/mu=%.4f beta=%.3f",
+                            + " z=%.4f cet/mu=%.4f beta=%.3f gamma=%.3f",
                     PaperRuntimeModel.QUANTILE,
                     PaperRuntimeModel.STDDEV_RATIO,
                     PaperRuntimeModel.getQuantileZ(), multiplier,
-                    PaperRuntimeModel.NEGOTIATION_BETA));
+                    PaperRuntimeModel.NEGOTIATION_BETA,
+                    PaperRuntimeModel.NEGOTIATION_GAMMA));
         }
         if (MAX_WORKFLOWS != Integer.MAX_VALUE) {
             System.out.println("[run] Max workflows per scenario: " + MAX_WORKFLOWS);
@@ -396,7 +397,8 @@ public class CBMWSimulation {
         StringBuilder csv = new StringBuilder();
         csv.append("scenario,load,deadlineClass,algorithm,arrivalScale,tightness,runs,")
                 .append("avgTotal,avgAccepted,avgDeadlineRate,avgOnDemandCost,")
-                .append("avgSpotCost,avgReservedCost,avgTotalCost,avgMakespan,")
+                .append("avgSpotCost,avgEstimatedRawCost,avgOfferedPrice,")
+                .append("avgReservedCost,avgTotalCost,avgMakespan,")
                 .append("avgReservedUtil,avgOnDemandUsageRatio,avgSpotUsageRatio\n");
         for (Aggregate aggregate : groups.values()) {
             csv.append(aggregate.toCsvRow()).append("\n");
@@ -471,6 +473,8 @@ public class CBMWSimulation {
         private double deadlineRate;
         private double onDemandCost;
         private double spotCost;
+        private double estimatedRawCost;
+        private double offeredPrice;
         private double reservedCost;
         private double totalCost;
         private double makespan;
@@ -494,6 +498,8 @@ public class CBMWSimulation {
             deadlineRate += row.deadlineRate;
             onDemandCost += row.onDemandCost;
             spotCost += row.spotCost;
+            estimatedRawCost += row.estimatedRawCost;
+            offeredPrice += row.offeredPrice;
             reservedCost += row.reservedCost;
             totalCost += row.totalCost;
             makespan += row.makespan;
@@ -504,10 +510,11 @@ public class CBMWSimulation {
 
         String toCsvRow() {
             return String.format(Locale.US,
-                    "%s,%s,%s,%s,%.4f,%.1f,%d,%.2f,%.2f,%.4f,%.4f,%.4f,%.2f,%.4f,%.2f,%.4f,%.4f,%.4f",
+                    "%s,%s,%s,%s,%.4f,%.1f,%d,%.2f,%.2f,%.4f,%.4f,%.4f,%.4f,%.4f,%.2f,%.4f,%.2f,%.4f,%.4f,%.4f",
                     scenario, load, deadlineClass, algorithm, arrivalScale,
                     tightness, runs, total / runs, accepted / runs,
                     deadlineRate / runs, onDemandCost / runs, spotCost / runs,
+                    estimatedRawCost / runs, offeredPrice / runs,
                     reservedCost / runs, totalCost / runs, makespan / runs,
                     reservedUtil / runs, onDemandUsageRatio / runs,
                     spotUsageRatio / runs);

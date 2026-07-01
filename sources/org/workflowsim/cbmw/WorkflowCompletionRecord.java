@@ -11,11 +11,21 @@ public class WorkflowCompletionRecord {
     private final double deadline;
     private final boolean metDeadline;
     private final double alpha;
+    private final boolean deadlineFeasible;
+    private final double estimatedRawCost;
+    private final double priceMarkupGamma;
+    private final double offeredPrice;
+    private final boolean priceAccepted;
 
     public WorkflowCompletionRecord(int workflowId, String workflowPath, String status,
                                     double startTime, double finishTime,
                                     double criticalPathTime, double deadline,
-                                    boolean metDeadline, double alpha) {
+                                    boolean metDeadline, double alpha,
+                                    boolean deadlineFeasible,
+                                    double estimatedRawCost,
+                                    double priceMarkupGamma,
+                                    double offeredPrice,
+                                    boolean priceAccepted) {
         this.workflowId = workflowId;
         this.workflowPath = workflowPath;
         this.status = status;
@@ -25,6 +35,11 @@ public class WorkflowCompletionRecord {
         this.deadline = deadline;
         this.metDeadline = metDeadline;
         this.alpha = alpha;
+        this.deadlineFeasible = deadlineFeasible;
+        this.estimatedRawCost = estimatedRawCost;
+        this.priceMarkupGamma = priceMarkupGamma;
+        this.offeredPrice = offeredPrice;
+        this.priceAccepted = priceAccepted;
     }
 
     public int getWorkflowId() { return workflowId; }
@@ -36,4 +51,9 @@ public class WorkflowCompletionRecord {
     public double getDeadline() { return deadline; }
     public boolean isMetDeadline() { return metDeadline; }
     public double getAlpha() { return alpha; }
+    public boolean isDeadlineFeasible() { return deadlineFeasible; }
+    public double getEstimatedRawCost() { return estimatedRawCost; }
+    public double getPriceMarkupGamma() { return priceMarkupGamma; }
+    public double getOfferedPrice() { return offeredPrice; }
+    public boolean isPriceAccepted() { return priceAccepted; }
 }

@@ -12,12 +12,33 @@ CBMW processes each workflow arrival through four sequential modules:
 
 | Module | Class | Role |
 |--------|-------|------|
-| 1. Negotiation | `NegotiationModule` | Computes critical path; rejects workflows whose deadline is shorter than `CP × 1.1` |
+| 1. Negotiation | `NegotiationModule` | Checks deadline feasibility, invokes the completed static plan to estimate raw execution cost, applies markup `gamma`, and automatically accepts the quote |
 | 2. Static Planning | `CBMWStaticPlanningAlgorithm` | Backward sweep assigns each task a reserved VM slot at its Latest Start Time (LST = deadline − remainingCP) |
 | 3. Dynamic Scheduling | `CBMWDynamicSchedulingAlgorithm` | Dispatches ready tasks to their planned VM; advances to any idle reserved VM if the planned VM is busy; falls back to on-demand if no reserved VM is available |
 | 4. Provisioning | `ProvisioningModule` | Spins up and terminates on-demand VMs; tracks per-task costs |
 
 The backward sweep in Module 2 deliberately defers reservations to the latest feasible slot, keeping earlier capacity free for workflows that have not yet arrived.
+
+### CBMW Price Negotiation
+
+After a deadline-feasible workflow is statically planned, CBMW computes the
+paper's price quote:
+
+```text
+raw cost = sum(planned task duration * allocated resource price)
+offered price = gamma * raw cost
+```
+
+Reserved tasks use the reserved VM's per-second price. On-demand tasks use the
+task-sized container price and the configured minimum billing duration. The
+markup is configured with `cbmw.negotiation.gamma` and defaults to `1.0`
+because the paper does not publish an experimental gamma value.
+
+There is no simulated human user, so every generated price quote is marked
+`AUTO_ACCEPTED`. The automatic user decision does not bypass the paper's
+deadline-feasibility check or a genuine static-planning failure. Quotes are
+written to the detail log, workflow completion summary, `results.txt`, and the
+scenario CSV columns `estimatedRawCost` and `offeredPrice`.
 
 ### NOSF Baseline
 

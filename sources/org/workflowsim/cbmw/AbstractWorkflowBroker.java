@@ -449,6 +449,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
             if (engine != null) engine.notifyWorkflowDisposed();
             return;
         }
+        finalizeWorkflowNegotiation(wfr);
         applyPerturbedRuntimes(data.getDaxPath(), tasks);
         accounting.registerWorkflowTasks(wfr, tasks, tightness, true, "ACCEPTED");
 
@@ -638,6 +639,9 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
     protected boolean negotiateWorkflow(WorkflowRecord wfr) {
         return negotiation.negotiate(wfr);
     }
+
+    /** Runs after static planning when a broker needs the final plan to quote. */
+    protected void finalizeWorkflowNegotiation(WorkflowRecord wfr) {}
 
     private boolean isSchedulingMoment() {
         double period = HybridVmPool.SCHEDULING_PERIOD;

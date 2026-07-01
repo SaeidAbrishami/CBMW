@@ -111,6 +111,12 @@ public class CBMWDetailedResultExporter {
                 * reservedCostMultiplier;
         double spotCost = workflows.stream()
                 .mapToDouble(WorkflowRecord::getTotalSpotCost).sum();
+        double estimatedRawCost = workflows.stream()
+                .mapToDouble(WorkflowRecord::getEstimatedRawCost).sum();
+        double offeredRevenue = workflows.stream()
+                .mapToDouble(WorkflowRecord::getOfferedPrice).sum();
+        long autoAcceptedQuotes = workflows.stream()
+                .filter(WorkflowRecord::isPriceAccepted).count();
         double reservedCoresWithTime = HybridVmPool.NUM_RESERVED
                 * HybridVmPool.RESERVED_CORES * simDuration;
         double onDemandCoresWithTime = 0.0;
@@ -227,6 +233,9 @@ public class CBMWDetailedResultExporter {
                 writer.write(String.format(Locale.US,
                         "Negotiation Safety Factor (beta): %.3f%n",
                         PaperRuntimeModel.NEGOTIATION_BETA));
+                writer.write(String.format(Locale.US,
+                        "Price Markup Factor (gamma): %.3f%n",
+                        PaperRuntimeModel.NEGOTIATION_GAMMA));
             }
             writer.write(String.format(Locale.US, "Total Tasks: %d%n", totalTasks));
             writer.write(String.format(Locale.US, "Total Workflows: %d%n", totalWorkflows));
@@ -245,6 +254,12 @@ public class CBMWDetailedResultExporter {
                     "Mean workflow delay (only positive delays averaged): %.1f seconds%n",
                     meanDelay));
             writer.write(String.format(Locale.US,
+                    "Negotiated raw estimate: %.4f%n", estimatedRawCost));
+            writer.write(String.format(Locale.US,
+                    "Negotiated offered revenue: %.4f%n", offeredRevenue));
+            writer.write(String.format(Locale.US,
+                    "Automatically accepted price quotes: %d%n", autoAcceptedQuotes));
+            writer.write(String.format(Locale.US,
                     "Price: reserved %.4f + on-demand %.4f + spot %.4f = %.4f%n",
                     reservedCost, onDemandCost, spotCost,
                     reservedCost + onDemandCost + spotCost));
@@ -254,14 +269,21 @@ public class CBMWDetailedResultExporter {
     private void writeWorkflowSummary(File file) throws IOException {
         List<List<Object>> rows = new ArrayList<>();
         rows.add(row("Workflow Name", "Status", "Start Time (s)", "Finish Time (s)",
-                "Critical Path Time (s)", "Deadline (s)", "Met Deadline", "Alpha"));
+                "Critical Path Time (s)", "Deadline (s)", "Met Deadline", "Alpha",
+                "Deadline Feasible", "Estimated Raw Cost", "Gamma",
+                "Offered Price", "Price Accepted"));
         List<WorkflowCompletionRecord> records = new ArrayList<>(accounting.getWorkflowRecords());
         records.sort(Comparator.comparingInt(WorkflowCompletionRecord::getWorkflowId));
         for (WorkflowCompletionRecord record : records) {
             rows.add(row(normalizePath(record.getWorkflowPath()), record.getStatus(),
                     fmt(record.getStartTime()), fmt(record.getFinishTime()),
                     fmt(record.getCriticalPathTime()), fmt(record.getDeadline()),
-                    record.isMetDeadline() ? "YES" : "NO", fmt(record.getAlpha())));
+                    record.isMetDeadline() ? "YES" : "NO", fmt(record.getAlpha()),
+                    record.isDeadlineFeasible() ? "YES" : "NO",
+                    fmtPrecise(record.getEstimatedRawCost()),
+                    fmtPrecise(record.getPriceMarkupGamma()),
+                    fmtPrecise(record.getOfferedPrice()),
+                    record.isPriceAccepted() ? "AUTO_ACCEPTED" : "NOT_QUOTED"));
         }
         SimpleXlsxWriter.write(file, "Workflow Completion Summary", rows);
     }

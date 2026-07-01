@@ -23,6 +23,7 @@ public class CBMWBroker extends AbstractWorkflowBroker {
     public CBMWBroker(String name, double tightness) throws Exception {
         super(name, tightness);
         negotiation.setBeta(PaperRuntimeModel.NEGOTIATION_BETA);
+        negotiation.setGamma(PaperRuntimeModel.NEGOTIATION_GAMMA);
         this.dynamicScheduler = new CBMWDynamicSchedulingAlgorithm(
                 vmPool, activeWorkflows, provisioner);
     }
@@ -50,6 +51,11 @@ public class CBMWBroker extends AbstractWorkflowBroker {
             return false;
         }
         return true;
+    }
+
+    @Override
+    protected void finalizeWorkflowNegotiation(WorkflowRecord wfr) {
+        negotiation.quoteExecutionPrice(wfr);
     }
 
     // -----------------------------------------------------------------------

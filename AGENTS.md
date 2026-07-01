@@ -64,6 +64,7 @@ Useful JVM switches:
 | `-Dcbmw.runtime.quantile=0.90` | Paper alpha quantile used to derive conservative CBMW task durations. |
 | `-Dcbmw.runtime.stddev.ratio=0.10` | Paper runtime uncertainty, sigma divided by mean runtime. |
 | `-Dcbmw.negotiation.beta=1.0` | Workflow-level safety factor applied to the conservative critical path. |
+| `-Dcbmw.negotiation.gamma=1.0` | Markup applied to CBMW's post-planning raw execution-cost quote. |
 | `-Dcbmw.cewb.spot.mtbi.sec=3600` | Override mean time between spot interruptions for every CEWB class. |
 | `-Dcbmw.cewb.spot.max.attempts=3` | Spot attempts before CEWB forces on-demand fallback. |
 | `-Dcbmw.cewb.spot.min.success.prob=0.80` | Minimum predicted probability that a spot attempt survives. |
@@ -193,6 +194,9 @@ test_workflows/
 - Deadline is `arrivalTime + criticalPath * tightness`.
 - CBMW computes `cet = mu + z(alpha) * sigma` from the DAX mean runtime,
   with default `alpha=0.90` and `sigma=0.10*mu`, for negotiation and planning.
+- After CBMW static planning, price negotiation sums each task's estimated
+  duration multiplied by its planned reserved/on-demand price, applies
+  `gamma`, and automatically accepts the quote because no user is simulated.
 - Dynamic capacity checks and reserved-slot rebooking use the stored planning
   estimate (`cet` for CBMW), never the sampled actual runtime.
 - `applyPerturbedRuntimes()` replaces each task runtime from the matching
@@ -316,6 +320,8 @@ dedicated containers. A full 200-workflow CBMW scenario also completed.
   and runtime-quantile changes.
 - The paper does not state a precise experimental beta value; the default is
   the minimum valid value `1.0` and must be reported with each experiment.
+- The paper does not state a precise experimental gamma value; the price-markup
+  default is `1.0` and must be reported with each experiment.
 - `NegotiationModule.remainingCP()` still needs cycle detection.
 - NOSF is a paper-informed reconstruction because its source article is not
   included and its full pseudocode could not be verified. The current

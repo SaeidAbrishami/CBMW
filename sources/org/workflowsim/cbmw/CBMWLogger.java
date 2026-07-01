@@ -22,6 +22,7 @@ public class CBMWLogger {
     /** Only these tags produce output. Everything else is silently dropped. */
     private static final Set<String> LOGGED_TAGS = Set.of(
             "NEGOTIATE",      // workflow accepted or rejected (with reason)
+            "PRICE-QUOTE",    // post-planning CBMW price and auto-acceptance
             "DISPATCH",       // task assigned to a VM (ready -> running)
             "TASK-COMPLETE",  // task finished (running -> done)
             "WF-COMPLETE",    // workflow done, deadline met or missed

@@ -122,7 +122,9 @@ public class CBMWAccounting {
                 wfr.getWorkflowId(), wfr.getDaxPath(), "COMPLETED",
                 wfr.getArrivalTime(), wfr.getCompletionTime(),
                 wfr.getCriticalPathLength(), wfr.getDeadline(),
-                wfr.isDeadlineMet(), alpha));
+                wfr.isDeadlineMet(), alpha, wfr.isDeadlineFeasible(),
+                wfr.getEstimatedRawCost(), wfr.getPriceMarkupGamma(),
+                wfr.getOfferedPrice(), wfr.isPriceAccepted()));
     }
 
     public void markOnDemandOrdered(int vmId, double orderTime, double readyTime) {

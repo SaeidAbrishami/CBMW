@@ -15,9 +15,11 @@ public class NegotiationModule {
     private static final double DEFAULT_BETA = 1.1;
     private final double tightness;         // 1.2 tight, 3.0 loose
     private double beta = DEFAULT_BETA;
+    private double gamma = PaperRuntimeModel.NEGOTIATION_GAMMA;
 
     public NegotiationModule(double tightness) {
         this.tightness = tightness;
+        setGamma(gamma);
     }
 
     public void setBeta(double beta) {
@@ -26,6 +28,15 @@ public class NegotiationModule {
         }
         this.beta = beta;
     }
+
+    public void setGamma(double gamma) {
+        if (gamma < 1.0 || !Double.isFinite(gamma)) {
+            throw new IllegalArgumentException("gamma must be finite and >= 1");
+        }
+        this.gamma = gamma;
+    }
+
+    public double getGamma() { return gamma; }
 
     /**
      * Checks whether the workflow can feasibly meet its user-given deadline.
@@ -39,6 +50,7 @@ public class NegotiationModule {
         double slack    = wfr.getDeadline() - wfr.getArrivalTime();
         double required = cp * beta;
         boolean feasible = (required <= slack);
+        wfr.setDeadlineFeasible(feasible);
         wfr.setAccepted(feasible);
 
         CBMWLogger.log("NEGOTIATE",
@@ -49,6 +61,49 @@ public class NegotiationModule {
                         cp, beta, required, slack,
                         feasible ? "ACCEPTED" : "REJECTED (slack < BETA*cp)"));
         return feasible;
+    }
+
+    /**
+     * Computes the paper's post-planning price quote. With no simulated user,
+     * every quote is accepted automatically.
+     */
+    public double quoteExecutionPrice(WorkflowRecord wfr) {
+        double reservedCost = 0.0;
+        double onDemandCost = 0.0;
+        double reservedPricePerSecond =
+                HybridVmPool.RESERVED_HOURLY_COST / 3600.0;
+
+        for (Task task : wfr.getTaskList()) {
+            int taskId = task.getCloudletId();
+            double duration = wfr.getEstimatedExecTime(taskId);
+            int vmId = wfr.getAssignedVm(taskId);
+            if (vmId >= 0) {
+                reservedCost += duration * reservedPricePerSecond;
+            } else {
+                double billableDuration = Math.max(
+                        HybridVmPool.ON_DEMAND_MIN_BILLING_SECONDS, duration);
+                onDemandCost += billableDuration
+                        * HybridVmPool.onDemandPricePerSecond(
+                                wfr.getTaskCores(taskId), wfr.getTaskRamMb(taskId));
+            }
+        }
+
+        double rawCost = reservedCost + onDemandCost;
+        double offeredPrice = rawCost * gamma;
+        wfr.setEstimatedReservedCost(reservedCost);
+        wfr.setEstimatedOnDemandCost(onDemandCost);
+        wfr.setEstimatedRawCost(rawCost);
+        wfr.setPriceMarkupGamma(gamma);
+        wfr.setOfferedPrice(offeredPrice);
+        wfr.setPriceAccepted(true);
+
+        CBMWLogger.logf("PRICE-QUOTE",
+                "wf=%d reservedEstimate=$%.6f onDemandEstimate=$%.6f"
+                        + " rawCost=$%.6f gamma=%.3f offeredPrice=$%.6f"
+                        + " userDecision=AUTO_ACCEPTED",
+                wfr.getWorkflowId(), reservedCost, onDemandCost, rawCost,
+                gamma, offeredPrice);
+        return offeredPrice;
     }
 
     /**
