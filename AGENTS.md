@@ -188,6 +188,8 @@ test_workflows/
 - Deadline is `arrivalTime + criticalPath * tightness`.
 - CBMW computes `cet = mu + z(alpha) * sigma` from the DAX mean runtime,
   with default `alpha=0.90` and `sigma=0.10*mu`, for negotiation and planning.
+- Dynamic capacity checks and reserved-slot rebooking use the stored planning
+  estimate (`cet` for CBMW), never the sampled actual runtime.
 - `applyPerturbedRuntimes()` replaces each task runtime from the matching
   `.txt` file.
 - `cloudletLength = runtime_seconds * 1000`.
