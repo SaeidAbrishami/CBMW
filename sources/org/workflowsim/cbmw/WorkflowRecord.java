@@ -22,6 +22,7 @@ public class WorkflowRecord {
     private final Map<Integer, Double> earliestFinishTimes = new HashMap<>();  // taskId -> eftji
     private final Map<Integer, Double> latestStartTimes    = new HashMap<>();  // taskId -> lstji
     private final Map<Integer, Double> latestFinishTimes   = new HashMap<>();  // taskId -> lftji
+    private final Map<Integer, Double> estimatedExecTimes  = new HashMap<>();  // taskId -> cetji
     private final Map<Integer, Double> scheduledStartTimes = new HashMap<>();  // taskId -> sstji
     private final Map<Integer, Integer> taskVmAssignment  = new HashMap<>();  // taskId -> vmId
     private final Set<Integer> completedTaskIds = new HashSet<>();
@@ -58,6 +59,18 @@ public class WorkflowRecord {
     public int getCompletedTaskCount() { return completedTaskIds.size(); }
     public boolean isComplete() {
         return getTaskCount() > 0 && completedTaskIds.size() >= getTaskCount();
+    }
+
+    // --- paper estimated execution times used by negotiation/static planning ---
+    public void setEstimatedExecTime(int taskId, double execTime) {
+        estimatedExecTimes.put(taskId, execTime);
+    }
+    public double getEstimatedExecTime(Task task) {
+        return estimatedExecTimes.getOrDefault(task.getCloudletId(),
+                task.getCloudletLength() / HybridVmPool.RESERVED_MIPS);
+    }
+    public double getEstimatedExecTime(int taskId) {
+        return estimatedExecTimes.getOrDefault(taskId, 0.0);
     }
 
     // --- static planner output ---

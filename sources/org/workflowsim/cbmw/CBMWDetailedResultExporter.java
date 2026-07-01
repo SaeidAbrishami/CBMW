@@ -74,6 +74,10 @@ public class CBMWDetailedResultExporter {
         double reservedCost = HybridVmPool.NUM_RESERVED
                 * HybridVmPool.RESERVED_HOURLY_COST
                 * Math.ceil(simDuration / 3600.0);
+        double reservedCoresWithTime = HybridVmPool.NUM_RESERVED
+                * HybridVmPool.RESERVED_CORES * simDuration;
+        double onDemandCoresWithTime = onDemand.size()
+                * HybridVmPool.ON_DEMAND_CORES * totalUptime;
         double makespan = workflows.stream()
                 .mapToDouble(WorkflowRecord::getCompletionTime)
                 .filter(t -> t < Double.MAX_VALUE)
@@ -127,6 +131,9 @@ public class CBMWDetailedResultExporter {
             writer.write(String.format(Locale.US,
                     "  Total Reserved RAM: %d MB%n%n",
                     HybridVmPool.NUM_RESERVED * HybridVmPool.RESERVED_RAM_MB));
+            writer.write(String.format(Locale.US,
+                    "  Total Reserved Cores With Time: %.6E%n%n",
+                    reservedCoresWithTime));
             writer.write("On-Demand Instances:\n");
             writer.write(String.format(Locale.US, "  Total Count: %d%n", onDemand.size()));
             writer.write(String.format(Locale.US,
@@ -139,6 +146,9 @@ public class CBMWDetailedResultExporter {
             writer.write(String.format(Locale.US,
                     "  Total On-Demand RAM: %d MB%n%n",
                     onDemand.size() * HybridVmPool.ON_DEMAND_RAM_MB));
+            writer.write(String.format(Locale.US,
+                    "  Total On-Demand Cores With Time: %.6E%n%n",
+                    onDemandCoresWithTime));
 
             writer.write("========== RESERVED INSTANCE RESOURCE UTILIZATION ==========\n");
             writer.write(String.format(Locale.US,
@@ -160,8 +170,26 @@ public class CBMWDetailedResultExporter {
 
             writer.write("========== SIMULATION SUMMARY ==========\n");
             writer.write(String.format(Locale.US, "Scheduling Algorithm: %s%n", algorithm));
+            if ("CBMW".equals(algorithm)) {
+                writer.write(String.format(Locale.US,
+                        "Planning Runtime Quantile (alpha): %.3f%n",
+                        PaperRuntimeModel.QUANTILE));
+                writer.write(String.format(Locale.US,
+                        "Runtime Stddev Ratio (sigma/mu): %.3f%n",
+                        PaperRuntimeModel.STDDEV_RATIO));
+                writer.write(String.format(Locale.US,
+                        "Conservative Runtime Multiplier (cet/mu): %.4f%n",
+                        PaperRuntimeModel.conservativeEstimate(1.0)));
+                writer.write(String.format(Locale.US,
+                        "Negotiation Safety Factor (beta): %.3f%n",
+                        PaperRuntimeModel.NEGOTIATION_BETA));
+            }
             writer.write(String.format(Locale.US, "Total Tasks: %d%n", totalTasks));
             writer.write(String.format(Locale.US, "Total Workflows: %d%n", totalWorkflows));
+            writer.write(String.format(Locale.US,
+                    "Scheduling Period: %.1f seconds%n", HybridVmPool.SCHEDULING_PERIOD));
+            writer.write(String.format(Locale.US,
+                    "Provisioner Period: %.1f seconds%n", HybridVmPool.PROVISIONER_PERIOD));
             writer.write(String.format(Locale.US,
                     "On-demand instances launched: %d%n", onDemand.size()));
             writer.write(String.format(Locale.US,

@@ -5,6 +5,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.PriorityQueue;
 import org.cloudbus.cloudsim.Cloudlet;
 import org.cloudbus.cloudsim.Log;
 import org.cloudbus.cloudsim.core.SimEvent;
@@ -32,11 +33,20 @@ import org.workflowsim.cbmw.WorkflowRecord;
 public class StaticGreedyBroker extends AbstractWorkflowBroker {
 
     private final CBMWDynamicSchedulingAlgorithm dispatcher;
+    private final Map<Integer, PriorityQueue<Double>> resourceAvailability = new HashMap<>();
 
     public StaticGreedyBroker(String name, double tightness) throws Exception {
         super(name, tightness);
         this.dispatcher = new CBMWDynamicSchedulingAlgorithm(
                 vmPool, activeWorkflows, provisioner);
+        int slots = Math.max(1, Math.min(
+                HybridVmPool.RESERVED_CORES / Math.max(1, HybridVmPool.TASK_CORES),
+                HybridVmPool.RESERVED_RAM_MB / Math.max(1, HybridVmPool.TASK_RAM_MB)));
+        for (CondorVM vm : vmPool.getReservedVms()) {
+            PriorityQueue<Double> availability = new PriorityQueue<>();
+            for (int i = 0; i < slots; i++) availability.add(0.0);
+            resourceAvailability.put(vm.getId(), availability);
+        }
     }
 
     // -----------------------------------------------------------------------
@@ -49,7 +59,7 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
 
         // Upward rank = remaining CP from each task to the exit (HEFT definition
         // with zero communication costs on homogeneous VMs).
-        Map<Integer, Double> urank = negotiation.computeRemainingCPs(tasks);
+        Map<Integer, Double> urank = negotiation.computeRemainingCPs(wfr);
 
         // Process in descending upward-rank order (most critical tasks first).
         List<Task> sorted = new ArrayList<>(tasks);
@@ -61,7 +71,7 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
 
         for (Task task : sorted) {
             int    taskId = task.getCloudletId();
-            double dur    = task.getCloudletLength() / HybridVmPool.RESERVED_MIPS;
+            double dur    = wfr.getEstimatedExecTime(task);
 
             // EST = max over all parents of their planned completion time.
             double est = arrival;
@@ -76,7 +86,7 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
             double bestFinish = Double.MAX_VALUE;
 
             for (CondorVM vm : vmPool.getReservedVms()) {
-                double slot   = findEarliestSlot(vm.getId(), est, dur);
+                double slot   = findEarliestSlot(vm.getId(), est);
                 double finish = slot + dur;
                 if (finish < bestFinish) {
                     bestFinish = finish;
@@ -101,7 +111,9 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
                 wfr.setAssignedVm(taskId, bestVm);
                 wfr.setScheduledStart(taskId, bestStart);
                 wfr.setLST(taskId, bestStart);
-                vmPool.bookSlot(bestVm, taskId, bestStart, bestStart + dur);
+                vmPool.bookSlot(bestVm, taskId, bestStart, bestStart + dur,
+                        HybridVmPool.TASK_CORES, HybridVmPool.TASK_RAM_MB);
+                reserveSlot(bestVm, bestFinish);
                 plannedEnd.put(taskId, bestStart + dur);
                 CBMWLogger.log("SG-PLAN",
                         String.format("wf=%d task=%d -> vm=%d slot=[%.2f,%.2f]",
@@ -123,25 +135,17 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
         return true;
     }
 
-    /**
-     * Earliest slot on vmId starting at or after {@code est} where a task of
-     * duration {@code dur} fits without overlapping any existing booking.
-     * O(bookings) per call.
-     */
-    private double findEarliestSlot(int vmId, double est, double dur) {
-        List<double[]> booked = vmPool.getBookings(vmId);
-        List<double[]> sorted = new ArrayList<>(booked);
-        sorted.sort(Comparator.comparingDouble(s -> s[0]));
+    private double findEarliestSlot(int vmId, double est) {
+        PriorityQueue<Double> availability = resourceAvailability.get(vmId);
+        return availability == null || availability.isEmpty()
+                ? Double.MAX_VALUE : Math.max(est, availability.peek());
+    }
 
-        double candidate = est;
-        for (double[] interval : sorted) {
-            if (interval[1] <= candidate) continue;     // booking already passed
-            if (interval[0] >= candidate + dur) break;  // task fits before this booking
-            if (vmPool.overlapCount(vmId, candidate, candidate + dur)
-                    < HybridVmPool.RESERVED_CORES) break;
-            candidate = interval[1];                     // push past the conflict
-        }
-        return candidate;
+    private void reserveSlot(int vmId, double finish) {
+        PriorityQueue<Double> availability = resourceAvailability.get(vmId);
+        if (availability == null || availability.isEmpty()) return;
+        availability.poll();
+        availability.add(finish);
     }
 
     // -----------------------------------------------------------------------

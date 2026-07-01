@@ -2,6 +2,7 @@ package org.workflowsim.cbmw;
 
 import java.io.FileWriter;
 import java.io.PrintWriter;
+import java.util.Locale;
 import java.util.Set;
 import org.cloudbus.cloudsim.core.CloudSim;
 
@@ -61,6 +62,12 @@ public class CBMWLogger {
     public static void log(String tag, String message) {
         if (writer == null || !LOGGED_TAGS.contains(tag)) return;
         writeLine(tag, message);
+    }
+
+    /** Formats only when this tag is actively being written. */
+    public static void logf(String tag, String format, Object... args) {
+        if (writer == null || !LOGGED_TAGS.contains(tag)) return;
+        writeLine(tag, String.format(Locale.US, format, args));
     }
 
     /** Flushes and closes the log file. */

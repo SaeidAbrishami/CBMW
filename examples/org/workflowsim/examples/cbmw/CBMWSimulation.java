@@ -33,6 +33,7 @@ import org.workflowsim.cbmw.CBMWDetailedResultExporter;
 import org.workflowsim.cbmw.CBMWLogger;
 import org.workflowsim.cbmw.CBMWResultCollector;
 import org.workflowsim.cbmw.HybridVmPool;
+import org.workflowsim.cbmw.PaperRuntimeModel;
 import org.workflowsim.cbmw.WorkflowArrivalData;
 import org.workflowsim.cbmw.WorkflowLoader;
 import org.workflowsim.cbmw.baselines.CEWBBroker;
@@ -115,6 +116,16 @@ public class CBMWSimulation {
                 + new File(ALGORITHM_OUTPUT_ROOT).getAbsolutePath());
         System.out.println("[run] Comparison outputs: "
                 + new File(COMPARISON_OUTPUT_DIR).getAbsolutePath());
+        if (ALGORITHMS.contains("CBMW")) {
+            double multiplier = PaperRuntimeModel.conservativeEstimate(1.0);
+            System.out.println(String.format(Locale.US,
+                    "[run] CBMW runtime model: alpha=%.3f sigma/mu=%.3f"
+                            + " z=%.4f cet/mu=%.4f beta=%.3f",
+                    PaperRuntimeModel.QUANTILE,
+                    PaperRuntimeModel.STDDEV_RATIO,
+                    PaperRuntimeModel.getQuantileZ(), multiplier,
+                    PaperRuntimeModel.NEGOTIATION_BETA));
+        }
         if (MAX_WORKFLOWS != Integer.MAX_VALUE) {
             System.out.println("[run] Max workflows per scenario: " + MAX_WORKFLOWS);
         }

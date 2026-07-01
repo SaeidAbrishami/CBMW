@@ -87,9 +87,12 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
         int bestVm = ON_DEMAND_SENTINEL;
         double bestSlot = -1.0;
         int bestLoad = Integer.MAX_VALUE;
+        int taskCores = HybridVmPool.TASK_CORES;
+        int taskRamMb = HybridVmPool.TASK_RAM_MB;
 
         for (CondorVM vm : pool.getReservedVms()) {
-            double slot = findLatestFeasibleSlot(vm.getId(), est, lft, dur);
+            double slot = findLatestFeasibleSlot(vm.getId(), est, lft, dur,
+                    taskCores, taskRamMb);
             if (slot < 0.0) continue;
 
             int load = pool.getBookings(vm.getId()).size();
@@ -105,7 +108,8 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
             task.setVmId(bestVm);
             wfr.setAssignedVm(taskId, bestVm);
             wfr.setScheduledStart(taskId, bestSlot);
-            pool.bookSlot(bestVm, taskId, bestSlot, bestSlot + dur);
+            pool.bookSlot(bestVm, taskId, bestSlot, bestSlot + dur,
+                    taskCores, taskRamMb);
             CBMWLogger.log("PLAN-ASSIGN-RESERVED",
                     String.format("wf=%d task=%d est=%.4f lst=%.4f lft=%.4f"
                                     + " -> vm=%d slot=[%.4f, %.4f]",
@@ -115,7 +119,7 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
         }
 
         double sst = Math.max(wfr.getArrivalTime(),
-                est - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
+                lst - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
         double expectedStart = Math.max(est,
                 sst + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
         double expectedFinish = expectedStart + dur;
@@ -138,9 +142,10 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
 
     /**
      * Returns the latest start on vmId such that start >= EST, start+dur <= LFT,
-     * and the slot does not exceed the reserved VM core capacity.
+     * and the slot does not exceed reserved VM core or RAM capacity.
      */
-    private double findLatestFeasibleSlot(int vmId, double est, double lft, double dur) {
+    private double findLatestFeasibleSlot(int vmId, double est, double lft,
+                                          double dur, int cores, int ramMb) {
         double earliest = Math.max(est, CloudSim.clock());
         double candidate = lft - dur;
         if (candidate < earliest) return -1.0;
@@ -150,19 +155,23 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
 
         while (candidate >= earliest) {
             double end = candidate + dur;
-            int overlaps = 0;
+            int overlapCores = 0;
+            int overlapRam = 0;
             double earliestOverlapStart = Double.POSITIVE_INFINITY;
 
             for (double[] interval : sorted) {
                 if (interval[1] <= earliest) continue;
                 if (candidate < interval[1] && end > interval[0]) {
-                    overlaps++;
+                    overlapCores += interval.length > 2 ? (int) interval[2] : HybridVmPool.TASK_CORES;
+                    overlapRam += interval.length > 3 ? (int) interval[3] : HybridVmPool.TASK_RAM_MB;
                     earliestOverlapStart = Math.min(earliestOverlapStart, interval[0]);
-                    if (overlaps >= HybridVmPool.RESERVED_CORES) break;
+                    if (overlapCores + cores > HybridVmPool.RESERVED_CORES
+                            || overlapRam + ramMb > HybridVmPool.RESERVED_RAM_MB) break;
                 }
             }
 
-            if (overlaps < HybridVmPool.RESERVED_CORES) return candidate;
+            if (overlapCores + cores <= HybridVmPool.RESERVED_CORES
+                    && overlapRam + ramMb <= HybridVmPool.RESERVED_RAM_MB) return candidate;
             candidate = earliestOverlapStart - dur - 1e-9;
         }
 
@@ -197,6 +206,6 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
     }
 
     private double duration(Task task) {
-        return task.getCloudletLength() / HybridVmPool.RESERVED_MIPS;
+        return wfr.getEstimatedExecTime(task);
     }
 }

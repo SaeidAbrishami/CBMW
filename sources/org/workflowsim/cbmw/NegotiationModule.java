@@ -12,11 +12,19 @@ import org.workflowsim.Task;
  */
 public class NegotiationModule {
 
-    private static final double BETA = 1.1; // safety factor — workflow needs at least CP*BETA seconds of slack
+    private static final double DEFAULT_BETA = 1.1;
     private final double tightness;         // 1.2 tight, 3.0 loose
+    private double beta = DEFAULT_BETA;
 
     public NegotiationModule(double tightness) {
         this.tightness = tightness;
+    }
+
+    public void setBeta(double beta) {
+        if (beta < 1.0 || !Double.isFinite(beta)) {
+            throw new IllegalArgumentException("beta must be finite and >= 1");
+        }
+        this.beta = beta;
     }
 
     /**
@@ -25,20 +33,20 @@ public class NegotiationModule {
      * Returns true if accepted.
      */
     public boolean negotiate(WorkflowRecord wfr) {
-        double cp   = computeCriticalPath(wfr.getTaskList());
+        double cp   = computeCriticalPath(wfr);
         wfr.setCriticalPathLength(cp);
 
         double slack    = wfr.getDeadline() - wfr.getArrivalTime();
-        double required = cp * BETA;
+        double required = cp * beta;
         boolean feasible = (required <= slack);
         wfr.setAccepted(feasible);
 
         CBMWLogger.log("NEGOTIATE",
                 String.format("wf=%d tasks=%d arrivalTime=%.4f deadline=%.4f"
-                        + " cp=%.4f BETA*cp=%.4f slack=%.4f -> %s",
+                        + " cp=%.4f beta=%.3f BETA*cp=%.4f slack=%.4f -> %s",
                         wfr.getWorkflowId(), wfr.getTaskList().size(),
                         wfr.getArrivalTime(), wfr.getDeadline(),
-                        cp, required, slack,
+                        cp, beta, required, slack,
                         feasible ? "ACCEPTED" : "REJECTED (slack < BETA*cp)"));
         return feasible;
     }
@@ -57,6 +65,17 @@ public class NegotiationModule {
         return cp;
     }
 
+    /** Returns the critical path using paper estimated execution times (cetji). */
+    public double computeCriticalPath(WorkflowRecord wfr) {
+        Map<Integer, Double> memo = new HashMap<>();
+        double cp = 0.0;
+        for (Task t : wfr.getTaskList()) {
+            double rank = remainingCP(t, wfr, memo);
+            if (rank > cp) cp = rank;
+        }
+        return cp;
+    }
+
     /**
      * Computes remaining CP from task t to the workflow exit.
      * remainingCP(t) = execTime(t) + max(remainingCP(child)) over children.
@@ -69,6 +88,15 @@ public class NegotiationModule {
         return memo;
     }
 
+    /** Remaining CPs based on paper estimated execution times (cetji). */
+    public Map<Integer, Double> computeRemainingCPs(WorkflowRecord wfr) {
+        Map<Integer, Double> memo = new HashMap<>();
+        for (Task t : wfr.getTaskList()) {
+            remainingCP(t, wfr, memo);
+        }
+        return memo;
+    }
+
     private double remainingCP(Task t, Map<Integer, Double> memo) {
         if (memo.containsKey(t.getCloudletId())) {
             return memo.get(t.getCloudletId());
@@ -77,6 +105,21 @@ public class NegotiationModule {
         double maxChild = 0.0;
         for (Task child : t.getChildList()) {
             double childCP = remainingCP(child, memo);
+            if (childCP > maxChild) maxChild = childCP;
+        }
+        double result = execTime + maxChild;
+        memo.put(t.getCloudletId(), result);
+        return result;
+    }
+
+    private double remainingCP(Task t, WorkflowRecord wfr, Map<Integer, Double> memo) {
+        if (memo.containsKey(t.getCloudletId())) {
+            return memo.get(t.getCloudletId());
+        }
+        double execTime = wfr.getEstimatedExecTime(t);
+        double maxChild = 0.0;
+        for (Task child : t.getChildList()) {
+            double childCP = remainingCP(child, wfr, memo);
             if (childCP > maxChild) maxChild = childCP;
         }
         double result = execTime + maxChild;

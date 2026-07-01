@@ -22,8 +22,14 @@ public class CBMWBroker extends AbstractWorkflowBroker {
 
     public CBMWBroker(String name, double tightness) throws Exception {
         super(name, tightness);
+        negotiation.setBeta(PaperRuntimeModel.NEGOTIATION_BETA);
         this.dynamicScheduler = new CBMWDynamicSchedulingAlgorithm(
                 vmPool, activeWorkflows, provisioner);
+    }
+
+    @Override
+    protected double estimatePlanningRuntime(double meanExecutionTime) {
+        return PaperRuntimeModel.conservativeEstimate(meanExecutionTime);
     }
 
     // -----------------------------------------------------------------------

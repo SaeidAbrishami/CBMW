@@ -48,6 +48,8 @@ public class WorkflowSimTags {
     public static final int VM_PROVISION_ACK = BASE + 8;
     public static final int VM_TERMINATE     = BASE + 9;
     public static final int SIM_END          = BASE + 10;
+    /** Completion of a lightweight paper-style on-demand container task. */
+    public static final int ON_DEMAND_TASK_COMPLETE = BASE + 11;
 
     /**
      * Private Constructor

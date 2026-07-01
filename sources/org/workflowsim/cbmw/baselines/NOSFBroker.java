@@ -18,14 +18,9 @@ import org.workflowsim.cbmw.WorkflowRecord;
  * NOSF paper baseline approximation: no reserved planning, on-demand only.
  *
  * It computes a latest safe on-demand order time per task, then dispatches
- * ready tasks to dedicated on-demand containers in FCFS/SST order.
+ * ready tasks to dedicated task-sized on-demand containers in FCFS/SST order.
  */
 public class NOSFBroker extends AbstractWorkflowBroker {
-
-    private static final int MAX_ON_DEMAND_VMS = Integer.getInteger(
-            "cbmw.nosf.max.ondemand.vms",
-            Math.max(1, (HybridVmPool.NUM_RESERVED * HybridVmPool.RESERVED_CORES)
-                    / HybridVmPool.ON_DEMAND_CORES));
 
     public NOSFBroker(String name, double tightness) throws Exception {
         super(name, tightness);
@@ -33,7 +28,7 @@ public class NOSFBroker extends AbstractWorkflowBroker {
 
     @Override
     protected boolean planWorkflow(WorkflowRecord wfr, List<Task> tasks) {
-        Map<Integer, Double> remainingCPs = negotiation.computeRemainingCPs(tasks);
+        Map<Integer, Double> remainingCPs = negotiation.computeRemainingCPs(wfr);
         double deadline = wfr.getDeadline();
         double arrival = wfr.getArrivalTime();
 
@@ -64,21 +59,15 @@ public class NOSFBroker extends AbstractWorkflowBroker {
             double sst = getSst(job);
             if (now < sst) continue;
 
-            CondorVM vm = provisioner.getOrProvisionShared(job, MAX_ON_DEMAND_VMS);
-            if (vm == null) break;
+            CondorVM vm = provisioner.getOrProvision(job);
             cl.setVmId(vm.getId());
             toSchedule.add(cl);
-            CBMWLogger.log("NOSF-DISPATCH",
-                    String.format("wf=%d task=%d sst=%.1f now=%.1f -> on-demand vm=%d",
-                            workflowIdForJob(job), primaryTaskId(job), sst, now, vm.getId()));
+            CBMWLogger.logf("NOSF-DISPATCH",
+                    "wf=%d task=%d sst=%.1f now=%.1f -> on-demand vm=%d",
+                    workflowIdForJob(job), primaryTaskId(job), sst, now, vm.getId());
         }
 
         dispatchScheduledJobs(toSchedule);
-    }
-
-    @Override
-    protected boolean terminateOnDemandWhenIdle() {
-        return false;
     }
 
     private double getSst(Job job) {

@@ -61,6 +61,9 @@ Useful JVM switches:
 | `-Dcbmw.generate.gantt=true` | Generate Gantt charts; normally keep false for speed. |
 | `-Dcbmw.generate.comparison=false` | Skip comparison chart generation during per-VM runs. |
 | `-Dcbmw.python=python3` | Python executable used for optional chart generation. |
+| `-Dcbmw.runtime.quantile=0.90` | Paper alpha quantile used to derive conservative CBMW task durations. |
+| `-Dcbmw.runtime.stddev.ratio=0.10` | Paper runtime uncertainty, sigma divided by mean runtime. |
+| `-Dcbmw.negotiation.beta=1.0` | Workflow-level safety factor applied to the conservative critical path. |
 
 Linux VM helper for one algorithm:
 
@@ -171,6 +174,8 @@ test_workflows/
 - `WorkflowLoader` reads `test_workflows/poisson_distribution.json`.
 - Each entry parses the matching DAX XML and computes critical path.
 - Deadline is `arrivalTime + criticalPath * tightness`.
+- CBMW computes `cet = mu + z(alpha) * sigma` from the DAX mean runtime,
+  with default `alpha=0.90` and `sigma=0.10*mu`, for negotiation and planning.
 - `applyPerturbedRuntimes()` replaces each task runtime from the matching
   `.txt` file.
 - `cloudletLength = runtime_seconds * 1000`.
@@ -181,18 +186,26 @@ Current configurable defaults in `HybridVmPool`:
 
 | Property | Default |
 |----------|---------|
-| `cbmw.reserved.instances` | 50 |
+| `cbmw.reserved.instances` | 5 |
 | `cbmw.reserved.cores` | 192 |
-| `cbmw.reserved.ram.mb` | 786432 |
-| `cbmw.ondemand.cores` | 32 |
-| `cbmw.ondemand.ram.mb` | 64000 |
+| `cbmw.reserved.ram.mb` | 384000 |
 | `cbmw.task.cores` | 1 |
-| `cbmw.task.ram.mb` | 0 |
+| `cbmw.task.ram.mb` | 1 |
 | `cbmw.reserved.hourly.cost` | 3.26 |
 | `cbmw.ondemand.per.sec` | 0.000340 |
 | `cbmw.ondemand.delay.sec` | 120.0 |
+| `cbmw.scheduling.period.sec` | 5.0 |
+| `cbmw.provisioner.period.sec` | 15.0 |
+| `cbmw.ondemand.min.billing.sec` | 60.0 |
 
 Reserved cost is fixed by makespan. On-demand cost is based on instance uptime.
+Following the paper, every on-demand assignment creates one dedicated logical
+container sized exactly like its task (`cbmw.task.cores` and
+`cbmw.task.ram.mb`). The supplied DAX files do not contain per-task CPU/RAM
+metadata, so these configurable task defaults apply uniformly. Logical
+containers keep independent IDs, OPD, lifecycle, one-minute billing, and
+output rows, but bypass CloudSim host registration to avoid treating
+serverless containers as heavyweight VMs.
 
 ### Broker Hierarchy
 
@@ -200,7 +213,7 @@ All brokers extend `AbstractWorkflowBroker`.
 
 | Broker | planWorkflow | processCloudletUpdate |
 |--------|--------------|-----------------------|
-| CBMW | Backward sweep-line, LST-aware slot booking | LST-aware dynamic dispatch with on-demand fallback |
+| CBMW | Paper-style EST/EFT/LFT backward sweep-line using estimated durations | Periodic LST-aware dynamic dispatch with on-demand fallback |
 | NOSF | On-demand-only approximation | Dispatch to on-demand |
 | CEWB | Low-cost/revocable approximation | Reserved/spot-style dispatch |
 | StaticGreedy | Static round-robin reserved planning | Assigned VM, any reserved, then on-demand |
@@ -213,22 +226,19 @@ pool.
 
 ## Latest Run Findings
 
-CBMW-only full-size runs are still too slow:
+The CBMW planner now uses the paper's alpha-quantile conservative execution
+times for negotiation and static planning, then applies the `.txt` perturbed
+runtimes only for actual execution. Detailed exports are aligned with the reference archive shape:
+`results.txt`, `TASK_EXECUTION_SUMMARY.xlsx`,
+`WORKFLOW_COMPLETION_SUMMARY.xlsx`, and `ON_DEMAND_INSTANCE_USAGE.xlsx`.
 
-- `-Dcbmw.algorithms=CBMW` with 200 workflows did not finish the first scenario
-  before timeout.
-- `-Dcbmw.algorithms=CBMW -Dcbmw.max.workflows=40` also did not finish the
-  first scenario within 15 minutes.
-- `-Dcbmw.algorithms=CBMW -Dcbmw.max.workflows=5` completed all 9 load/deadline
-  scenarios in about 3 minutes and generated CSVs/plots.
+Validation smoke run:
 
-Reason: each full scenario has about 200 workflows and roughly 110,000 tasks
-(100 small workflows plus 100 large workflows). CBMW static planning does
-task-by-task reserved slot search, so full-size scenarios are currently
-computationally expensive.
+```powershell
+java '-Dcbmw.algorithms=CBMW' '-Dcbmw.max.workflows=2' '-Dcbmw.max.scenarios=1' '-Dcbmw.output.dir=Output/validation_reference_env_smoke' '-Dcbmw.export.details=true' '-Dcbmw.detail.log=false' '-Dcbmw.quiet=true' '-Dcbmw.generate.gantt=false' '-Dcbmw.generate.comparison=false' -cp "bin;lib/*" org.workflowsim.examples.cbmw.CBMWSimulation
+```
 
-Current generated outputs are therefore valid CBMW-only smoke/subset outputs
-when `cbmw.max.workflows=5`; they are not full 200-workflow paper-scale results.
+The run compiled and completed, producing the `.rar-style` detailed folder.
 
 ---
 
@@ -236,6 +246,16 @@ when `cbmw.max.workflows=5`; they are not full 200-workflow paper-scale results.
 
 - `CBMWLogger` can be disabled with `-Dcbmw.detail.log=false`.
 - `CBMWLogger` no longer flushes on every event write.
+- `WorkflowParser` now deduplicates required files with a `HashSet`; the old
+  indexed scan over a `LinkedList` became cubic for SIPHT tasks with hundreds
+  of input files.
+- `HybridVmPool` uses constant-time VM lookup and on-demand removal.
+- Paper-style on-demand containers are dedicated and task-sized. They execute
+  through a lightweight logical path rather than registering tens of thousands
+  of heavyweight CloudSim VMs.
+- Disabled `CBMWLogger` calls no longer format hot-path task/container messages.
+- StaticGreedy tracks per-resource-slot availability with priority queues
+  instead of copying, sorting, and rescanning all prior bookings for each task.
 - `WorkflowRecord` tracks completed task IDs.
 - `AbstractWorkflowBroker.updateWorkflowCompletion()` no longer scans all
   received cloudlets for every task completion.
@@ -244,12 +264,19 @@ when `cbmw.max.workflows=5`; they are not full 200-workflow paper-scale results.
 - `CBMWSimulation` saves `results.csv` and `results_aggregate.csv` after each
   completed scenario.
 
+Paper-container validation: all five algorithms completed a detailed-output
+five-workflow smoke run. A clean full 200-workflow NOSF scenario (the worst
+case, because every task uses on-demand) completed in 118 seconds with logical
+dedicated containers. A full 200-workflow CBMW scenario also completed.
+
 ---
 
 ## Known Remaining Issues
 
-- CBMW full 200-workflow scenarios remain too slow; optimize static planning
-  before attempting the full 45-scenario experiment.
-- `releaseSlot` still uses exact floating-point equality for slot removal.
+- Full 200-workflow scenarios should be rebenchmarked after the latest planner
+  and runtime-quantile changes.
+- The paper does not state a precise experimental beta value; the default is
+  the minimum valid value `1.0` and must be reported with each experiment.
 - `NegotiationModule.remainingCP()` still needs cycle detection.
-- Task sub-deadlines are intentionally not used in this project.
+- NOSF and CEWB remain approximations of external baseline papers; the CBMW
+  paper does not include their full pseudocode.

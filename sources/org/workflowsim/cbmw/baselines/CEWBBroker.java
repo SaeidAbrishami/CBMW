@@ -35,7 +35,7 @@ public class CEWBBroker extends AbstractWorkflowBroker {
 
     @Override
     protected boolean planWorkflow(WorkflowRecord wfr, List<Task> tasks) {
-        Map<Integer, Double> remainingCPs = negotiation.computeRemainingCPs(tasks);
+        Map<Integer, Double> remainingCPs = negotiation.computeRemainingCPs(wfr);
         double deadline = wfr.getDeadline();
         double arrival = wfr.getArrivalTime();
 

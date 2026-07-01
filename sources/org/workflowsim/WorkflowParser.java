@@ -19,9 +19,11 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.cloudbus.cloudsim.Log;
 import org.jdom2.Document;
 import org.jdom2.Element;
@@ -254,8 +256,11 @@ public final class WorkflowParser {
                         task.setType(nodeType);
                         task.setUserId(userId);
                         mName2Task.put(nodeName, task);
+                        Set<String> requiredFileNames = new HashSet<>();
                         for (FileItem file : mFileList) {
-                            task.addRequiredFile(file.getName());
+                            if (requiredFileNames.add(file.getName())) {
+                                task.getRequiredFiles().add(file.getName());
+                            }
                         }
                         task.setFileList(mFileList);
                         this.getTaskList().add(task);

@@ -25,7 +25,8 @@ public class CBMWAccounting {
         for (Task task : tasks) {
             int taskId = task.getCloudletId();
             double execTime = task.getCloudletLength() / HybridVmPool.RESERVED_MIPS;
-            double subDeadline = Double.NaN;
+            double subDeadline = wfr.getLFT(taskId);
+            if (!Double.isFinite(subDeadline)) subDeadline = wfr.getDeadline();
             List<Integer> parentIds = new ArrayList<>();
             for (Task parent : task.getParentList()) parentIds.add(parent.getCloudletId());
             taskRecords.put(taskId, new TaskExecutionRecord(
@@ -91,6 +92,15 @@ public class CBMWAccounting {
                 .markDestroyed(destroyTime);
     }
 
+    public double billableDestroyTime(int vmId, double actualDestroyTime) {
+        OnDemandInstanceRecord record = onDemandRecords.get(vmId);
+        if (record == null || !Double.isFinite(record.getLaunchTime())) {
+            return actualDestroyTime;
+        }
+        return Math.max(actualDestroyTime,
+                record.getLaunchTime() + HybridVmPool.ON_DEMAND_MIN_BILLING_SECONDS);
+    }
+
     public double getOnDemandUptime(int vmId) {
         OnDemandInstanceRecord record = onDemandRecords.get(vmId);
         return record != null ? record.getUptime() : Double.NaN;
@@ -100,9 +110,9 @@ public class CBMWAccounting {
         utilizationSnapshots.add(new UtilizationSnapshot(
                 CloudSim.clock(),
                 pool.getReservedVms().size() * HybridVmPool.RESERVED_CORES,
-                pool.getOnDemandVms().size() * HybridVmPool.ON_DEMAND_CORES,
+                pool.getActiveOnDemandCount() * HybridVmPool.ON_DEMAND_CORES,
                 pool.getReservedVms().size() * HybridVmPool.RESERVED_RAM_MB,
-                pool.getOnDemandVms().size() * HybridVmPool.ON_DEMAND_RAM_MB,
+                pool.getActiveOnDemandCount() * HybridVmPool.ON_DEMAND_RAM_MB,
                 runningReservedTasks.size() * HybridVmPool.TASK_CORES,
                 runningOnDemandTasks.size() * HybridVmPool.TASK_CORES,
                 runningReservedTasks.size() * HybridVmPool.TASK_RAM_MB,
