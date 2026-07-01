@@ -24,7 +24,10 @@ public class CBMWLogger {
             "NEGOTIATE",      // workflow accepted or rejected (with reason)
             "DISPATCH",       // task assigned to a VM (ready -> running)
             "TASK-COMPLETE",  // task finished (running -> done)
-            "WF-COMPLETE"     // workflow done, deadline met or missed
+            "WF-COMPLETE",    // workflow done, deadline met or missed
+            "NOSF-PREPROCESS",
+            "NOSF-ALLOCATE",
+            "NOSF-FEEDBACK"
     );
 
     private static PrintWriter writer;

@@ -430,7 +430,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         wfr.setDeadline(data.getUserDeadline());
         allWorkflows.add(wfr);
 
-        if (!negotiation.negotiate(wfr)) {
+        if (!negotiateWorkflow(wfr)) {
             accounting.registerWorkflowTasks(wfr, tasks, tightness, false,
                     "REJECTED_NEGOTIATION_DEADLINE_INFEASIBLE");
             Log.printLine(CloudSim.clock() + ": " + getName()
@@ -632,6 +632,11 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         return meanExecutionTime;
     }
 
+    /** Allows baselines without CBMW admission control to accept every arrival. */
+    protected boolean negotiateWorkflow(WorkflowRecord wfr) {
+        return negotiation.negotiate(wfr);
+    }
+
     private boolean isSchedulingMoment() {
         double period = HybridVmPool.SCHEDULING_PERIOD;
         if (period <= 0.0) return true;
@@ -689,7 +694,9 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         if (now > wfr.getCompletionTime() || wfr.getCompletionTime() == Double.MAX_VALUE) {
             wfr.setCompletionTime(now);
         }
-        wfr.markTaskCompleted(primaryTaskId(job));
+        int taskId = primaryTaskId(job);
+        wfr.markTaskCompleted(taskId);
+        onWorkflowTaskComplete(wfr, taskId, now);
 
         if (wfr.isComplete()) {
             boolean met = wfr.getCompletionTime() <= wfr.getDeadline();
@@ -704,6 +711,10 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
             if (eng != null) eng.notifyWorkflowDisposed();
         }
     }
+
+    /** Algorithm-specific feedback after a task's actual completion is known. */
+    protected void onWorkflowTaskComplete(WorkflowRecord wfr, int taskId,
+                                          double finishTime) {}
 
     private WorkflowEngine getWorkflowEngineRef() {
         try {

@@ -19,6 +19,30 @@ CBMW processes each workflow arrival through four sequential modules:
 
 The backward sweep in Module 2 deliberately defers reservations to the latest feasible slot, keeping earlier capacity free for workflows that have not yet arrived.
 
+### NOSF Baseline
+
+`NOSFBroker` implements a paper-informed reconstruction of NOSF's three-stage
+online scheduler:
+
+1. **Workflow preprocessing:** compute uncertainty-aware task durations, EST/EFT
+   values, and proportional critical-path sub-deadlines.
+2. **Resource allocation:** order ready tasks by earliest EST (then
+   sub-deadline), predict whether each task can finish before its sub-deadline,
+   and select the lowest incremental-cost on-demand resource.
+3. **Feedback:** after each actual task completion, update successor timing and
+   redistribute the remaining sub-deadlines using the observed finish time.
+
+The reconstruction uses the same conservative runtime model as the paper-style
+experiments: `cet = mu + z(alpha) * sigma`, where the default uncertainty is
+`sigma = 0.1 * mu` and `alpha = 0.90`.
+
+The original NOSF article is not available in this repository, so this is not
+claimed as a line-for-line reproduction of its unpublished pseudocode. The
+current experiment also exposes one task-sized, dedicated on-demand container
+configuration. Consequently, NOSF's heterogeneous reusable-VM comparison and
+utilization tie-break reduce to a single feasible candidate here; its deadline,
+priority, uncertainty, cost, and feedback rules are still applied.
+
 ---
 
 ## Project Structure

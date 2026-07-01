@@ -60,6 +60,7 @@ public class WorkflowRecord {
     public void setTaskList(List<Task> tasks) { this.taskList = tasks; }
     public int getTaskCount() { return taskList != null ? taskList.size() : 0; }
     public boolean markTaskCompleted(int taskId) { return completedTaskIds.add(taskId); }
+    public boolean isTaskCompleted(int taskId) { return completedTaskIds.contains(taskId); }
     public int getCompletedTaskCount() { return completedTaskIds.size(); }
     public boolean isComplete() {
         return getTaskCount() > 0 && completedTaskIds.size() >= getTaskCount();

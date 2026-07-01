@@ -160,6 +160,7 @@ sources/org/workflowsim/cbmw/
   CBMWLogger.java
   baselines/
     NOSFBroker.java
+    NOSFWorkflowPlanner.java
     CEWBBroker.java
     StaticGreedyBroker.java
     DynamicGreedyBroker.java
@@ -242,7 +243,7 @@ All brokers extend `AbstractWorkflowBroker`.
 | Broker | planWorkflow | processCloudletUpdate |
 |--------|--------------|-----------------------|
 | CBMW | Paper-style EST/EFT/LFT backward sweep-line using estimated durations | Periodic LST-aware dynamic dispatch with on-demand fallback |
-| NOSF | On-demand-only approximation | Dispatch to on-demand |
+| NOSF | Paper-informed uncertainty-aware EST/EFT and sub-deadline preprocessing | EST-priority, cost-aware on-demand dispatch with completion feedback |
 | CEWB | Low-cost/revocable approximation | Reserved/spot-style dispatch |
 | StaticGreedy | Static round-robin reserved planning | Assigned VM, any reserved, then on-demand |
 | DynamicGreedy | No static planning | First idle reserved, then on-demand FCFS |
@@ -308,5 +309,9 @@ dedicated containers. A full 200-workflow CBMW scenario also completed.
 - The paper does not state a precise experimental beta value; the default is
   the minimum valid value `1.0` and must be reported with each experiment.
 - `NegotiationModule.remainingCP()` still needs cycle detection.
-- NOSF and CEWB remain approximations of external baseline papers; the CBMW
-  paper does not include their full pseudocode.
+- NOSF is a paper-informed reconstruction because its source article is not
+  included and its full pseudocode could not be verified. The current
+  single-type dedicated-container environment also collapses heterogeneous VM
+  selection and utilization tie-breaking to one candidate.
+- CEWB remains an approximation of an external baseline paper; the CBMW paper
+  does not include its full pseudocode.
