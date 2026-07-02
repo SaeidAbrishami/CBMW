@@ -14,9 +14,14 @@ against paper-style baselines and greedy baselines.
 Compile from the project root on Windows PowerShell:
 
 ```powershell
-$files = Get-ChildItem -Path sources,examples -Recurse -Filter *.java | ForEach-Object { $_.FullName }
-javac -cp "lib/*" -d bin $files
+.\scripts\build.ps1
 ```
+
+The script uses a temporary `javac` argument file to avoid Windows
+command-length limits and compiles into a temporary staging directory. After a
+successful compile, it recursively replaces `.class` files in `bin/`, removing
+stale bytecode while preserving non-class launchers and the last good build on
+failure.
 
 Run from compiled classes:
 

@@ -151,7 +151,6 @@ sources/org/workflowsim/cbmw/
     WorkflowRecord.java                 — Per-workflow state (LST map, VM assignments, results)
     CBMWResultCollector.java            — Per-scenario statistics and CSV output
     CBMWLogger.java                     — Structured event log to cbmw_detail.log
-    CreateTestDaxModule.java            — Standalone generator for test DAX workflows
 
 examples/org/workflowsim/examples/cbmw/
     CBMWSimulation.java                 — Main simulation driver (single or batch scenarios)
@@ -167,31 +166,30 @@ test_workflows/
 
 Requires **JDK 8+** and the bundled libraries in `lib/`.
 
-**Windows:**
-```bat
-javac -cp "lib/*;out" -d out ^
-    sources/org/workflowsim/cbmw/*.java ^
-    examples/org/workflowsim/examples/cbmw/CBMWSimulation.java
+**Windows PowerShell:**
+```powershell
+.\scripts\build.ps1
 ```
 
-**Linux / macOS:** replace `;` with `:` in the classpath.
+The script recursively removes old `.class` files from `bin/`, preserves its
+non-class launcher files, compiles every Java file under `sources/` and
+`examples/`, and uses a temporary argument file so Windows does not exceed its
+command-length limit. It compiles into a temporary staging directory and only
+updates `bin/` after success. Cleaning prevents deleted or renamed classes from
+remaining in the runtime classpath without destroying the last working build
+when compilation fails.
+
+**Linux / macOS:** use the existing `scripts/run_algorithm.sh` helper or compile
+with `:` as the classpath separator.
 
 ---
 
 ## Running
 
-### 1. Generate test workflows (first time only)
+### Run the simulation
 
-```bat
-java -cp "lib/*;out" org.workflowsim.cbmw.CreateTestDaxModule
-```
-
-Writes DAX files and `test_workflows/manifest.csv`. Edit the constants at the top of `CreateTestDaxModule.java` to control the number, size, and topology of generated workflows.
-
-### 2. Run the simulation
-
-```bat
-java -cp "lib/*;out" org.workflowsim.examples.cbmw.CBMWSimulation
+```powershell
+java -cp "bin;lib/*" org.workflowsim.examples.cbmw.CBMWSimulation
 ```
 
 By default this runs a single scenario (`lambda=2.0`, `tightness=1.2`, `seed=0`). To run the full 180-scenario experiment, uncomment the nested loop in `CBMWSimulation.main()`.

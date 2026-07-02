@@ -70,4 +70,3 @@ dax=`echo $dax|awk -F/ '{print $NF}'|sed 's/.xml//g'`
 filename="$dax"_"$code.rt"
 echo "$dax" "$code" "$runtime" > $filename
 
-
