@@ -4,6 +4,24 @@ Implementation of the **CBMW** (Cost-efficient Broker for Multiple Workflows) al
 
 CBMW manages a hybrid pool of reserved VMs (fixed hourly cost) and on-demand containers (per-second cost) to schedule dynamically arriving scientific workflows while meeting user-specified deadlines at minimum cost.
 
+### Task Runtime Meaning
+
+The task mean runtime `mu` represents the task's complete expected service time:
+
+```text
+mu = computation time + shared-storage input/output access time
+```
+
+The simulator therefore does not add a separate shared-storage or dependency
+file-transfer delay. The conservative planning duration `cet` is derived from
+this combined `mu`, and the matching `.txt` value is the perturbed sample of the
+same combined runtime used for actual execution.
+
+Queue waiting, scheduler delay, and on-demand provisioning delay (`OPD`) are
+separate from task runtime. Reserved-container startup is currently not added
+separately; it is represented only when it is already included in the supplied
+DAX/runtime measurement.
+
 ---
 
 ## Algorithm Overview
