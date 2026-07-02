@@ -36,6 +36,8 @@ public class WorkflowRecord {
     private final Map<Integer, Integer> taskRamRequirements = new HashMap<>();
     private final Map<Integer, String> taskResourceSources = new HashMap<>();
     private final Map<Integer, Double> scheduledStartTimes = new HashMap<>();  // taskId -> sstji
+    private final Map<Integer, Double> plannedProvisionOrderTimes = new HashMap<>();
+    private final Map<Integer, Double> plannedContainerReadyTimes = new HashMap<>();
     private final Map<Integer, Integer> taskVmAssignment  = new HashMap<>();  // taskId -> vmId
     private final Set<Integer> completedTaskIds = new HashSet<>();
 
@@ -160,6 +162,21 @@ public class WorkflowRecord {
     }
     public double getScheduledStart(int taskId) {
         return scheduledStartTimes.getOrDefault(taskId, 0.0);
+    }
+    public void setPlannedProvisionOrder(int taskId, double time) {
+        plannedProvisionOrderTimes.put(taskId, time);
+    }
+    public boolean hasPlannedProvisionOrder(int taskId) {
+        return plannedProvisionOrderTimes.containsKey(taskId);
+    }
+    public double getPlannedProvisionOrder(int taskId) {
+        return plannedProvisionOrderTimes.getOrDefault(taskId, Double.NaN);
+    }
+    public void setPlannedContainerReady(int taskId, double time) {
+        plannedContainerReadyTimes.put(taskId, time);
+    }
+    public double getPlannedContainerReady(int taskId) {
+        return plannedContainerReadyTimes.getOrDefault(taskId, Double.NaN);
     }
     public void setAssignedVm(int taskId, int vmId) { taskVmAssignment.put(taskId, vmId); }
     public boolean hasAssignedVm(int taskId) { return taskVmAssignment.containsKey(taskId); }

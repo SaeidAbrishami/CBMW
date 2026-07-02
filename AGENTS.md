@@ -283,9 +283,18 @@ separately from on-demand cost/usage.
 
 The CBMW planner now uses the paper's alpha-quantile conservative execution
 times for negotiation and static planning, then applies the `.txt` perturbed
-runtimes only for actual execution. Detailed exports are aligned with the reference archive shape:
+runtimes only for actual execution. Detailed exports are aligned with the
+reference archive shape:
 `results.txt`, `TASK_EXECUTION_SUMMARY.xlsx`,
 `WORKFLOW_COMPLETION_SUMMARY.xlsx`, and `ON_DEMAND_INSTANCE_USAGE.xlsx`.
+
+The last distributed Ferdowsi run is stored under `Output/remote_full_paper/`.
+All five algorithms completed all 9 scenarios (10 `results.csv` lines including
+the header), and VM1 through VM5 were shut down after completion. This run was
+performed before the alpha-quantile runtime correction and the latest
+paper-alignment changes, so it is historical performance data, not validation
+of the current implementation. A new full five-VM run is required before
+drawing final comparative conclusions.
 
 Validation smoke run:
 

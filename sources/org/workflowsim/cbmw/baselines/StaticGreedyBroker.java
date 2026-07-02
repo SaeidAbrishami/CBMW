@@ -7,135 +7,160 @@ import java.util.List;
 import java.util.Map;
 import org.cloudbus.cloudsim.Cloudlet;
 import org.cloudbus.cloudsim.Log;
+import org.cloudbus.cloudsim.core.CloudSim;
 import org.cloudbus.cloudsim.core.SimEvent;
 import org.workflowsim.CondorVM;
 import org.workflowsim.Task;
+import org.workflowsim.WorkflowSimTags;
 import org.workflowsim.cbmw.AbstractWorkflowBroker;
-import org.workflowsim.cbmw.CBMWDynamicSchedulingAlgorithm;
 import org.workflowsim.cbmw.CBMWLogger;
 import org.workflowsim.cbmw.CBMWStaticPlanningAlgorithm;
 import org.workflowsim.cbmw.HybridVmPool;
 import org.workflowsim.cbmw.WorkflowRecord;
 
 /**
- * Static Greedy baseline (document §1.1).
+ * Completely static greedy baseline from new_experiments_text.txt.
  *
- * Planning: tasks sorted by upward rank (= remaining CP, highest first).
- * Each task is placed at the earliest feasible start time on a reserved VM
- * (earliest-finish HEFT style). Falls back to on-demand if on-demand would
- * finish earlier than the best reserved slot.
- *
- * Runtime: reuses CBMWDynamicSchedulingAlgorithm (Algorithm 3) — the same
- * OPD-aware dispatch used by CBMW but driven by earliest-start slots instead
- * of latest-start slots.
+ * Each valid workflow is fully planned when it arrives. Tasks are considered
+ * by descending upward rank and assigned to their earliest deadline-feasible
+ * reserved slot. A dedicated on-demand container is selected only when no
+ * reserved slot exists in that window. Runtime execution keeps every planned
+ * resource assignment fixed; actual runtimes may only delay the plan.
  */
 public class StaticGreedyBroker extends AbstractWorkflowBroker {
 
-    private final CBMWDynamicSchedulingAlgorithm dispatcher;
+    private static final double EPS = 1e-9;
+    private final StaticGreedySchedulingAlgorithm dispatcher;
 
     public StaticGreedyBroker(String name, double tightness) throws Exception {
         super(name, tightness);
-        this.dispatcher = new CBMWDynamicSchedulingAlgorithm(
+        this.dispatcher = new StaticGreedySchedulingAlgorithm(
                 vmPool, activeWorkflows, provisioner);
     }
 
-    // -----------------------------------------------------------------------
-    // Planning — upward-rank ordering, earliest-feasible-slot assignment
-    // -----------------------------------------------------------------------
+    /** StaticGreedy has no CBMW admission gate: every valid arrival is planned. */
+    @Override
+    protected boolean negotiateWorkflow(WorkflowRecord wfr) {
+        double cp = negotiation.computeCriticalPath(wfr);
+        wfr.setCriticalPathLength(cp);
+        wfr.setDeadlineFeasible(
+                cp <= wfr.getDeadline() - wfr.getArrivalTime() + EPS);
+        wfr.setAccepted(true);
+        return true;
+    }
 
     @Override
     protected boolean planWorkflow(WorkflowRecord wfr, List<Task> tasks) {
         double arrival = wfr.getArrivalTime();
+        Map<Integer, Double> upwardRank = negotiation.computeRemainingCPs(wfr);
 
-        // Upward rank = remaining CP from each task to the exit (HEFT definition
-        // with zero communication costs on homogeneous VMs).
-        Map<Integer, Double> urank = negotiation.computeRemainingCPs(wfr);
-
-        // Process in descending upward-rank order (most critical tasks first).
         List<Task> sorted = new ArrayList<>(tasks);
-        sorted.sort(Comparator.comparingDouble(
-                (Task t) -> urank.getOrDefault(t.getCloudletId(), 0.0)).reversed());
+        sorted.sort(Comparator
+                .comparingDouble((Task task) -> upwardRank.getOrDefault(
+                        task.getCloudletId(), 0.0))
+                .reversed()
+                .thenComparingInt(Task::getCloudletId));
 
-        // Planned completion times (for children's EST calculation).
+        Map<Integer, Double> lftMemo = new HashMap<>();
+        for (Task task : tasks) computeLFT(task, wfr, lftMemo);
+
         Map<Integer, Double> plannedEnd = new HashMap<>();
-
         for (Task task : sorted) {
-            int    taskId = task.getCloudletId();
-            double dur    = wfr.getEstimatedExecTime(task);
-            int taskCores = wfr.getTaskCores(taskId);
-            int taskRamMb = wfr.getTaskRamMb(taskId);
+            int taskId = task.getCloudletId();
+            double duration = wfr.getEstimatedExecTime(task);
+            int cores = wfr.getTaskCores(taskId);
+            int ramMb = wfr.getTaskRamMb(taskId);
 
-            // EST = max over all parents of their planned completion time.
             double est = arrival;
             for (Task parent : task.getParentList()) {
                 est = Math.max(est,
                         plannedEnd.getOrDefault(parent.getCloudletId(), arrival));
             }
+            double lft = wfr.getLFT(taskId);
+            wfr.setEST(taskId, est);
+            wfr.setEFT(taskId, est + duration);
+            wfr.setLST(taskId, lft - duration);
+            task.setLatestStartTime(lft - duration);
 
-            // Find the reserved VM with the earliest finish time (HEFT).
-            int    bestVm     = CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL;
-            double bestStart  = 0.0;
-            double bestFinish = Double.MAX_VALUE;
-
+            int bestVm = CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL;
+            double bestStart = Double.MAX_VALUE;
             for (CondorVM vm : vmPool.getReservedVms()) {
-                double slot = findEarliestSlot(vm.getId(), est, dur,
-                        taskCores, taskRamMb);
-                double finish = slot + dur;
-                if (finish < bestFinish) {
-                    bestFinish = finish;
-                    bestStart  = slot;
-                    bestVm     = vm.getId();
+                double start = vmPool.findEarliestFeasibleSlot(
+                        vm.getId(), est, lft, duration, cores, ramMb);
+                if (start == Double.MAX_VALUE) continue;
+                if (start < bestStart - EPS
+                        || (Math.abs(start - bestStart) <= EPS
+                            && (bestVm < 0 || vm.getId() < bestVm))) {
+                    bestStart = start;
+                    bestVm = vm.getId();
                 }
             }
 
-            // On-demand EFT: provisioning triggers at max(arrival, est-OPD),
-            // VM ready OPD seconds later, task starts at max(est, arrival+OPD).
-            double sst       = Math.max(arrival,
-                    est - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
-            double odStart   = Math.max(est,
-                    sst + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
-            double odFinish  = odStart + dur;
-
-            if (bestVm != CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL
-                    && bestFinish <= odFinish) {
-                // Reserved slot finishes no later than on-demand → use reserved.
+            task.setWorkflowId(wfr.getWorkflowId());
+            if (bestVm != CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL) {
                 task.setVmId(bestVm);
-                task.setWorkflowId(wfr.getWorkflowId());
                 wfr.setAssignedVm(taskId, bestVm);
                 wfr.setScheduledStart(taskId, bestStart);
-                wfr.setLST(taskId, bestStart);
-                vmPool.bookSlot(bestVm, taskId, bestStart, bestStart + dur,
-                        taskCores, taskRamMb);
-                plannedEnd.put(taskId, bestStart + dur);
-                CBMWLogger.log("SG-PLAN",
-                        String.format("wf=%d task=%d -> vm=%d slot=[%.2f,%.2f]",
-                                wfr.getWorkflowId(), taskId, bestVm,
-                                bestStart, bestStart + dur));
+                vmPool.bookSlot(bestVm, taskId, bestStart,
+                        bestStart + duration, cores, ramMb);
+                plannedEnd.put(taskId, bestStart + duration);
+                CBMWLogger.logf("SG-PLAN",
+                        "wf=%d task=%d -> reserved vm=%d slot=[%.2f,%.2f]",
+                        wfr.getWorkflowId(), taskId, bestVm,
+                        bestStart, bestStart + duration);
             } else {
-                // On-demand is faster — provision OPD seconds before EST.
+                double orderTime = Math.max(arrival,
+                        est - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
+                double readyTime = projectedOnDemandReadyTime(orderTime);
+                double plannedStart = Math.max(est, readyTime);
+
                 task.setVmId(CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL);
-                task.setWorkflowId(wfr.getWorkflowId());
-                wfr.setAssignedVm(taskId, CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL);
-                wfr.setScheduledStart(taskId, sst);
-                wfr.setLST(taskId, sst);
-                plannedEnd.put(taskId, odFinish);
-                CBMWLogger.log("SG-PLAN",
-                        String.format("wf=%d task=%d -> ON-DEMAND sst=%.2f est=%.2f",
-                                wfr.getWorkflowId(), taskId, sst, est));
+                wfr.setAssignedVm(taskId,
+                        CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL);
+                wfr.setScheduledStart(taskId, plannedStart);
+                wfr.setPlannedProvisionOrder(taskId, orderTime);
+                wfr.setPlannedContainerReady(taskId, readyTime);
+                plannedEnd.put(taskId, plannedStart + duration);
+
+                schedule(getId(), Math.max(0.0, orderTime - CloudSim.clock()),
+                        WorkflowSimTags.STATIC_GREEDY_ON_DEMAND_ORDER, taskId);
+                CBMWLogger.logf("SG-PLAN",
+                        "wf=%d task=%d -> on-demand order=%.2f"
+                                + " ready=%.2f start=%.2f est=%.2f",
+                        wfr.getWorkflowId(), taskId, orderTime,
+                        readyTime, plannedStart, est);
             }
         }
         return true;
     }
 
-    private double findEarliestSlot(int vmId, double est, double duration,
-                                    int cores, int ramMb) {
-        return vmPool.findEarliestFeasibleSlot(
-                vmId, est, duration, cores, ramMb);
+    private double computeLFT(Task task, WorkflowRecord wfr,
+                              Map<Integer, Double> memo) {
+        int taskId = task.getCloudletId();
+        Double cached = memo.get(taskId);
+        if (cached != null) return cached;
+
+        double lft = wfr.getDeadline();
+        for (Task child : task.getChildList()) {
+            lft = Math.min(lft,
+                    computeLFT(child, wfr, memo)
+                            - wfr.getEstimatedExecTime(child));
+        }
+        memo.put(taskId, lft);
+        wfr.setLFT(taskId, lft);
+        return lft;
     }
 
-    // -----------------------------------------------------------------------
-    // Runtime — Algorithm 3 (identical to CBMW, driven by earliest-start SSTs)
-    // -----------------------------------------------------------------------
+    @Override
+    public void processEvent(SimEvent ev) {
+        if (ev.getTag() == WorkflowSimTags.STATIC_GREEDY_ON_DEMAND_ORDER) {
+            int taskId = (Integer) ev.getData();
+            orderLogicalOnDemandContainer(taskId);
+            sendNow(getId(), WorkflowSimTags.CLOUDLET_UPDATE);
+            return;
+        }
+        super.processEvent(ev);
+    }
 
     @Override
     @SuppressWarnings("unchecked")
@@ -150,9 +175,14 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
             Log.printLine("StaticGreedy dispatcher error: " + e.getMessage());
         }
         dispatchScheduledJobs(dispatcher.getScheduledList());
+
+        double nextWake = dispatcher.getNextWakeTime();
+        if (Double.isFinite(nextWake) && nextWake > CloudSim.clock() + EPS) {
+            schedule(getId(), nextWake - CloudSim.clock(),
+                    WorkflowSimTags.CLOUDLET_UPDATE);
+        }
     }
 
-    /** Release the reserved-VM booking when the task completes. */
     @Override
     protected void onTaskComplete(Cloudlet cl) {
         vmPool.releaseSlot(cl.getCloudletId());

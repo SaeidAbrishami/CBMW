@@ -28,7 +28,11 @@ public class ProvisioningModule {
      * responsibility via dispatchScheduledJobs).
      */
     public CondorVM getOrProvision(Job job) {
-        int jobId = job.getCloudletId();
+        return getOrProvision(job.getCloudletId());
+    }
+
+    /** Provisions by task/job ID so a static plan can order before the job is ready. */
+    public CondorVM getOrProvision(int jobId) {
         if (jobToVm.containsKey(jobId)) {
             return jobToVm.get(jobId);
         }
@@ -36,6 +40,10 @@ public class ProvisioningModule {
         vm.setState(org.workflowsim.WorkflowSimTags.VM_STATUS_BUSY);
         jobToVm.put(jobId, vm);
         return vm;
+    }
+
+    public CondorVM getProvisionedVm(int jobId) {
+        return jobToVm.get(jobId);
     }
 
     /**

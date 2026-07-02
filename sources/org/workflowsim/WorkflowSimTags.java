@@ -54,6 +54,8 @@ public class WorkflowSimTags {
     public static final int CEWB_SPOT_TASK_COMPLETE = BASE + 12;
     /** Interruption of a CEWB logical spot-instance attempt. */
     public static final int CEWB_SPOT_TASK_INTERRUPTED = BASE + 13;
+    /** StaticGreedy's pre-planned order time for a dedicated on-demand container. */
+    public static final int STATIC_GREEDY_ON_DEMAND_ORDER = BASE + 14;
 
     /**
      * Private Constructor

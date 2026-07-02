@@ -322,17 +322,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
                 if (provVm != null
                         && !pendingVmCreations.containsKey(vmId)
                         && !submittedVmIds.contains(vmId)) {
-                    double readyAt = nextProvisionerTick(CloudSim.clock()
-                            + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
-                    pendingVmCreations.put(vmId, readyAt);
-                    accounting.markOnDemandOrdered(vmId, CloudSim.clock(), readyAt);
-                    accounting.markTaskProvisioningOrdered(
-                            cl, CloudSim.clock(), readyAt);
-                    schedule(getId(), Math.max(0.0, readyAt - CloudSim.clock()),
-                            WorkflowSimTags.CLOUDLET_UPDATE);
-                    CBMWLogger.logf("VM-PROVISION-ORDERED",
-                            "on-demand vm=%d orderedAt=%.1f readyAt=%.1f",
-                            vmId, CloudSim.clock(), readyAt);
+                    orderLogicalOnDemandContainer(primaryTaskId((Job) cl));
                 }
                 continue;
             }
@@ -639,6 +629,36 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         return meanExecutionTime;
     }
 
+    /**
+     * Starts the OPD countdown for a dedicated logical container. Static
+     * planners may call this before the corresponding job becomes ready.
+     */
+    protected CondorVM orderLogicalOnDemandContainer(int taskId) {
+        CondorVM vm = provisioner.getOrProvision(taskId);
+        int vmId = vm.getId();
+        if (readyOnDemandContainers.contains(vmId)
+                || pendingVmCreations.containsKey(vmId)) {
+            return vm;
+        }
+        double orderedAt = CloudSim.clock();
+        double readyAt = projectedOnDemandReadyTime(orderedAt);
+        pendingVmCreations.put(vmId, readyAt);
+        accounting.markOnDemandOrdered(vmId, orderedAt, readyAt);
+        accounting.markTaskProvisioningOrdered(taskId, orderedAt, readyAt);
+        schedule(getId(), Math.max(0.0, readyAt - orderedAt),
+                WorkflowSimTags.CLOUDLET_UPDATE);
+        CBMWLogger.logf("VM-PROVISION-ORDERED",
+                "on-demand vm=%d task=%d orderedAt=%.1f readyAt=%.1f",
+                vmId, taskId, orderedAt, readyAt);
+        return vm;
+    }
+
+    /** Ready time after OPD, aligned to the configured provisioner period. */
+    protected double projectedOnDemandReadyTime(double orderTime) {
+        return nextProvisionerTick(orderTime
+                + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
+    }
+
     /** Allows baselines without CBMW admission control to accept every arrival. */
     protected boolean negotiateWorkflow(WorkflowRecord wfr) {
         return negotiation.negotiate(wfr);
@@ -659,7 +679,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         return true;
     }
 
-    private double nextProvisionerTick(double time) {
+    protected double nextProvisionerTick(double time) {
         double period = HybridVmPool.PROVISIONER_PERIOD;
         if (period <= 0.0) return time;
         return Math.ceil((time - EPS) / period) * period;

@@ -1,0 +1,1121 @@
+A Cost-efficient Cloud Broker for Executing
+Scientific Workflows Using Hybrid Reserved and
+On-Demand Resources
+Doaa Talib Zaidan1 , Saeid Abrishami1*, Hoda Taheri2
+1
+
+Department of Computer Engineering, Faculty of Engineering,
+Ferdowsi University of Mashhad, Mashhad, Iran.
+2
+Department of Applied Mathematics, Faculty of Mathematics and
+Computer Science, Hakim Sabzevari University, Sabzevar, Iran.
+
+*Corresponding author(s). E-mail(s): s-abrishami@um.ac.ir;
+Contributing authors: doaa.almagsoosi@mail.um.ac.ir;
+h.taheri@hsu.ac.ir;
+Abstract
+This paper addresses the problem of cost-efficient scheduling of multiple scientific workflows in cloud environments under deadline constraints. The objective
+is to design a workflow brokerage mechanism that coordinates the execution of
+concurrently arriving workflows while minimizing cost and maintaining reliable
+deadline satisfaction. To this end, we propose a hybrid resource provisioning and
+scheduling framework that combines reserved and on-demand cloud resources.
+Reserved resources are prioritized to exploit their lower cost, while on-demand
+instances are dynamically provisioned when the workload exceeds the reserved
+capacity. The brokerage mechanism integrates a static planning phase, which
+constructs an initial execution plan for each workflow based on conservative
+execution-time estimates and schedules tasks at their latest feasible start times,
+with a dynamic scheduling phase that jointly manages ready tasks from multiple
+workflows at runtime according to system state and resource availability. This
+coordinated strategy improves resource utilization while preserving capacity for
+future workflow arrivals. Extensive simulation experiments using real scientific
+workflow benchmarks demonstrate that the proposed approach reduces execution cost compared to on-demand-based methods and achieves higher deadline
+satisfaction rates than approaches relying on unreliable low-cost resources.
+Keywords: Cloud computing, multiple workflow scheduling, workflow as a service,
+reserved instances, cloud brokerage
+
+1
+
+1 Introduction
+Scientific workflows provide a fundamental abstraction for structuring, automating, and executing complex scientific and data-intensive applications across a broad
+range of domains, including biology, astronomy, and agricultural sciences. Modern
+workflows increasingly incorporate Machine Learning (ML) and Artificial Intelligence (AI)–driven workloads—such as large-scale data preprocessing, model training,
+hyperparameter optimization, and inference pipelines—which significantly increase
+both computational demands and orchestration complexity [1]. These workflows typically consist of hundreds or thousands of heterogeneous, precedence-constrained tasks
+with diverse resource requirements (e.g., CPUs, GPUs, and high-memory nodes) and
+complex data dependencies.
+Cloud computing provides a particularly suitable execution platform for such
+workflows due to its elasticity, on-demand resource provisioning, and support for
+specialized accelerators, enabling dynamic scaling and cost-aware resource management under budget constraints [2]. Consequently, cloud platforms have emerged as a
+key enabler for executing next-generation HPC workflows that integrate traditional
+scientific computing with large-scale data-driven and AI-oriented processing.
+Executing such large-scale applications on cloud infrastructures remains a significant challenge. It requires careful provisioning of appropriate resources, as well
+as efficient scheduling and mapping of workflow tasks onto those resources while
+respecting precedence constraints. These decisions must satisfy users’ Quality of Service (QoS) requirements—such as deadlines, reliability, and security—while keeping
+resource rental costs within acceptable limits. Although prior studies have explored
+user-side schedulers for single workflows [3–5], such approaches are limited in their
+ability to handle more complex and dynamic scenarios. This challenge has led to
+the emergence of Workflow-as-a-Service (WaaS) brokers [6]. Acting as intermediaries
+between Cloud Service Providers (CSPs) and users, WaaS brokers select and lease
+suitable cloud services for workflow execution while explicitly considering user-defined
+QoS parameters. In addition, they help alleviate vendor lock-in by enabling workflows
+to be executed across multiple CSPs, thereby reducing dependence on a single provider
+and mitigating the risk of monopolistic practices.
+In realistic WaaS environments, workflows arrive at the broker in an online and
+unpredictable manner, without prior knowledge of future submissions. For each incoming workflow, the broker must dynamically provision appropriate cloud resources and
+schedule tasks while respecting precedence constraints and users’ QoS requirements.
+At the same time, it seeks to minimize resource rental costs by provisioning resources
+only when needed and by selecting cost-effective service and pricing options. This
+online execution setting requires the broker to carefully balance immediate scheduling
+decisions with long-term cost efficiency.
+To attract users, WaaS brokers aim to reduce workflow execution costs compared to
+direct user-managed execution while simultaneously maximizing their own profit. They
+primarily achieve this through two strategies. First, brokers execute multiple workflows
+from different users concurrently in order to increase the utilization of leased cloud
+resources, thereby amortizing costs across workflows. This leads to the Multiple Workflow Scheduling Problem (MWSP), which is inherently more complex than scheduling
+2
+
+a single workflow due to increased contention and coordination requirements [7]. Second, brokers exploit the diversity of cloud service models and pricing options—such
+as Infrastructure as a Service (IaaS), Container as a Service (CaaS), and Function as
+a Service (FaaS), combined with on-demand, spot, and reserved pricing—to improve
+efficiency and reduce execution cost.
+Most existing research on the MWSP focuses on the traditional IaaS model with ondemand pricing [8–13], while a separate line of work explores container-based execution
+models under on-demand pricing [14–16]. These studies largely overlook the use of
+more cost-efficient pricing options, such as spot and reserved instances, which have
+the potential to significantly reduce workflow execution costs when incorporated into
+scheduling and resource provisioning strategies. Spot instances, in particular, provide
+access to excess cloud capacity at significantly reduced prices but introduce substantial
+uncertainty, as they may be revoked by the cloud service provider with minimal notice
+[17]. To mitigate this risk, some approaches combine on-demand resources for critical
+tasks—where interruptions could violate users’ QoS constraints—with spot instances
+for less critical tasks [18–22]. Although such hybrid strategies often reduce cost, the
+inherent unreliability of spot resources can still jeopardize QoS guarantees.
+Given these limitations, reserved pricing models offer a more stable alternative for
+reducing execution cost. In this model, cloud resources are leased for an extended duration—typically one year or longer—at a substantial discount compared to on-demand
+instances. However, excessive reliance on reserved resources may lead to underutilization, thereby increasing operational costs for the WaaS broker. A practical strategy
+is therefore to provision an appropriate baseline of reserved instances that achieves
+high utilization, while using on-demand instances to accommodate peak workloads.
+Since reserved instances are prepaid, the broker should prioritize their usage and maximize their utilization through careful task scheduling. However, allocating reserved
+resources too aggressively may prevent future workflows with tighter deadlines from
+meeting their timing constraints, whereas excessive reliance on on-demand resources
+can significantly increase operational cost.
+Despite its clear economic and operational advantages, the joint use of reserved and
+on-demand instances for workflow scheduling under QoS constraints remains largely
+unexplored. To the best of our knowledge, no prior work has addressed this problem in
+its general form [6]. Existing studies are limited to specific cases, such as the scheduling of periodic workflows with predefined submission intervals [23] or linear pipelines
+rather than general workflows [24]. Consequently, a comprehensive scheduling framework that jointly exploits reserved and on-demand resources for general workflows is
+still missing.
+To bridge this research gap, we propose Cost-efficient cloud Broker for executing
+Multiple scientific Workflows (CBMW), a cost-efficient cloud brokerage mechanism
+for executing multiple workflows using a hybrid resource provisioning model that
+combines reserved and on-demand instances. The broker prioritizes the utilization
+of reserved resources to exploit their lower cost, while dynamically provisioning ondemand instances when the workload exceeds the reserved capacity. This strategy
+enables the system to achieve both cost efficiency and reliable deadline satisfaction.
+
+3
+
+To support this provisioning model, CBMW employs a hybrid scheduling strategy
+that integrates static planning with dynamic scheduling. Upon the arrival of a workflow, a static planner constructs an initial execution plan before execution begins.
+Using the workflow deadline as a constraint, the planner attempts to assign each
+task to reserved instances at the latest feasible start time that still satisfies the overall workflow deadline. This conservative placement preserves reserved capacity for
+future workflows that may arrive with tighter timing requirements. During execution,
+a dynamic scheduler manages the set of ready tasks according to the current system
+state and resource availability. While the static plan provides a guideline, the scheduler may adapt task placements or start times when better opportunities arise, such
+as when reserved instances become idle earlier than expected.
+The main contributions of this paper can be summarized as follows:
+
+ We propose a cloud brokerage mechanism for WaaS environments that efficiently
+integrates reserved instances and on-demand containers for the execution of multiple
+workflows.
+ We design a hybrid scheduling strategy that combines static deadline-aware planning
+with dynamic runtime scheduling, enabling both cost-efficient resource allocation
+and adaptive execution.
+ We introduce a conservative reserved-resource placement strategy that schedules
+tasks at their latest feasible start times to preserve capacity for future workflows.
+ We conduct extensive simulation-based evaluations using real scientific workflow
+benchmarks to analyze the performance of the proposed approach under different
+workload intensities and deadline constraints.
+The remainder of the paper is organized as follows. Section 2 reviews related work in
+workflow scheduling and cloud brokerage mechanisms. Section 3 describes the system
+model and problem formulation. Section 4 presents the proposed CBMW brokerage
+mechanism and its hybrid scheduling strategy. Section 5 evaluates the performance of
+the proposed approach through simulation experiments. Finally, Section 6 concludes
+the paper and outlines directions for future work.
+
+2 Related Work
+In this section, we review prior studies on the design of WaaS brokers in cloud
+environments. Since the primary responsibilities of a WaaS broker are resource provisioning and task scheduling, we also review studies addressing the MWSP. The
+reviewed studies are categorized based on the pricing models adopted for renting cloud
+resources: on-demand resources, a combination of spot and on-demand resources, and
+a combination of reserved and on-demand resources.
+
+2.1 On-demand Resources
+The on-demand pricing model is the most widely adopted model for scheduling and
+executing multiple workflows in cloud environments. Consequently, a large body of
+prior work has focused on MWSP under this model, with most approaches relying on
+heuristic, meta-heuristic, or learning-based techniques.
+4
+
+Several studies employ heuristic algorithms to address cost minimization under
+workflow deadline constraints. Liu et al. [8] proposed the onliNe multi-workflOw
+Scheduling Framework (NOSF), which uses a greedy heuristic to minimize execution cost while satisfying deadlines. In this framework, each task is scheduled on
+the resource that leads to the minimum cost increase while meeting its assigned
+sub-deadline. To handle uncertainty in task execution times, execution durations are
+modeled as random variables following a normal distribution, and this uncertainty is
+incorporated into scheduling parameters such as earliest start time. Similarly, Chen
+et al. [9] proposed the unceRtainty-aware Online Scheduling Algorithm (ROSA) to
+solve the same problem. ROSA adopts a comparable greedy scheduling strategy while
+explicitly considering execution time uncertainty. Task execution times are modeled
+using normal distributions, and α-quantiles are used to estimate predicted start and
+finish times for workflow tasks. These predicted values guide the selection of the most
+appropriate VM for task execution. Experimental results show that ROSA achieves
+cost reductions of up to 56% compared to five competing algorithms.
+In a related direction, Ye et al. [10] proposed a stochastic multi-workflow dynamic
+scheduling algorithm (SMWDSA) that explicitly models both task execution time and
+workflow arrival as stochastic processes. The approach decomposes workflow deadlines
+into task-level sub-deadlines and schedules tasks based on minimum available time
+slots on heterogeneous VMs to reduce cost while satisfying deadline constraints. In
+addition, a feedback mechanism dynamically updates task priorities and sub-deadlines
+during execution to mitigate the impact of uncertainty and improve overall scheduling efficiency. Taghinezhad-Niar et al. [25] also proposed two heuristic algorithms for
+scheduling deadline-constrained workflows in a WaaS broker using containers under
+execution-time uncertainty. One algorithm minimizes cost, while the other targets
+energy consumption. Their approach distributes the workflow deadline into task-level
+sub-deadlines and prioritizes ready tasks using the Earliest Deadline First (EDF)
+heuristic, assigning them to available resources accordingly.
+Meta-heuristic algorithms have also been extensively investigated for MWSP under
+the on-demand pricing model. Li et al. [11] applied Particle Swarm Optimization
+(PSO) to jointly optimize workflow makespan and execution cost. To improve the
+exploration of the solution space, they proposed a Multiswarm Co-evolution (MSC)
+strategy that consists of three swarms: one swarm optimizing cost, one optimizing
+makespan, and a third optimizing a normalized objective combining both metrics.
+These swarms cooperate to generate candidate solutions, which are further refined
+using a Genetic Algorithm (GA) to explore elite individuals and improve convergence.
+To address the same optimization objectives, Li et al. [26] proposed a co-evolutionary
+algorithm based on the Poor and Rich Optimization (PRO) meta-heuristic. Their
+approach maintains four populations: the first two populations independently optimize
+makespan and cost, respectively; the third population serves as a global information
+exchange pool containing all non-dominated solutions from the first two populations;
+and the fourth population maintains an elite solution set composed of the best individuals selected according to a predefined threshold. The proposed algorithm achieves
+a performance improvement of up to 25.62% compared to state-of-the-art methods.
+
+5
+
+In addition to heuristic and meta-heuristic methods, reinforcement learning (RL)
+has been increasingly adopted to tackle MWSP under on-demand pricing. Li et al. [12]
+proposed a Double Deep Q-Network (DDQN)-based framework to jointly minimize
+workflow makespan and execution cost. Their method employs a two-level scheduling
+architecture: at the first level, a pointer network selects one task from the set of ready
+tasks—defined as tasks whose parent tasks have completed execution—and at the second level, the selected task is assigned to a VM by the DDQN agent. Pan and Wei
+[27] also employed a Deep Q-Network (DQN) to schedule multiple workflows, with
+the objective of minimizing makespan while maximizing overall resource utilization.
+Furthermore, Zhang et al. [28] proposed a hybrid approach combining Genetic Algorithms and DQN to schedule multiple workflows with the joint objective of minimizing
+makespan and execution cost.
+Although these studies demonstrate the effectiveness of on-demand-based scheduling approaches, they rely exclusively on the highest-cost pricing model offered by cloud
+providers. As a result, they are inherently limited in their ability to reduce execution costs, as they do not exploit lower-priced alternatives such as spot or reserved
+instances.
+
+2.2 Hybrid Spot and On-demand Resources
+To further reduce execution costs, several studies have explored the use of low-cost
+but unreliable spot instances in combination with on-demand resources. In these
+approaches, on-demand instances are typically used to guarantee deadline satisfaction,
+while spot instances are leveraged opportunistically when sufficient slack is available.
+Taghavi et al. [22] proposed the Cost-Efficient Workflow-as-a-Service Broker
+(CEWB), which classifies cloud resources into multiple reliability-based classes. Ondemand instances constitute the highest reliability class, while spot instances are
+assigned to lower classes based on their maximum bid price. Workflow tasks are
+also classified according to their criticality, which is determined by their slack time.
+Tasks are then mapped to appropriate resource classes such that highly critical tasks
+are scheduled on more reliable resources, whereas less critical tasks are executed on
+cheaper spot instances. Zolfaghari et al. [18] extended this model to the scheduling of
+workflow ensembles, defined as sets of workflows with similar structures but different
+sizes. Similarly, Chen et al. [21] proposed a heuristic algorithm for scheduling workflow ensembles on hybrid spot and on-demand resources, aiming to reduce execution
+cost while meeting deadlines.
+Other researchers have explored hybrid spot–on-demand scheduling using heuristic
+strategies. Zhou et al. [20] proposed Dyna, which first derives an execution plan based
+solely on on-demand instances using the A* algorithm to minimize cost while satisfying
+deadline constraints. The initial plan is subsequently refined by selectively migrating
+tasks to spot instances when sufficient deadline slack is available.
+More recently, Lin et al. [19] proposed SptDAG, a reinforcement learning–based
+framework for scheduling workflows on hybrid spot and on-demand resources. Their
+6
+
+approach employs a deep neural network to select among a set of predefined metapolicies, including prioritizing the use of spot instances, launching new spot or ondemand instances, assigning tasks to existing idle instances, or deferring task execution
+to a subsequent scheduling period.
+Overall, while hybrid spot and on-demand approaches are effective in reducing
+execution costs, their dependence on unreliable spot instances can jeopardize servicelevel agreements, particularly for workflows with strict deadline requirements.
+
+2.3 Hybrid Reserved and On-demand Resources
+The combination of reserved and on-demand instances offers a compelling pricing
+model for workflow scheduling, as it combines the reliability and discounted cost of
+reserved instances with the elasticity of on-demand resources. Despite its practical
+importance, this model has received limited attention in the literature, especially for
+general workflow scheduling scenarios.
+Taheri et al. [23] focused on scheduling periodic workflows under a hybrid
+reserved–on-demand pricing model, where workflow submissions occur at predefined
+intervals with fixed patterns. Their approach follows a static planning–dynamic
+scheduling paradigm. In the static planning phase, the problem is formulated as a
+resource leveling problem (RLP) to derive an initial schedule that maximizes the utilization of reserved resources. In the dynamic scheduling phase, tasks are executed
+according to the static plan, while on-demand instances are provisioned when reserved
+capacity is insufficient. Due to execution-time uncertainty, the static plan may be
+adjusted dynamically. However, this work does not address general online workflows
+with arbitrary and unpredictable arrival times.
+Zhu et al. [24] investigated the scheduling of workflows structured as linear pipelines
+on hybrid reserved and on-demand instances. To account for uncertainty in task execution and data transfer times, these parameters are modeled using fuzzy numbers. A
+fuzzy task scheduling algorithm is then applied to prioritize ready tasks and schedule
+them on reserved instances whenever possible. If no suitable reserved instance is available, the algorithm falls back to existing or newly provisioned on-demand instances
+to meet task sub-deadlines. Nevertheless, this study is limited to linear workflows and
+does not consider general workflows modeled as Directed Acyclic Graphs (DAGs).
+Considering the existing literature, it is evident that current approaches addressing
+hybrid reserved and on-demand resources are restricted to specific workflow structures
+or predictable submission patterns. To the best of our knowledge, no previous work
+has proposed a WaaS broker capable of cost-efficiently scheduling general DAG-based
+workflows with arbitrary arrival times under a hybrid reserved/on-demand pricing
+model. To fill this gap, we propose the CBMW.
+
+3 System architecture and model
+This section first presents the architecture of the proposed WaaS broker, followed by
+a detailed description of the system model. Building on this model, MWSP is formally formulated. For clarity, a comprehensive list of symbols and acronyms employed
+throughout this study is provided in Table 1.
+7
+
+Table 1: Summary of notations
+Parameter
+W = {w1 , . . . , wn }
+ai
+di
+tji
+rcji
+rmji
+cetji
+ef tji
+lf tji
+sstji
+astji
+af tji
+arij
+R = {r1 , . . . , rm }
+rcck
+rmck
+O = {o1 , . . . , op }
+oltl
+ostl
+opsl
+opd
+
+Description
+Set of workflows
+Arrival time of workflow wi
+Deadline of workflow wi
+j th task of workflow wi
+Required number of cores for task tji
+Required memory for task tji
+Conservative execution time of task tji
+Earliest finish time of task tji
+Latest finish time of task tji
+Scheduled start time of task tji
+Actual start time of task tji
+Actual finish time of task tji
+Allocated resource for task tji
+Set of reserved resources
+Core capacity of reserved resource rk
+Memory capacity of reserved resource rk
+Set of on-demand resources
+Launch time of on-demand resource ol
+Stop time of on-demand resource ol
+Price per second of on-demand resource ol
+Provisioning delay of on-demand resources
+
+3.1 System Architecture
+Figure 1 illustrates the architecture of the proposed WaaS broker. Users submit workflows to the broker at arbitrary times, each accompanied by a predefined deadline. The
+broker is responsible for leasing resources from the CSP and executing workflow tasks
+on those resources. To support workflow execution, the broker provisions resources
+using both on-demand and reserved pricing models. Reserved resources are leased
+as virtual machines (VMs), selected from a single, large instance type—for example,
+an HPC-optimized Amazon instance such as hpc7a.96xlarge [29], which provides 192
+physical cores and 768 GiB of memory. Workflow tasks are executed on these VMs
+using a container management service that runs tasks as containers. In contrast, ondemand resources are provisioned through a service such as AWS Fargate [30], which
+enables the broker to directly lease containers without managing the underlying virtual
+machines. The specific container configurations are selected according to the resource
+requirements of individual tasks.
+As illustrated in Figure 1, the broker is composed of four main components: the
+Negotiation Module, the Static Planning Module, the Dynamic Scheduling Module,
+and the Provisioning Module. The Negotiation Module receives workflows from users
+and first verifies the feasibility of the user-defined deadline. If the deadline is acceptable, the module negotiates the execution price according to the system’s pricing
+8
+
+Fig. 1: The proposed architecture
+
+policy. To reduce the broker’s execution costs, it actively encourages users by offering lower prices for workflows with flexible deadlines—providing the scheduler greater
+freedom to allocate reserved resources efficiently—or for workflows submitted during
+off-peak periods when reserved resources are available and underutilized. To determine
+the proposed price, the module relies on the static planner to estimate execution costs
+based on the current system load and the workflow’s deadline. If the user accepts the
+offered price, the workflow proceeds to execution.
+The WaaS broker employs a hybrid scheduling approach that combines static planning with dynamic scheduling. Upon the arrival of a workflow, the static planner
+constructs an initial execution plan before execution begins. Using the workflow’s deadline as a constraint, it attempts to assign each task to reserved instances at the latest
+feasible start time that still satisfies the overall deadline. This conservative placement
+strategy preserves reserved capacity for future workflows that may arrive with tighter
+timing requirements. When no suitable reserved instance can be identified, the task is
+tentatively assigned to an on-demand container. This preliminary plan is subsequently
+used by the pricing policy to estimate how much of the workflow can be executed on
+reserved resources versus on-demand containers, and to derive an expected execution
+cost that forms the basis for the price offered to the user.
+At runtime, task execution is governed by the dynamic scheduler. It continuously
+monitors the set of ready tasks —those whose dependencies have completed—and dispatches them to available resources based on the current system state and resource
+load. While the dynamic scheduler takes the static plan as a guideline, it is not bound
+by it and may adjust task start times or resource assignments in response to changing
+conditions. For instance, if reserved instances become idle, the scheduler may advance
+9
+
+the execution of tasks that were originally planned to run later. Finally, the Provisioning Module manages the lifecycle of on-demand containers by provisioning and
+releasing them as requested by the dynamic scheduler.
+
+3.2 System Model
+In the proposed system, users submit workflows dynamically to the WaaS broker,
+which constitute a workflow set W = {w1 , w2 , . . . , wn }. Each workflow wi has its own
+unique arrival time ai and deadline di . The deadline represents the time limit within
+which the workflow must be executed. Each workflow can be represented as a Directed
+Acyclic Graph (DAG), in which the nodes represent computational tasks, while the
+edges depict dependencies, either data or control flow, between the tasks. The j th
+′
+task of workflow wi is represented by tji , while a dependency between tasks tji and tji
+′
+j′
+j
+is represented by ejj
+i . Task ti is called the parent (or predecessor) of ti , while the
+opposite relationship is referred to as the child or successor. A child task can start its
+execution while all of its parents are completed and their corresponding data has been
+received. We assume that tasks are containerized using a container technology such as
+Docker, to be executed on provisioned containers.
+We consider workflow tasks to be rigid, meaning that they require a predetermined and fixed amount of resources during execution. The rcji denotes the number
+of required cores for a task tji , and rmji denotes its required memory. We assume the
+task execution time is a random variable with independent and normal distribution,
+which is employed by other reserachers [8, 9]. The execution time of each task tji follows a normal distribution N (µ, σ 2 ) with µ is the expected value (i.e., mean execution
+time of the task), and σ 2 is the variance. To obtain a safer execution-time estimate
+during static planning and increase the probability of meeting workflow deadlines,
+we use a conservative execution time estimate cetji , defined as the α-quantile of the
+execution-time distribution of task tji , rather than its mean. The α-quantile execution
+time represents a conservative bound such that the task execution time is less than
+or equal to this value with α% probability. We chose α ≥ 0.9 to provide a stronger
+probabilistic guarantee for meeting task deadlines.
+To enable data transfer between tasks, the broker employs a shared storage service such as Amazon S3. In this model, a parent task writes its output data to the
+shared storage, from which child tasks retrieve the required inputs asynchronously
+when needed. This mechanism allows data transfer delays to be estimated in advance;
+therefore, the associated data access time is incorporated into the execution time of
+each task.
+The broker leases a set of reserved resources, R = {r1 , ..., rm }, with identical
+configurations to execute workflow tasks. Each resource rk has a core capacity rcck
+and a memory capacity rmck . To execute tasks on reserved instances, the broker uses
+a container management service that launches task containers on VMs. We assume
+a short provisioning delay for launching a container on a reserved resource, which is
+already considered in the execution time of each task. If a resource rk is allocated to
+task tji , we denote it by arij = rk , and astji and af tji indicates the actual start time
+and finish time of the task on that resource.
+10
+
+On the other hand, in the case of resource shortage, some tasks may be scheduled
+on dedicated on-demand containers, which are illustrated by O = {o1 , ..., op }. If a
+task tji is scheduled on an on-demand container ol , denoted by arij = ol , the core and
+memory capacity of the leased container equals to required core and memory of that
+task, while the start and finish lease time of that resource, denoted by oltl and ostl
+equals to the actual start and finish time of the task. Each on-demand container ol , has
+a per second price denoted by opsl with a one-minute minimum, which is dependent
+on its configurations. The provisioning delay of on-demand containers is much longer
+than reserved ones and should be explicitly considered in the scheduling time, and
+indicated by opd.
+
+3.3 Problem Formulation
+The overall aim of the WaaS broker is to schedule and execute users’ workflows with
+minimum execution cost, while adhering to workflows’ deadline. Since the cost of
+reserved resources is pre-paid and the broker’s scheduler has no role in decreasing their
+cost, the aim of the scheduler is to minimize the cost of leased on-demand containers
+to reduce the overall cost. The problem can be formulated as follows:
+X
+M inimize
+max(60, ostl − oltl ) × opsl
+(1)
+ol ∈O
+
+s.t.
+max af tji ≤ di
+j
+
+af tji ≤ astji
+X
+
+′
+
+∀wi ∈ W
+
+(2)
+′
+
+∀wi ∈ W, ∀tji ∈ Succ(tji )
+
+rcji ≤ rcck
+
+∀rk ∈ R, ∀t ∈ T ime
+
+(3)
+(4)
+
+tji , arij =rk
+astji ≤t≤af tji
+
+X
+
+rmji ≤ rmck
+
+∀rk ∈ R, ∀t ∈ T ime
+
+(5)
+
+tji , arij =rk
+astji ≤t≤af tji
+
+Equation 1 represents the optimization objective, while the remaining equations
+represent the problem constraints. Equation 2 indicates that the finish time of the
+workflow must satisfy the deadline. Equation 3 ensures the data dependency among
+tasks of a workflow, in which Succ(tji ) indicates the successor tasks of task tji . Finally,
+equations 4 and 5 guarantees that the required CPU cores and memory of scheduled
+tasks on each reserved instance, do not exceed its capacity, in each time instance t.
+Although the utilization of reserved resources is not explicitly modeled as an optimization objective, the scheduler implicitly aims to maximize their utilization. Higher
+utilization of reserved resources reduces the need for on-demand containers, thereby
+decreasing the overall execution cost. While the cost of leasing reserved resources significantly impacts the total operational cost of the broker, determining the optimal
+amount of reserved capacity is handled by a separate resource provisioning component
+11
+
+that predicts long-term workload demand. This problem is beyond the scope of the
+present study.
+
+4 The Proposed WaaS Broker
+In this section, we elaborate on the four components of the proposed WaaS broker.
+
+4.1 Negotiation Module
+The negotiation module is responsible for deciding whether to accept or reject a user’s
+workflow based on its deadline and for negotiating the execution price with the user.
+Upon receiving a workflow wi , the module first computes the earliest finish time for
+each task tji , denoted by ef tji , as follows:
+(
+ai + cetji
+if tji has no predecessors
+j
+′
+(6)
+ef ti =
+j′
+j
+maxtj′ ef ti + ceti where tji is a predecessor of tji
+i
+
+The negotiation module accepts the workflow if
+
+β × max ef tji ≤ di
+j
+
+(7)
+
+where the parameter β ≥ 1 is a safety factor used to account for residual uncertainty and to further increase the likelihood of meeting the workflow’s deadline. Since
+task execution times are already estimated using α-quantiles, which ensure that the
+majority of tasks complete within the predicted duration, even a small value of β is
+sufficient to provide an additional margin of safety.
+The negotiation module is also responsible for determining the execution price
+offered to the user. To this end, it invokes the static planning module (described in
+the next subsection) to estimate the raw execution cost of the workflow. This estimate
+is computed by multiplying the execution time of each task by the per-second price of
+its allocated resource, whether reserved or on-demand. The estimated raw cost is then
+multiplied by a parameter γ , which represents a markup factor capturing the broker’s
+operational costs and profit margin, in order to determine the final price quoted to the
+user. Workflows submitted during off-peak periods or with relatively loose deadlines
+have a higher likelihood of being executed on reserved instances, resulting in lower
+raw execution costs and consequently lower prices. The computed price is presented
+to the user, and if the user accepts the offer, the workflow is admitted to the system
+for execution.
+
+4.2 Static Planning Module
+The static planning module constructs an initial execution plan by attempting to
+schedule each task at its latest feasible start time while still satisfying the overall
+workflow deadline on a reserved instance. If no suitable reserved instance is available,
+the task is tentatively assigned to an on-demand container. To schedule a workflow
+wi , the module relies on the latest finish time of each task tji , denoted by lf tji , which
+is computed as follows:
+12
+
+Algorithm 1 Static Planning Algorithm for Workflows
+procedure WorkflowPlanner(wi )
+for each task tji ∈ wi do
+3:
+Compute ef tji and lf tji using Equations 6, 8
+4:
+end for
+5:
+T asks ← List of tasks in descending order of lf tji
+6:
+for each task tji ∈ T asks do
+7:
+sstji , arij ← T askP lanner(tji )
+8:
+if sstji = ∞ then
+9:
+sstji ← lstji − opd
+10:
+arij ← o0
+11:
+end if
+12:
+end for
+13: end procedure
+1:
+
+2:
+
+lf tji =
+
+if tji has no successors
+′
+where tji is a successor of tji
+
+(
+di
+′
+′
+mintj′ (lf tji − cetji )
+i
+
+(8)
+
+Algorithm 1 shows the WorkflowPlanner algorithm for planning a workflow wi ,
+which computes scheduled start time denoted by sstji , and allocated resource arij , for
+each task tji ∈ wi . First, it computes ef tji and lf tji for each task, and then sorts tasks
+in their ascending order of their latest finish time. Then, each task is selected in order
+and sent to the function TaskPlanner which tries to schedule each task on reserved
+instances at its latest feasible start time. If this function fails, the task is scheduled on
+a dummy on-demand resource called o0 , which will be replaced with a real on-demand
+container ol at runtime, by the provisioning module. Furthermore, the on-demand
+provisioning delay also considered in computing the scheduled start time of the task.
+The TaskPlanner algorithm is presented in Algorithm 2. Scheduling a task on a set
+of resources is a well-known cumulative scheduling problem, which can be addressed
+using a simple instantiation of the sweep-line resource profile algorithm [31, 32]. However, the standard version of this algorithm searches for the earliest feasible start time
+for each task. In contrast, our objective is to determine the latest feasible start time.
+Therefore, we propose a backward variant of the sweep-line algorithm that computes
+the latest feasible start time for each task.
+To maintain the resource profile for each reserved resource rk , we use a data structure denoted by events[k ], which stores the scheduled start and finish times of all tasks
+assigned to that resource. Each event contains three attributes: the time of the event,
+and availCore and availMem, which indicate the number of available CPU cores and
+the amount of available memory after the occurrence of the event. Because the algorithm operates in a backward manner, the events are sorted in descending order of
+their timestamps. This data structure is updated whenever a task is scheduled on a
+resource by inserting its start and finish events while preserving the ordering.
+13
+
+Algorithm 2 Static Planning Algorithm for Tasks
+function TaskPlanner(tji )
+2:
+best start ← +∞, best res ← ∅
+3:
+for each rk ∈ R do
+4:
+cand end ← lf tji
+5:
+cand start ← +∞
+6:
+for each event e ∈ events[k ] do
+7:
+if e.time > cand end then
+8:
+continue
+9:
+end if
+10:
+if e.availCore < rcji or e.availM em < rmji then
+11:
+cand end ← e.time
+12:
+if cand end − cetji < estji then
+13:
+break
+14:
+end if
+15:
+else if cand end − e.time ≥ cetji then
+16:
+cand start ← cand end − cetji
+17:
+break
+18:
+end if
+19:
+end for
+20:
+if cand start > best start then
+21:
+best start ← cand start
+22:
+best res ← sj
+23:
+end if
+24:
+end for
+1:
+
+if best start < +∞ then
+Insert the start and end events of tji into events of best res
+27:
+Update the properties of the events between the start and end of tji
+28:
+end if
+29:
+return best start, best res
+30: end function
+25:
+26:
+
+The main loop of the algorithm (lines 3–24) attempts to determine the latest
+feasible candidate start and corresponding candidate end times for task tji on each
+available reserved resource rk . To achieve this, the algorithm performs a backward
+sweep over the resource’s event list (lines 6–19), examining the interval between each
+event and the subsequent event in the list. Note that the events are processed in
+descending order of time. If the event time occurs after the current candidate end, the
+interval is ignored (line 7).
+The algorithm then checks whether the available CPU cores or memory in the
+current interval are sufficient to execute the task (line 10). If not, the candidate end
+is shifted to the end of the previous interval. If this new candidate end violates the
+earliest start time constraint of the task (line 12), the search terminates unsuccessfully.
+14
+
+Otherwise, the algorithm verifies whether the interval duration is sufficient to complete
+the task before the candidate end (line 15). If this condition holds, the candidate
+start time is computed and the search terminates successfully. Finally, the computed
+candidate start time is compared with the best start time found so far across all
+reserved resources in order to select the latest feasible start time (line 20).
+Upon completion of the search, if a suitable reserved resource is identified, the
+start and finish events of the task are inserted into the corresponding event list, and
+the available cores and memory within the affected intervals are updated accordingly
+(lines 25–28).
+
+4.3 Dynamic Scheduling Module
+The dynamic scheduler is responsible for executing workflow tasks at runtime, i.e.,
+determining the actual start time astji for each task tji . Although the static plan
+serves as an initial roadmap for task execution, the dynamic scheduler may adjust the
+scheduled start time of tasks for two main reasons.
+First, the non-deterministic nature of cloud environments introduces uncertainties
+in resource availability and task execution times that must be handled at runtime.
+However, because the static planner conservatively uses the α-quantiles of task execution times when constructing the schedule, we expect that many tasks will finish
+earlier than predicted.
+Second, while the static planner schedules tasks at their latest feasible start time
+in order to preserve reserved resources for future workflow arrivals, at runtime some
+reserved resources may become idle earlier than expected. In such situations, the
+dynamic scheduler may execute tasks earlier than planned to improve the utilization
+of reserved resources.
+The dynamic scheduler adopts a periodic strategy that divides time into short
+intervals. During each interval, newly available ready tasks are collected, and scheduling decisions are made at the end of the interval. A task becomes ready when the
+execution of all its predecessor tasks has completed. The scheduler maintains a list of
+ready tasks sorted in ascending order of their scheduled start time.
+Algorithm 3 illustrates the dynamic scheduling procedure. The algorithm receives
+the list ReadyT asks and, in the first loop, attempts to schedule tasks whose scheduled
+start times have been reached (lines 3–15). For each such task, the scheduler first calls
+the provisioner module to provision the appropriate container and execute the task
+on its allocated resource (see the next subsection).
+If the allocated resource is a reserved instance, it is possible that sufficient resources
+are not currently available due to runtime variations in task execution times or resource
+availability. In this case, the scheduler invokes the function CheckReserved, which
+searches for another reserved instance with sufficient available resources to execute the
+task (line 5). This function uses the events data structure to determine the current
+availability of reserved instances while considering tasks already scheduled by the
+static planner. For brevity, the implementation details of this function are omitted.
+If no suitable reserved instance is found, the scheduler allocates an on-demand
+instance for the task (line 7). The provisioner module is then invoked again to provision
+the corresponding container and execute the task. Finally, the events structure of the
+15
+
+Algorithm 3 Dynamic Scheduling Algorithm
+procedure DynamicScheduler(ReadyT asks)
+CT ← current system time
+3:
+for each tji ∈ ReadyT asks such that sstji ≤ CT do
+4:
+if P rovisioner(tji , arij ) = false then
+5:
+arij ← CheckReserved(tji , CT )
+6:
+if arij = ∅ then
+7:
+arij ← o0
+8:
+end if
+9:
+P rovisioner(tji , arij )
+10:
+end if
+11:
+if arij is a reserved instance then
+12:
+Update events for resource arij
+13:
+end if
+14:
+Remove tji from ReadyT asks
+15:
+end for
+1:
+
+2:
+
+while ReadyT asks ̸= ∅ do
+tji ← next task in ReadyT asks
+18:
+new res ← CheckReserved(tji , CT )
+19:
+if new res ̸= ∅ then
+20:
+arij ← new res
+21:
+P rovisioner(tji , arij )
+22:
+Update events for resource arij
+23:
+Remove tji from ReadyT asks
+24:
+else
+25:
+break
+26:
+end if
+27:
+end while
+28: end procedure
+
+16:
+
+17:
+
+selected resource is updated (for reserved instances), and the task is removed from the
+ready task list.
+The second loop (lines 16–27) attempts to execute tasks whose scheduled start
+times lie in the future earlier than planned, provided that reserved resources are currently available. The function CheckReserved is again used to determine whether a
+reserved instance has sufficient resources to execute the task. If such a resource exists,
+the provisioner module is called to start the task immediately. Tasks are examined in
+the order of their scheduled start time until a task is encountered that cannot currently
+be scheduled on any reserved instance (line 25).
+16
+
+4.4 Provisioning Module
+The provisioning module acts as the execution interface between the broker’s scheduling decisions and the underlying cloud infrastructure. Its primary responsibility is
+to provision containers and execute tasks on the selected resources. For reserved
+instances, the module relies on a container management service to launch containers
+on VMs. In contrast, when tasks are assigned to on-demand resources, a serverless
+container service such as AWS Fargate provided by Amazon Web Services is used to
+directly provision containers without requiring explicit management of the underlying
+VMs.
+In addition to initiating task execution, the provisioning module also manages task
+completion events. When a task finishes, the module releases the allocated container,
+updates the resource state by removing the corresponding events from the assigned
+reserved resource (if applicable), and inserts the task’s ready successors into the list
+of ready tasks maintained by the dynamic scheduler.
+
+5 Experiments
+To evaluate the effectiveness of the proposed brokerage system, we conducted a
+comparative analysis using simulation. In the following subsections, we describe the
+experimental setup and analyze the results obtained from the simulations.
+
+5.1 Experimental Setup
+We utilized CloudSim [33] to simulate the cloud environment and the execution of
+workflows. The reserved resources are modeled as 50 instances of AWS hpc7a.96xlarge
+[29], each providing 192 physical CPU cores and 768 GiB of memory. On-demand
+resources are modeled as AWS Fargate Linux/X86 containers [30], whose resource
+specifications match the requirements of the tasks executed on them.
+The workflow traces are generated using five real-world scientific workflows, namely
+Montage, CyberShake, LIGO, Epigenomics, and SIPHT [34]. These workflows are
+produced using the Pegasus Workflow Generator with sizes ranging from 50 to 1000
+tasks in order to ensure both application and size diversity. The runtime provided
+by Pegasus for each task is considered as its expected execution time µ, while the
+standard deviation is set to σ = 0.1µ to model runtime variability.
+Since no previous work addresses workflow scheduling using a combination of
+reserved and on-demand instances, we compare our approach with two representative
+cloud workflow brokers. The first is NOSF [8], which operates solely on on-demand
+resources. The second is CEWB [22], which employs a combination of spot and ondemand instances. To ensure a fair comparison, identical assumptions are applied
+across all algorithms, including second-level billing granularity. The primary evaluation metric is the total monetary cost, while the deadline success rate and resource
+utilization are considered as secondary metrics.
+To evaluate the performance of the competing algorithms under diverse conditions,
+we consider three workload scenarios. In each scenario, workflow arrivals are modeled
+as a Poisson process with different arrival rates λ. Specifically, we define: light load
+17
+
+(a) Total Cost
+
+(b) Success Rate
+
+(c) Resource Utilization
+
+Fig. 2: Performance results of the evaluated methods under the low-load scenario.
+
+with 50 workflows and λ = 2 per minute, moderate load with 100 workflows and λ = 3
+per minute, and heavy load with 200 workflows and λ = 6 per minute.
+For each scenario, two levels of deadline tightness are considered relative to the
+critical path length of each workflow: tight deadlines, set to 1.2 times the critical path
+length, and loose deadlines, set to 3 times the critical path length. The results for
+these scenarios are presented in the following section.
+
+5.2 Results of Experiments
+This section analyzes the behavior of the evaluated algorithms across the different experimental scenarios. All reported results are averaged over 10 independent
+simulation runs to mitigate the impact of stochastic variability in the environment.
+
+5.2.1 Low load scenario
+Figure 2 shows the performance of the evaluated methods under the low-load scenario. In this setting, the workload nearly saturates the reserved capacity but does
+not require CBMW to provision on-demand instances. As illustrated in Figure 2c,
+CBMW achieves a utilization of approximately 85%, indicating efficient use of its
+18
+
+reserved resources. NOSF also exhibits high utilization due to its reliance on elastically scalable on-demand resources. In contrast, CEWB shows lower utilization, even
+below that of CBMW. This behavior is attributed to its design: CEWB intentionally
+maintains a subset of spot instances idle within each reliability class to hedge against
+future demand and mitigate interruption risk. While this improves flexibility and fault
+tolerance, it reduces overall utilization.
+Figure 2a shows that, in this scenario, the total cost of CBMW is lower than
+that of NOSF. This is expected, as reserved instances have a lower unit cost than
+on-demand instances, and CBMW operates primarily within its reserved capacity.
+CEWB, however, achieves the lowest total cost among all methods, driven by the significant discount of spot instances (typically 60%–90%) compared to reserved instances
+(around 40%).
+This cost advantage, however, comes at the expense of reliability. As shown in
+Figure 2b, CEWB exhibits a lower deadline success rate, whereas CBMW achieves
+the highest. In particular, under tight deadlines, CEWB’s success rate drops to
+approximately 92%, reflecting the volatility and potential interruptions of spot
+instances. In contrast, CBMW maintains a high success rate by leveraging reliable
+reserved resources and avoiding the provisioning delays associated with on-demand
+and spot instances, which can negatively impact deadline satisfaction in time-sensitive
+workflows.
+
+5.2.2 Moderate load scenario
+Under the moderate-load scenario, the workload exceeds the capacity of the reserved
+instances, requiring CBMW to provision additional on-demand instances to meet
+demand. As shown in Figure 3c, CBMW achieves a utilization exceeding 90%, indicating that reserved resources are effectively utilized before resorting to on-demand
+provisioning.
+In terms of cost, Figure 3a shows that CBMW significantly reduces total cost
+compared to NOSF. This improvement is attributed to executing a large portion of
+the workload on reserved instances, which offer a lower unit price than on-demand
+resources. Although CEWB still achieves the lowest cost due to its use of heavily
+discounted spot instances, the cost gap between CEWB and CBMW becomes relatively
+small in this regime.
+Regarding deadline satisfaction, Figure 3b highlights clear differences among the
+algorithms. CEWB experiences a decline in success rate due to the volatility of spot
+instances. While its performance remains relatively high under loose deadlines, the
+success rate drops to approximately 86% under tight deadlines. NOSF achieves a
+moderate success rate of around 92%, benefiting from the reliability of on-demand
+instances but affected by their provisioning latency.
+CBMW attains the highest deadline success rate in both configurations (approximately 97%). This result demonstrates the advantage of maintaining a stable pool
+of reserved instances, which minimizes provisioning delays and reduces the risk of
+interruptions.
+19
+
+(a) Total Cost
+
+(b) Success Rate
+
+(c) Resource Utilization
+
+Fig. 3: Performance results of the evaluated methods under the moderate-load scenario.
+
+5.2.3 Heavy load scenario
+In the heavy-load scenario, the demand for computational resources significantly
+exceeds the capacity of the reserved instance pool. As a result, CBMW must provision
+a substantial number of on-demand instances to accommodate the incoming workflows.
+This behavior is reflected in Figure 4c, where the utilization of the reserved resources
+remains high while additional demand is handled by elastic on-demand provisioning.
+From a cost perspective, CBMW exhibits a noticeable increase in cost under tight
+deadline settings due to its reliance on on-demand instances to ensure deadline satisfaction. In this regime, CEWB achieves the lowest cost—approximately 50% of CBMW’s
+total cost (see Figure 4a)—by leveraging heavily discounted spot instances. However, under loose deadline conditions, CBMW performs more efficiently by exploiting
+reserved resources, resulting in a significant cost reduction. Overall, CBMW consistently outperforms NOSF in terms of cost, particularly under loose deadlines where the
+effective utilization of reserved capacity minimizes reliance on expensive on-demand
+provisioning.
+20
+
+(a) Total Cost
+
+(b) Success Rate
+
+(c) Resource Utilization
+
+Fig. 4: Performance results of the evaluated methods under the high-load scenario.
+
+However, this cost advantage comes at the expense of reliability. As illustrated in
+Figure 4b, CEWB experiences a substantial decline in deadline success rate (around
+81%), primarily due to the interruption-prone nature of spot instances under heavy
+demand. In contrast, CBMW maintains a high success rate of approximately 95%,
+demonstrating its robustness in meeting workflow deadlines even under extreme
+workload conditions.
+These results highlight an important trade-off between cost efficiency and reliability. While spot-based approaches can minimize monetary cost, the use of stable
+reserved resources provides significantly stronger guarantees for deadline-sensitive
+workflows.
+
+5.2.4 Overall discussion
+Overall, the experimental results demonstrate clear trade-offs among the evaluated
+brokerage strategies. Algorithms that rely heavily on on-demand or spot instances
+benefit from high elasticity and potentially lower monetary cost, but they may suffer
+from higher provisioning latency or resource interruptions.
+CBMW adopts a hybrid strategy centered around reserved resources, which
+enables stable execution and predictable performance. Under moderate and heavy load
+21
+
+regimes, CBMW achieves a favorable balance between cost efficiency and reliability
+by maximizing the utilization of its reserved capacity before resorting to on-demand
+provisioning.
+In contrast, CEWB consistently achieves the lowest cost due to its aggressive use
+of spot instances, but its reliability decreases in scenarios with tight deadlines or high
+workload intensity. NOSF, which relies solely on on-demand instances, provides stable
+execution but incurs higher costs because it cannot benefit from the discounted pricing
+of reserved or spot resources.
+These observations indicate that CBMW is particularly suitable for workflow-based
+applications where deadline satisfaction and execution reliability are critical, while still
+maintaining competitive cost efficiency compared with purely on-demand solutions.
+
+6 Conclusion and Future Work
+In this paper, we presented CBMW, a cloud brokerage mechanism for executing multiple scientific workflows in WaaS environments. The proposed approach combines
+a hybrid resource provisioning model with a hybrid scheduling strategy. Specifically,
+CBMW integrates reserved and on-demand instances to balance cost efficiency and
+execution flexibility. Reserved resources are prioritized to exploit their lower cost,
+while on-demand instances are dynamically provisioned when the workload exceeds
+the reserved capacity.
+To effectively utilize these heterogeneous resources, CBMW employs a hybrid
+scheduling mechanism that integrates static planning and dynamic runtime scheduling. The static planner constructs an initial deadline-aware execution plan that assigns
+tasks to reserved resources at their latest feasible start times, while tasks that cannot
+be accommodated are tentatively assigned to on-demand containers. During execution, a dynamic scheduler manages ready tasks according to the current system state
+and adapts scheduling decisions when resource availability changes.
+Extensive simulation experiments using several real scientific workflow benchmarks
+demonstrate that CBMW achieves a favorable trade-off between cost and deadline
+satisfaction. By maximizing the utilization of reserved resources while maintaining the
+elasticity of on-demand provisioning, the proposed approach significantly reduces execution cost compared with purely on-demand brokerage strategies while maintaining
+high deadline success rates.
+Future work will focus on improving the resource provisioning strategy of the
+proposed brokerage framework. One promising direction is to develop predictive mechanisms for estimating the optimal amount of reserved capacity based on historical
+workload patterns and expected workflow arrival rates. Such predictive provisioning
+could help determine an appropriate baseline of reserved instances that maximizes
+utilization while minimizing unnecessary reservation costs. Another direction is to
+extend the brokerage model by incorporating spot instances in addition to reserved
+and on-demand resources. While spot instances offer significant cost reductions, their
+interruption-prone nature introduces reliability challenges. Therefore, future research
+will investigate reliability-aware scheduling strategies that selectively utilize spot
+22
+
+resources without compromising workflow deadline guarantees or overall execution
+stability.
+
+References
+[1] Silva, R.F., Casanova, H., Chard, K., Altintas, I., Badia, R.M., Balis, B., Coleman, T., Coppens, F., Di Natale, F., Enders, B., Fahringer, T., Filgueira, R.,
+Fursin, G., Garijo, D., Goble, C., Howell, D., Jha, S., Katz, D.S., Laney, D., Leser,
+U., Malawski, M., Mehta, K., Pottier, L., Ozik, J., Peterson, J.L., Ramakrishnan,
+L., Soiland-Reyes, S., Thain, D., Wolf, M.: A Community Roadmap for Scientific
+Workflows Research and Development . In: 2021 IEEE Workshop on Workflows
+in Support of Large-Scale Science (WORKS), pp. 81–90. IEEE Computer Society,
+Los Alamitos, CA, USA (2021). https://doi.org/10.1109/WORKS54523.2021.
+00016 . https://doi.ieeecomputersociety.org/10.1109/WORKS54523.2021.00016
+[2] Chen, G., Qi, J., Hua, J., Sun, Y., Dong, Z., Sun, Y.: Afas: Arbitrary-freedom
+adaptive scheduling for multiworkflow cloud computing via deep reinforcement
+learning. IEEE Transactions on Network and Service Management 22(4), 3601–
+3616 (2025) https://doi.org/10.1109/TNSM.2025.3566771
+[3] Bevara, P.K., Singh, R.S., Medera, R., Prasad Chelluri, V.V.D.: Optimizing scientific workflow scheduling in cloud environments: a hybrid pso-ewwo. Cluster
+Computing 28(8), 508 (2025) https://doi.org/10.1007/s10586-025-05168-5
+[4] Namdev, K., Rajak, R.: Enhancing heuristic workflow scheduling algorithms using
+q-learning technique in cloud computing. Cluster Computing 28(6), 409 (2025)
+https://doi.org/10.1007/s10586-025-05217-z
+[5] Khademi Dehnavi, M., Broumandnia, A., Hosseini Shirvani, M., Ahanian, I.: A
+hybrid genetic-based task scheduling algorithm for cost-efficient workflow execution in heterogeneous cloud computing environment. Cluster Computing 27(8),
+10833–10858 (2024) https://doi.org/10.1007/s10586-024-04468-6
+[6] Abrishami, S., Zandi, F.M., Nourbakhsh, A.: Workflow as a Service Broker in
+Cloud Environment: A Systematic Literature Review (2025). https://arxiv.org/
+abs/2501.12672
+[7] Hilman, M.H., Rodriguez, M.A., Buyya, R.: Multiple workflows scheduling in
+multi-tenant distributed systems: A taxonomy and future directions. ACM
+Comput. Surv. 53(1) (2020) https://doi.org/10.1145/3368036
+[8] Liu, J., Ren, J., Dai, W., Zhang, D., Zhou, P., Zhang, Y., Min, G., Najjari, N.:
+Online multi-workflow scheduling under uncertain task execution time in iaas
+clouds. IEEE Transactions on Cloud Computing 9(3), 1180–1194 (2021) https:
+//doi.org/10.1109/TCC.2019.2906300
+[9] Chen, H., Zhu, X., Liu, G., Pedrycz, W.: Uncertainty-aware online scheduling for
+23
+
+real-time workflows in cloud service environment. IEEE Transactions on Services
+Computing 14(4), 1167–1178 (2021) https://doi.org/10.1109/TSC.2018.2866421
+[10] Ye, L., Xia, Y., Yang, L., Zhan, Y.: Dynamic scheduling stochastic multiworkflows
+with deadline constraints in clouds. IEEE Transactions on Automation Science
+and Engineering 20(4), 2594–2606 (2023) https://doi.org/10.1109/TASE.2022.
+3204313
+[11] Li, H., Wang, D., Zhou, M., Fan, Y., Xia, Y.: Multi-swarm co-evolution based
+hybrid intelligent optimization for bi-objective multi-workflow scheduling in the
+cloud. IEEE Transactions on Parallel and Distributed Systems 33(9), 2183–2197
+(2022) https://doi.org/10.1109/TPDS.2021.3122428
+[12] Li, H., Huang, J., Wang, B., Fan, Y.: Weighted double deep q-network based reinforcement learning for bi-objective multi-workflow scheduling in the cloud. Cluster
+Computing 25(2), 751–768 (2022) https://doi.org/10.1007/s10586-021-03454-6
+[13] Alam, M., Shahid, M., Mustajab, S.: Security prioritized multiple workflow allocation model under precedence constraints in cloud computing environment. Cluster
+Computing 27(1), 341–376 (2024) https://doi.org/10.1007/s10586-022-03819-5
+[14] Rodriguez, M.A., Buyya, R.: Scheduling dynamic workloads in multi-tenant scientific workflow as a service platforms. Future Generation Computer Systems 79,
+739–750 (2018) https://doi.org/10.1016/j.future.2017.05.009
+[15] Tarafdar, A., Karmakar, K., Das, R.K., Khatua, S.: Multi-criteria scheduling of
+scientific workflows in the workflow as a service platform. Computers and Electrical Engineering 105, 108458 (2023) https://doi.org/10.1016/j.compeleceng.2022.
+108458
+[16] Karmakar, K., Tarafdar, A., Das, R.K., Khatua, S.: Cost-efficient workflow as
+a service using containers. Journal of Grid Computing 22(1), 40 (2024) https:
+//doi.org/10.1007/s10723-024-09745-7
+[17] Lin, L., Pan, L., Liu, S.: Methods for improving the availability of spot instances:
+A survey. Computers in Industry 141, 103718 (2022) https://doi.org/10.1016/j.
+compind.2022.103718
+[18] Zolfaghari, B., Abrishami, S.: A multi-class workflow ensemble management system using on-demand and spot instances in cloud. Future Generation Computer
+Systems 137, 97–110 (2022) https://doi.org/10.1016/j.future.2022.07.007
+[19] Lin, L., Pan, L., Liu, S.: Spotdag: An rl-based algorithm for dag workflow
+scheduling in heterogeneous cloud environments. IEEE Transactions on Services
+Computing 17(5), 2904–2917 (2024) https://doi.org/10.1109/TSC.2024.3422828
+
+24
+
+[20] Zhou, A.C., He, B., Liu, C.: Monetary cost optimizations for hosting workflowas-a-service in iaas clouds. IEEE Transactions on Cloud Computing 4(1), 34–48
+(2016) https://doi.org/10.1109/TCC.2015.2404807
+[21] Chen, L., Liu, G., Zhang, J., Zhang, X.: Scheduling ensemble workflows on hybrid
+resources in iaas clouds. Computing 107(1), 22 (2024) https://doi.org/10.1007/
+s00607-024-01386-8
+[22] Taghavi, B., Zolfaghari, B., Abrishami, S.: A cost-efficient workflow as a service
+broker using on-demand and spot instances. Journal of Grid Computing 21(40)
+(2023) https://doi.org/10.1007/s10723-023-09676-9
+[23] Taheri, H., Abrishami, S., Naghibzadeh, M.: A cloud broker for executing
+deadline-constrained periodic scientific workflows. IEEE Transactions on Services
+Computing 16(5), 3089–3100 (2023) https://doi.org/10.1109/TSC.2023.3284492
+[24] Zhu, J., Li, X., Ruiz, R., Li, W., Huang, H., Zomaya, A.Y.: Scheduling periodical
+multi-stage jobs with fuzziness to elastic cloud resources. IEEE Transactions on
+Parallel and Distributed Systems 31(12), 2819–2833 (2020) https://doi.org/10.
+1109/TPDS.2020.3004134
+[25] Taghinezhad-Niar, A., Pashazadeh, S., Taheri, J.: Qos-aware online scheduling of
+multiple workflows under task execution time uncertainty in clouds. Cluster Computing 25(6), 3767–3784 (2022) https://doi.org/10.1007/s10586-022-03600-8
+[26] Li, H., Tian, L., Xu, G., Cañizares Abreu, J.R., Huang, S., Chai, S., Xia, Y.:
+Co-evolutionary and elite learning-based bi-objective poor and rich optimization algorithm for scheduling multiple workflows in the cloud. Future Generation
+Computer Systems 152, 99–111 (2024) https://doi.org/10.1016/j.future.2023.10.
+015
+[27] Pan, J., Wei, Y.: A deep reinforcement learning-based scheduling framework for
+real-time workflows in the cloud environment. Expert Systems with Applications
+255, 124845 (2024) https://doi.org/10.1016/j.eswa.2024.124845
+[28] Zhang, J., Cheng, L., Liu, C., Zhao, Z., Mao, Y.: Cost-aware scheduling systems
+for real-time workflows in cloud: An approach based on genetic algorithm and deep
+reinforcement learning. Expert Systems with Applications 234, 120972 (2023)
+https://doi.org/10.1016/j.eswa.2023.120972
+[29] Amazon: HPC optimized Amazon EC2 instance types. https://aws.amazon.com/
+ec2/instance-types/hpc-optimized/. Accessed: 2025-12-15 (2025)
+[30] Amazon: AWS Fargate. https://aws.amazon.com/fargate/. Accessed: 2025-12-15
+(2025)
+[31] Beldiceanu, N., Carlsson, M.: A new multi-resource cumulatives constraint
+
+25
+
+with negative heights. In: Van Hentenryck, P. (ed.) Principles and Practice of
+Constraint Programming - CP 2002, pp. 63–79. Springer, Berlin, Heidelberg
+(2002)
+[32] Letort, A., Beldiceanu, N., Carlsson, M.: A scalable sweep algorithm for the
+cumulative constraint. In: Proceedings of the 18th International Conference on
+Principles and Practice of Constraint Programming - Volume 7514, pp. 439–454.
+Springer, Berlin, Heidelberg (2012)
+[33] Andreoli, R., Zhao, J., Cucinotta, T., Buyya, R.: Cloudsim 7g: An integrated
+toolkit for modeling and simulation of future generation cloud computing environments. Software: Practice and Experience 55(6), 1041–1058 (2025) https://doi.
+org/10.1002/spe.3413 https://onlinelibrary.wiley.com/doi/pdf/10.1002/spe.3413
+[34] Juve, G., Chervenak, A., Deelman, E., Bharathi, S., Mehta, G., Vahi, K.:
+Characterizing and profiling scientific workflows. Future Generation Computer
+Systems 29(3), 682–692 (2013) https://doi.org/10.1016/j.future.2012.08.015 .
+Special Section: Recent Developments in High Performance Computing and
+Security
+
+26
+
+

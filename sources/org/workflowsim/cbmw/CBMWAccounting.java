@@ -112,8 +112,13 @@ public class CBMWAccounting {
     }
 
     public void markTaskProvisioningOrdered(Cloudlet cl, double orderTime,
-                                            double readyTime) {
-        TaskExecutionRecord record = taskRecords.get(primaryTaskId(cl));
+                                             double readyTime) {
+        markTaskProvisioningOrdered(primaryTaskId(cl), orderTime, readyTime);
+    }
+
+    public void markTaskProvisioningOrdered(int taskId, double orderTime,
+                                             double readyTime) {
+        TaskExecutionRecord record = taskRecords.get(taskId);
         if (record != null) record.markProvisioningOrdered(orderTime, readyTime);
     }
 

@@ -303,6 +303,10 @@ public class HybridVmPool {
         return activeOnDemandIds.size();
     }
 
+    public boolean isOnDemandContainerActive(int vmId) {
+        return activeOnDemandIds.contains(vmId);
+    }
+
     public int getActiveOnDemandCores() {
         int total = 0;
         for (Integer vmId : activeOnDemandIds) {
@@ -407,6 +411,19 @@ public class HybridVmPool {
             }
             cursor = segmentEnd;
         }
+    }
+
+    /** Earliest feasible slot that also completes by latestFinish. */
+    public double findEarliestFeasibleSlot(int vmId, double earliest,
+                                           double latestFinish, double duration,
+                                           int cores, int ramMb) {
+        if (!Double.isFinite(latestFinish) || latestFinish < earliest) {
+            return Double.MAX_VALUE;
+        }
+        double start = findEarliestFeasibleSlot(
+                vmId, earliest, duration, cores, ramMb);
+        return Double.isFinite(start) && start + duration <= latestFinish + 1e-9
+                ? start : Double.MAX_VALUE;
     }
 
     private void updateProfile(int vmId, double start, double end,
