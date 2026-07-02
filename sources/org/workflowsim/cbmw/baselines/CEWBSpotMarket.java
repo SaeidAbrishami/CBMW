@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import org.workflowsim.cbmw.HybridVmPool;
 
 /** Configurable spot instance classes, prices, capacity, and reliability. */
 final class CEWBSpotMarket {
@@ -114,7 +115,8 @@ final class CEWBSpotMarket {
             double price = currentPrice(type);
             if (price > onDemandPricePerSecond * MAX_BID_TO_ON_DEMAND_RATIO) continue;
             double predictedExecution = estimatedRuntime * 1000.0 / type.mips;
-            double execution = cloudletLength / type.mips;
+            double execution = HybridVmPool.executionTimeSeconds(
+                    cloudletLength, taskCores, type.mips);
             double successProbability = Math.exp(
                     -predictedExecution / type.meanTimeBetweenInterruptions);
             if (successProbability < MIN_SUCCESS_PROBABILITY) continue;

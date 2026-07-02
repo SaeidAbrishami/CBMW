@@ -231,7 +231,10 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         } else {
             onTaskComplete(cl);
             WorkflowRecord wfrRes = activeWorkflows.get(wfId);
-            if (wfrRes != null) wfrRes.addReservedCpuTime(cl.getActualCPUTime());
+            if (wfrRes != null) {
+                wfrRes.addReservedCpuTime(cl.getActualCPUTime()
+                        * wfrRes.getTaskCores(primaryTaskId(job)));
+            }
             CBMWLogger.logf("TASK-COMPLETE",
                     "task=%d wf=%d vm=%d(reserved) actualCPU=%.4fs",
                     cl.getCloudletId(), wfId, cl.getVmId(), cl.getActualCPUTime());
@@ -355,7 +358,9 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         double now = CloudSim.clock();
         double queueDelay = Parameters.getOverheadParams().getQueueDelay() != null
                 ? Parameters.getOverheadParams().getQueueDelay(cl) : 0.0;
-        double executionTime = cl.getCloudletLength() / HybridVmPool.RESERVED_MIPS;
+        int taskCores = vmPool.getTaskCores(primaryTaskId((Job) cl));
+        double executionTime = HybridVmPool.executionTimeSeconds(
+                cl.getCloudletLength(), taskCores, HybridVmPool.RESERVED_MIPS);
         try {
             cl.setResourceParameter(getId(), vmPool.getOnDemandPricePerSecond(
                     primaryTaskId((Job) cl)));
@@ -525,7 +530,10 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
 
     private void captureEstimatedRuntimes(WorkflowRecord wfr, List<Task> tasks) {
         for (Task task : tasks) {
-            double mean = task.getCloudletLength() / HybridVmPool.RESERVED_MIPS;
+            double mean = HybridVmPool.executionTimeSeconds(
+                    task.getCloudletLength(),
+                    wfr.getTaskCores(task.getCloudletId()),
+                    HybridVmPool.RESERVED_MIPS);
             double estimated = estimatePlanningRuntime(mean);
             wfr.setNominalExecTime(task.getCloudletId(), mean);
             wfr.setEstimatedExecTime(task.getCloudletId(), estimated);

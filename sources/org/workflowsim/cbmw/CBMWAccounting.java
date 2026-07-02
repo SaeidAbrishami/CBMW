@@ -34,7 +34,9 @@ public class CBMWAccounting {
                     PaperRuntimeModel.conservativeEstimate(nominalRuntime);
             double planningRuntime = wfr.getEstimatedExecTime(taskId);
             double actualRuntime = actualRuntimeAvailable
-                    ? task.getCloudletLength() / HybridVmPool.RESERVED_MIPS
+                    ? HybridVmPool.executionTimeSeconds(
+                            task.getCloudletLength(), wfr.getTaskCores(taskId),
+                            HybridVmPool.RESERVED_MIPS)
                     : Double.NaN;
             double est = wfr.hasEST(taskId) ? wfr.getEST(taskId) : Double.NaN;
             double eft = wfr.hasEFT(taskId) ? wfr.getEFT(taskId) : Double.NaN;

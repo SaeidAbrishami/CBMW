@@ -104,7 +104,8 @@ public class WorkflowLoader {
             String id           = job.getAttribute("id");
             String runtimeAttr  = job.getAttribute("runtime");
             // Mirror WorkflowParser's 100 MI floor (100 / 1000 MIPS = 0.1s)
-            double runtime = runtimeAttr.isEmpty() ? 0.1 : Math.max(Double.parseDouble(runtimeAttr), 0.1);
+            double runtime = runtimeAttr.isEmpty()
+                    ? 0.1 : Math.max(Double.parseDouble(runtimeAttr), 0.1);
             runtimes.put(id, runtime);
         }
 

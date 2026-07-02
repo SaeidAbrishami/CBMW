@@ -113,7 +113,9 @@ public class WorkflowRecord {
     }
     public double getEstimatedExecTime(Task task) {
         return estimatedExecTimes.getOrDefault(task.getCloudletId(),
-                task.getCloudletLength() / HybridVmPool.RESERVED_MIPS);
+                HybridVmPool.executionTimeSeconds(
+                        task.getCloudletLength(), getTaskCores(task.getCloudletId()),
+                        HybridVmPool.RESERVED_MIPS));
     }
     public double getEstimatedExecTime(int taskId) {
         return estimatedExecTimes.getOrDefault(taskId, 0.0);

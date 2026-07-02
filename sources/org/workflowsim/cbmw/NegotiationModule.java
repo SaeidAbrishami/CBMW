@@ -156,7 +156,9 @@ public class NegotiationModule {
         if (memo.containsKey(t.getCloudletId())) {
             return memo.get(t.getCloudletId());
         }
-        double execTime = t.getCloudletLength() / HybridVmPool.RESERVED_MIPS;
+        double execTime = HybridVmPool.executionTimeSeconds(
+                t.getCloudletLength(), t.getNumberOfPes(),
+                HybridVmPool.RESERVED_MIPS);
         double maxChild = 0.0;
         for (Task child : t.getChildList()) {
             double childCP = remainingCP(child, memo);

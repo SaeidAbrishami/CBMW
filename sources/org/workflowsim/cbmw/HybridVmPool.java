@@ -109,6 +109,23 @@ public class HybridVmPool {
                 + (ramMb / 1024.0) * ON_DEMAND_MEMORY_PER_GB_SEC;
     }
 
+    /**
+     * CloudSim rigid-task wall time. Cloudlet length is work per PE, so both
+     * total work and total MIPS scale with requested cores and wall time stays
+     * equal to length-per-PE divided by MIPS-per-core.
+     */
+    public static double executionTimeSeconds(long cloudletLength,
+                                              int cores,
+                                              double mipsPerCore) {
+        int effectiveCores = Math.max(1, cores);
+        if (!Double.isFinite(mipsPerCore) || mipsPerCore <= 0.0) {
+            throw new IllegalArgumentException("mipsPerCore must be finite and positive");
+        }
+        double totalWork = (double) cloudletLength * effectiveCores;
+        double totalMips = mipsPerCore * effectiveCores;
+        return totalWork / totalMips;
+    }
+
     public CondorVM getVmById(int id) {
         return vmsById.get(id);
     }

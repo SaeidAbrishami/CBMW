@@ -216,6 +216,9 @@ test_workflows/
 - `applyPerturbedRuntimes()` replaces each task runtime from the matching
   `.txt` file.
 - `cloudletLength = runtime_seconds * 1000`.
+- Tasks are rigid: the DAX runtime is their wall-clock duration at the requested
+  core count. Cores affect capacity and price, not automatic runtime speedup;
+  reserved and logical on-demand execution use the same rule.
 
 ### VM Model
 
