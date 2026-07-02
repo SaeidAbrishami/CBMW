@@ -45,8 +45,6 @@ public class HybridVmPool {
             System.getProperty("cbmw.ondemand.delay.sec", "120.0"));
     public static final double SCHEDULING_PERIOD = Double.parseDouble(
             System.getProperty("cbmw.scheduling.period.sec", "5.0"));
-    public static final double PROVISIONER_PERIOD = Double.parseDouble(
-            System.getProperty("cbmw.provisioner.period.sec", "15.0"));
     public static final double ON_DEMAND_MIN_BILLING_SECONDS = Double.parseDouble(
             System.getProperty("cbmw.ondemand.min.billing.sec", "60.0"));
 

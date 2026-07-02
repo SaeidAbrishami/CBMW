@@ -660,10 +660,9 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         return vm;
     }
 
-    /** Ready time after OPD, aligned to the configured provisioner period. */
+    /** Paper model: a container is ready exactly OPD seconds after ordering. */
     protected double projectedOnDemandReadyTime(double orderTime) {
-        return nextProvisionerTick(orderTime
-                + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
+        return orderTime + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY;
     }
 
     /** Allows baselines without CBMW admission control to accept every arrival. */
@@ -684,12 +683,6 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
             return false;
         }
         return true;
-    }
-
-    protected double nextProvisionerTick(double time) {
-        double period = HybridVmPool.PROVISIONER_PERIOD;
-        if (period <= 0.0) return time;
-        return Math.ceil((time - EPS) / period) * period;
     }
 
     private List<Job> wrapTasksAsJobs(List<Task> tasks, WorkflowRecord wfr) {

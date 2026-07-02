@@ -242,8 +242,6 @@ public class CBMWDetailedResultExporter {
             writer.write(String.format(Locale.US,
                     "Scheduling Period: %.1f seconds%n", HybridVmPool.SCHEDULING_PERIOD));
             writer.write(String.format(Locale.US,
-                    "Provisioner Period: %.1f seconds%n", HybridVmPool.PROVISIONER_PERIOD));
-            writer.write(String.format(Locale.US,
                     "On-demand instances launched: %d%n", onDemand.size()));
             writer.write(String.format(Locale.US,
                     "Time For Start First Workflow to End Last Workflow: %.1f seconds%n",

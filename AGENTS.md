@@ -234,7 +234,6 @@ Current configurable defaults in `HybridVmPool`:
 | `cbmw.ondemand.memory.per.gb.sec` | 0.0 |
 | `cbmw.ondemand.delay.sec` | 120.0 |
 | `cbmw.scheduling.period.sec` | 5.0 |
-| `cbmw.provisioner.period.sec` | 15.0 |
 | `cbmw.ondemand.min.billing.sec` | 60.0 |
 
 Reserved cost is fixed by makespan. On-demand cost is based on instance uptime.
