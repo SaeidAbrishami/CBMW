@@ -118,6 +118,11 @@ Main outputs:
 - `Output/comparison/new_experiment_moderate.png`
 - `Output/comparison/new_experiment_heavy.png`
 
+Scenario CSVs distinguish admission from execution success: `acceptanceRate`
+is accepted/total, the legacy `deadlineRate` remains met/accepted, and
+`overallSuccessRate` is met/total. They also include rejected workflow counts
+split into negotiation and planning failures.
+
 Detailed `.rar-style` outputs, when `cbmw.export.details=true`:
 
 - `results.txt`

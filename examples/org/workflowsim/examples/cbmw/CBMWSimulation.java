@@ -396,7 +396,10 @@ public class CBMWSimulation {
 
         StringBuilder csv = new StringBuilder();
         csv.append("scenario,load,deadlineClass,algorithm,arrivalScale,tightness,runs,")
-                .append("avgTotal,avgAccepted,avgDeadlineRate,avgOnDemandCost,")
+                .append("avgTotal,avgAccepted,avgRejected,avgMetDeadline,")
+                .append("avgRejectedNegotiation,avgRejectedPlanning,")
+                .append("avgAcceptanceRate,avgDeadlineRate,avgOverallSuccessRate,")
+                .append("avgOnDemandCost,")
                 .append("avgSpotCost,avgEstimatedRawCost,avgOfferedPrice,")
                 .append("avgReservedCost,avgTotalCost,avgMakespan,")
                 .append("avgReservedUtil,avgOnDemandUsageRatio,avgSpotUsageRatio\n");
@@ -470,7 +473,13 @@ public class CBMWSimulation {
         private int runs;
         private double total;
         private double accepted;
+        private double rejected;
+        private double metDeadline;
+        private double rejectedNegotiation;
+        private double rejectedPlanning;
+        private double acceptanceRate;
         private double deadlineRate;
+        private double overallSuccessRate;
         private double onDemandCost;
         private double spotCost;
         private double estimatedRawCost;
@@ -495,7 +504,13 @@ public class CBMWSimulation {
             runs++;
             total += row.total;
             accepted += row.accepted;
+            rejected += row.rejected;
+            metDeadline += row.metDeadline;
+            rejectedNegotiation += row.rejectedNegotiation;
+            rejectedPlanning += row.rejectedPlanning;
+            acceptanceRate += row.acceptanceRate;
             deadlineRate += row.deadlineRate;
+            overallSuccessRate += row.overallSuccessRate;
             onDemandCost += row.onDemandCost;
             spotCost += row.spotCost;
             estimatedRawCost += row.estimatedRawCost;
@@ -510,10 +525,16 @@ public class CBMWSimulation {
 
         String toCsvRow() {
             return String.format(Locale.US,
-                    "%s,%s,%s,%s,%.4f,%.1f,%d,%.2f,%.2f,%.4f,%.4f,%.4f,%.4f,%.4f,%.2f,%.4f,%.2f,%.4f,%.4f,%.4f",
+                    "%s,%s,%s,%s,%.4f,%.1f,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,"
+                            + "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.2f,%.4f,"
+                            + "%.2f,%.4f,%.4f,%.4f",
                     scenario, load, deadlineClass, algorithm, arrivalScale,
                     tightness, runs, total / runs, accepted / runs,
-                    deadlineRate / runs, onDemandCost / runs, spotCost / runs,
+                    rejected / runs, metDeadline / runs,
+                    rejectedNegotiation / runs, rejectedPlanning / runs,
+                    acceptanceRate / runs, deadlineRate / runs,
+                    overallSuccessRate / runs,
+                    onDemandCost / runs, spotCost / runs,
                     estimatedRawCost / runs, offeredPrice / runs,
                     reservedCost / runs, totalCost / runs, makespan / runs,
                     reservedUtil / runs, onDemandUsageRatio / runs,

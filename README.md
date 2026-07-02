@@ -231,8 +231,25 @@ Makespan (sim s)         : 6880.14
 
 Appended to stdout after the console report. Columns:
 ```
-scenario, algorithm, lambda, tightness, run, total, accepted, deadlineRate, onDemandCost, reservedCost, makespan
+scenario,load,deadlineClass,algorithm,arrivalScale,tightness,run,total,
+accepted,rejected,metDeadline,rejectedNegotiation,rejectedPlanning,
+acceptanceRate,deadlineRate,overallSuccessRate,onDemandCost,spotCost,
+estimatedRawCost,offeredPrice,reservedCost,totalCost,makespan,reservedUtil,
+onDemandUsageRatio,spotUsageRatio
 ```
+
+Workflow admission and success are reported with separate denominators:
+
+```text
+acceptanceRate     = accepted / total submitted
+deadlineRate       = met deadline / accepted
+overallSuccessRate = met deadline / total submitted
+rejected           = total submitted - accepted
+```
+
+The CSV also reports `metDeadline`, `rejectedNegotiation`, and
+`rejectedPlanning`. This prevents a high accepted-workflow `deadlineRate` from
+hiding workflows rejected before execution.
 
 ### Detailed event log
 

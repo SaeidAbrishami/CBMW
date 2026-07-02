@@ -22,21 +22,32 @@ public class CBMWResultCollector {
     public void printReport(String scenario) {
         long total = allWorkflows.size();
         long accepted = allWorkflows.stream().filter(WorkflowRecord::isAccepted).count();
+        long rejected = total - accepted;
         long met = allWorkflows.stream()
                 .filter(w -> w.isAccepted() && w.isDeadlineMet()).count();
+        long rejectedNegotiation = rejectionCount("NEGOTIATION_DEADLINE_INFEASIBLE");
+        long rejectedPlanning = rejectionCount("PLANNING_FAILED");
         double odCost = totalOnDemandCost();
         double spotCost = totalSpotCost();
         double rawEstimate = totalEstimatedRawCost();
         double offeredPrice = totalOfferedPrice();
         double makespan = makespan();
         double deadlineRate = accepted == 0 ? 0.0 : (double) met / accepted;
+        double acceptanceRate = total == 0 ? 0.0 : (double) accepted / total;
+        double overallSuccessRate = total == 0 ? 0.0 : (double) met / total;
         double reservedCost = reservedCost();
         double reservedUtil = reservedUtilization();
 
         Log.printLine("\n========== RESULTS: " + scenario + " ==========");
         Log.printLine(String.format("Workflows total/accepted : %d / %d", total, accepted));
-        Log.printLine(String.format("Deadline met rate        : %.3f (%d / %d)",
+        Log.printLine(String.format("Workflows rejected       : %d (negotiation=%d, planning=%d)",
+                rejected, rejectedNegotiation, rejectedPlanning));
+        Log.printLine(String.format("Acceptance rate          : %.3f (%d / %d)",
+                acceptanceRate, accepted, total));
+        Log.printLine(String.format("Accepted deadline rate   : %.3f (%d / %d)",
                 deadlineRate, met, accepted));
+        Log.printLine(String.format("Overall success rate     : %.3f (%d / %d)",
+                overallSuccessRate, met, total));
         Log.printLine(String.format("Reserved VM utilization  : %.1f%%",
                 reservedUtil * 100));
         Log.printLine(String.format("On-demand cost ($)       : %.4f", odCost));
@@ -51,7 +62,9 @@ public class CBMWResultCollector {
 
     public static String csvHeader() {
         return "scenario,load,deadlineClass,algorithm,arrivalScale,tightness,run,"
-                + "total,accepted,deadlineRate,onDemandCost,spotCost,estimatedRawCost,"
+                + "total,accepted,rejected,metDeadline,rejectedNegotiation,"
+                + "rejectedPlanning,acceptanceRate,deadlineRate,overallSuccessRate,"
+                + "onDemandCost,spotCost,estimatedRawCost,"
                 + "offeredPrice,reservedCost,"
                 + "totalCost,makespan,reservedUtil,onDemandUsageRatio,spotUsageRatio";
     }
@@ -74,9 +87,14 @@ public class CBMWResultCollector {
                                              double spotUsageRatio) {
         long total = allWorkflows.size();
         long accepted = allWorkflows.stream().filter(WorkflowRecord::isAccepted).count();
+        long rejected = total - accepted;
         long met = allWorkflows.stream()
                 .filter(w -> w.isAccepted() && w.isDeadlineMet()).count();
         double deadlineRate = accepted == 0 ? 0.0 : (double) met / accepted;
+        double acceptanceRate = total == 0 ? 0.0 : (double) accepted / total;
+        double overallSuccessRate = total == 0 ? 0.0 : (double) met / total;
+        long rejectedNegotiation = rejectionCount("NEGOTIATION_DEADLINE_INFEASIBLE");
+        long rejectedPlanning = rejectionCount("PLANNING_FAILED");
         double odCost = totalOnDemandCost();
         double spotCost = totalSpotCost();
         double rawEstimate = totalEstimatedRawCost();
@@ -85,19 +103,25 @@ public class CBMWResultCollector {
         double totalCost = odCost + spotCost + reservedCost;
 
         return new ScenarioMetrics(scenario, load, deadlineClass, algorithm,
-                arrivalScale, tightness, run, total, accepted, deadlineRate,
+                arrivalScale, tightness, run, total, accepted, rejected, met,
+                rejectedNegotiation, rejectedPlanning, acceptanceRate,
+                deadlineRate, overallSuccessRate,
                 odCost, spotCost, rawEstimate, offeredPrice, reservedCost,
                 totalCost, makespan(),
                 reservedUtilization(), onDemandUsageRatio, spotUsageRatio);
     }
 
     public static String toCsvRow(ScenarioMetrics metrics) {
-        return String.format("%s,%s,%s,%s,%.4f,%.1f,%d,%d,%d,%.4f,%.4f,%.4f,"
-                        + "%.4f,%.4f,%.2f,%.4f,%.2f,%.4f,%.4f,%.4f",
+        return String.format("%s,%s,%s,%s,%.4f,%.1f,%d,%d,%d,%d,%d,%d,%d,"
+                        + "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.2f,%.4f,"
+                        + "%.2f,%.4f,%.4f,%.4f",
                 metrics.scenario, metrics.load, metrics.deadlineClass,
                 metrics.algorithm, metrics.arrivalScale, metrics.tightness,
-                metrics.run, metrics.total, metrics.accepted,
-                metrics.deadlineRate, metrics.onDemandCost, metrics.spotCost,
+                metrics.run, metrics.total, metrics.accepted, metrics.rejected,
+                metrics.metDeadline, metrics.rejectedNegotiation,
+                metrics.rejectedPlanning, metrics.acceptanceRate,
+                metrics.deadlineRate, metrics.overallSuccessRate,
+                metrics.onDemandCost, metrics.spotCost,
                 metrics.estimatedRawCost, metrics.offeredPrice,
                 metrics.reservedCost, metrics.totalCost, metrics.makespan,
                 metrics.reservedUtil, metrics.onDemandUsageRatio,
@@ -122,6 +146,11 @@ public class CBMWResultCollector {
     private double totalOfferedPrice() {
         return allWorkflows.stream()
                 .mapToDouble(WorkflowRecord::getOfferedPrice).sum();
+    }
+
+    private long rejectionCount(String reason) {
+        return allWorkflows.stream()
+                .filter(w -> reason.equals(w.getRejectionReason())).count();
     }
 
     private double reservedCost() {
@@ -159,7 +188,13 @@ public class CBMWResultCollector {
         public final int run;
         public final long total;
         public final long accepted;
+        public final long rejected;
+        public final long metDeadline;
+        public final long rejectedNegotiation;
+        public final long rejectedPlanning;
+        public final double acceptanceRate;
         public final double deadlineRate;
+        public final double overallSuccessRate;
         public final double onDemandCost;
         public final double spotCost;
         public final double estimatedRawCost;
@@ -174,7 +209,10 @@ public class CBMWResultCollector {
         public ScenarioMetrics(String scenario, String load, String deadlineClass,
                                String algorithm, double arrivalScale,
                                double tightness, int run, long total,
-                               long accepted, double deadlineRate,
+                               long accepted, long rejected, long metDeadline,
+                               long rejectedNegotiation, long rejectedPlanning,
+                               double acceptanceRate, double deadlineRate,
+                               double overallSuccessRate,
                                double onDemandCost, double spotCost,
                                double estimatedRawCost, double offeredPrice,
                                double reservedCost, double totalCost,
@@ -190,7 +228,13 @@ public class CBMWResultCollector {
             this.run = run;
             this.total = total;
             this.accepted = accepted;
+            this.rejected = rejected;
+            this.metDeadline = metDeadline;
+            this.rejectedNegotiation = rejectedNegotiation;
+            this.rejectedPlanning = rejectedPlanning;
+            this.acceptanceRate = acceptanceRate;
             this.deadlineRate = deadlineRate;
+            this.overallSuccessRate = overallSuccessRate;
             this.onDemandCost = onDemandCost;
             this.spotCost = spotCost;
             this.estimatedRawCost = estimatedRawCost;

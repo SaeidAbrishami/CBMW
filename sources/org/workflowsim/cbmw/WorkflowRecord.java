@@ -16,6 +16,7 @@ public class WorkflowRecord {
     private double criticalPathLength;
     private double deadline;
     private boolean accepted;
+    private String rejectionReason = "";
     private boolean deadlineFeasible;
     private double estimatedReservedCost;
     private double estimatedOnDemandCost;
@@ -62,6 +63,10 @@ public class WorkflowRecord {
     public void setDeadline(double d) { this.deadline = d; }
     public boolean isAccepted() { return accepted; }
     public void setAccepted(boolean a) { this.accepted = a; }
+    public String getRejectionReason() { return rejectionReason; }
+    public void setRejectionReason(String reason) {
+        this.rejectionReason = reason == null ? "" : reason;
+    }
     public boolean isDeadlineFeasible() { return deadlineFeasible; }
     public void setDeadlineFeasible(boolean feasible) {
         this.deadlineFeasible = feasible;

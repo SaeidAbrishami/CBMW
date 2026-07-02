@@ -433,6 +433,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         allWorkflows.add(wfr);
 
         if (!negotiateWorkflow(wfr)) {
+            wfr.setRejectionReason("NEGOTIATION_DEADLINE_INFEASIBLE");
             accounting.registerWorkflowTasks(wfr, tasks, tightness, false,
                     "REJECTED_NEGOTIATION_DEADLINE_INFEASIBLE");
             Log.printLine(CloudSim.clock() + ": " + getName()
@@ -442,6 +443,8 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         }
 
         if (!planWorkflow(wfr, tasks)) {
+            wfr.setAccepted(false);
+            wfr.setRejectionReason("PLANNING_FAILED");
             accounting.registerWorkflowTasks(wfr, tasks, tightness, false,
                     "REJECTED_PLANNING_FAILED");
             Log.printLine(CloudSim.clock() + ": " + getName()
@@ -449,6 +452,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
             if (engine != null) engine.notifyWorkflowDisposed();
             return;
         }
+        wfr.setRejectionReason("");
         finalizeWorkflowNegotiation(wfr);
         applyPerturbedRuntimes(data.getDaxPath(), tasks);
         accounting.registerWorkflowTasks(wfr, tasks, tightness, true, "ACCEPTED");
