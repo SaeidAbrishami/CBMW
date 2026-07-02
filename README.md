@@ -120,6 +120,22 @@ The external CEWB paper's complete pseudocode and experimental spot constants
 are not available in this repository. These defaults must therefore be cited as
 the simulator's configurable market model, not as values claimed by the paper.
 
+### Baseline Certification Status
+
+NOSF and CEWB cannot currently be certified as exact reproductions of their
+original publications. Their complete source pseudocode, implementation, and
+all experimental constants are not available in this repository.
+
+- **NOSF** is a paper-informed reconstruction of preprocessing, sub-deadlines,
+  EST-priority allocation, uncertainty handling, and completion feedback.
+- **CEWB** implements explicit reliability classes, dynamic spot prices,
+  interruptions, retries, and on-demand fallback using documented configurable
+  simulation assumptions.
+
+Results should label both algorithms as **paper-informed reconstructed
+baselines**, not exact reference implementations. Exact certification requires
+the original algorithms and experiment parameters from their authors.
+
 ---
 
 ## Project Structure
