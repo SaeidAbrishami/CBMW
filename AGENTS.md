@@ -199,6 +199,10 @@ test_workflows/
   `gamma`, and automatically accepts the quote because no user is simulated.
 - Dynamic capacity checks and reserved-slot rebooking use the stored planning
   estimate (`cet` for CBMW), never the sampled actual runtime.
+- Following Algorithm 1 literally, a task that cannot be placed on reserved
+  capacity is assigned to dummy resource `o0` at `SST = LST - OPD`. This value
+  is not clamped to workflow arrival and does not trigger a second static
+  feasibility rejection; Algorithm 3 provisions immediately when SST is past.
 - `applyPerturbedRuntimes()` replaces each task runtime from the matching
   `.txt` file.
 - `cloudletLength = runtime_seconds * 1000`.

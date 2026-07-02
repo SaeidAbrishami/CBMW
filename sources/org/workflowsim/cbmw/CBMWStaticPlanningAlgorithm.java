@@ -15,7 +15,7 @@ import org.workflowsim.planning.BasePlanningAlgorithm;
  *
  * Computes EST/EFT/LFT/LST for each task and assigns tasks to reserved VM slots
  * by searching backward from LFT. Tasks that cannot fit on reserved capacity are
- * assigned to on-demand only when the OPD-adjusted start can still meet LFT.
+ * assigned to the paper's dummy on-demand resource at LST - OPD.
  */
 public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
 
@@ -117,26 +117,18 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
             return;
         }
 
-        double sst = Math.max(wfr.getArrivalTime(),
-                lst - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
-        double expectedStart = Math.max(est,
-                sst + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
-        double expectedFinish = expectedStart + dur;
-        if (expectedFinish > lft + 1e-9) {
-            throw new IllegalStateException(String.format(
-                    "task %d cannot meet lft=%.4f on reserved or on-demand"
-                            + " (est=%.4f expectedOdFinish=%.4f)",
-                    taskId, lft, est, expectedFinish));
-        }
+        // Algorithm 1, lines 8-10: a failed reserved TaskPlanner result is
+        // assigned to dummy on-demand resource o0 at LST - OPD. The paper does
+        // not add a second feasibility rejection or clamp this time to arrival.
+        double sst = lst - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY;
 
         task.setVmId(ON_DEMAND_SENTINEL);
         wfr.setAssignedVm(taskId, ON_DEMAND_SENTINEL);
         wfr.setScheduledStart(taskId, sst);
         CBMWLogger.log("PLAN-ASSIGN-ONDEMAND",
                 String.format("wf=%d task=%d est=%.4f lft=%.4f sst=%.4f"
-                                + " odStart=%.4f dur=%.4f",
-                        wfr.getWorkflowId(), taskId, est, lft, sst,
-                        expectedStart, dur));
+                                + " rule=LST-OPD dur=%.4f",
+                        wfr.getWorkflowId(), taskId, est, lft, sst, dur));
     }
 
     /**

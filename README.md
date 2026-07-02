@@ -19,6 +19,13 @@ CBMW processes each workflow arrival through four sequential modules:
 
 The backward sweep in Module 2 deliberately defers reservations to the latest feasible slot, keeping earlier capacity free for workflows that have not yet arrived.
 
+When reserved `TaskPlanner` placement fails, Algorithm 1 is followed literally:
+the task is assigned to dummy on-demand resource `o0` with
+`SST = LST - on-demand provisioning delay`. Static planning does not add a
+second on-demand feasibility rejection or clamp SST to workflow arrival. If SST
+is already in the past when the workflow arrives, Algorithm 3 orders the
+container immediately; such a task can still miss its deadline.
+
 ### CBMW Price Negotiation
 
 After a deadline-feasible workflow is statically planned, CBMW computes the
