@@ -58,7 +58,7 @@ public class HybridVmPool {
     private int nextOnDemandId = NUM_RESERVED;
 
     // Persistent slot bookings for reserved VMs across all workflow planning calls.
-    // vmId -> list of [start, end, cores, ramMb] intervals
+    // vmId -> list of [start, end, cores, ramMb, taskId] intervals
     private final Map<Integer, List<double[]>> reservedBookings = new HashMap<>();
     // vmId -> interval-start -> [used cores, used RAM] until the next entry.
     private final Map<Integer, TreeMap<Double, int[]>> reservedProfiles = new HashMap<>();
@@ -214,7 +214,7 @@ public class HybridVmPool {
     public void bookSlot(int vmId, int taskId, double start, double end,
                          int cores, int ramMb) {
         List<double[]> list = reservedBookings.computeIfAbsent(vmId, k -> new ArrayList<>());
-        list.add(new double[]{start, end, cores, ramMb});
+        list.add(new double[]{start, end, cores, ramMb, taskId});
         updateProfile(vmId, start, end, cores, ramMb);
         taskBookingIndex.put(taskId, new double[]{vmId, start, end, cores, ramMb});
         CBMWLogger.log("BOOK-SLOT",
@@ -463,8 +463,7 @@ public class HybridVmPool {
         List<double[]> slots = reservedBookings.get(vmId);
         int before = (slots != null) ? slots.size() : 0;
         if (slots != null) {
-            slots.removeIf(s -> Math.abs(s[0] - start) < 1e-6
-                    && Math.abs(s[1] - end) < 1e-6);
+            slots.removeIf(s -> s.length > 4 && (int) s[4] == taskId);
         }
         int after = (slots != null) ? slots.size() : 0;
         CBMWLogger.log("RELEASE-SLOT",
