@@ -136,6 +136,25 @@ Results should label both algorithms as **paper-informed reconstructed
 baselines**, not exact reference implementations. Exact certification requires
 the original algorithms and experiment parameters from their authors.
 
+### Unresolved Parameters
+
+Some values required by the algorithms are not specified precisely by the
+available papers or workflow files. The simulator uses explicit defaults so
+experiments remain reproducible:
+
+| Parameter | Current default | Why unresolved |
+|-----------|-----------------|----------------|
+| CBMW safety factor `beta` | `1.0` | The paper requires `beta >= 1` but does not publish the experimental value. |
+| CBMW price markup `gamma` | `1.0` | The paper defines the markup but does not publish the experimental value. |
+| Reserved-container startup | `0 s` separately | It is unknown whether the supplied runtime measurements already include this delay. |
+| Task cores and RAM | `1 core`, `1 MB` | The supplied DAX files do not contain task resource metadata. |
+| NOSF constants and VM-selection details | Current documented reconstruction | Complete source pseudocode and experimental constants are unavailable. |
+| CEWB spot classes, prices, capacities, and reliability | Current documented spot-market defaults | The original experimental market constants are unavailable. |
+
+Every reported experiment must state these values and any JVM-property
+overrides. Results using the defaults should describe `beta`, `gamma`, NOSF,
+and CEWB settings as simulator assumptions rather than paper-certified values.
+
 ---
 
 ## Project Structure
