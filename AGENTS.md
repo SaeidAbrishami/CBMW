@@ -239,7 +239,10 @@ Current configurable defaults in `HybridVmPool`:
 | `cbmw.scheduling.period.sec` | 5.0 |
 | `cbmw.ondemand.min.billing.sec` | 60.0 |
 
-Reserved cost is fixed by makespan. On-demand cost is based on instance uptime.
+Following Section 3.3 and Equation 1 of the paper, reserved capacity is treated
+as prepaid and excluded from each run's scheduling cost. Reported `totalCost`
+is therefore on-demand cost plus spot cost (spot is nonzero only for CEWB).
+On-demand cost is based on instance uptime.
 Following the paper, every on-demand assignment creates one dedicated logical
 container sized exactly like its task. Per-task requirements are read from
 common DAX attributes/profile keys (`cores`, `cpu`, `num_procs`, `ram`, or

@@ -53,11 +53,6 @@ public class CEWBBroker extends AbstractWorkflowBroker {
     }
 
     @Override
-    public double getReservedCostMultiplier() {
-        return 0.0;
-    }
-
-    @Override
     public void processEvent(SimEvent ev) {
         if (ev.getTag() == WorkflowSimTags.CEWB_SPOT_TASK_COMPLETE) {
             completeSpotAttempt((SpotAttempt) ev.getData());

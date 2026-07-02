@@ -32,12 +32,6 @@ public class NOSFBroker extends AbstractWorkflowBroker {
         super(name, tightness);
     }
 
-    /** NOSF owns no reserved pool; it executes exclusively on on-demand resources. */
-    @Override
-    public double getReservedCostMultiplier() {
-        return 0.0;
-    }
-
     @Override
     protected double estimatePlanningRuntime(double meanExecutionTime) {
         return PaperRuntimeModel.conservativeEstimate(meanExecutionTime);

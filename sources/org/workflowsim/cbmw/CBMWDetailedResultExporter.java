@@ -26,7 +26,6 @@ public class CBMWDetailedResultExporter {
     private final String scenario;
     private final double alpha;
     private final double simDuration;
-    private final double reservedCostMultiplier;
 
     public CBMWDetailedResultExporter(List<WorkflowRecord> workflows,
                                       CBMWAccounting accounting,
@@ -34,8 +33,7 @@ public class CBMWDetailedResultExporter {
                                       String algorithm,
                                       String scenario,
                                       double alpha,
-                                      double simDuration,
-                                      double reservedCostMultiplier) {
+                                      double simDuration) {
         this.workflows = workflows;
         this.accounting = accounting;
         this.vmPool = vmPool;
@@ -43,7 +41,6 @@ public class CBMWDetailedResultExporter {
         this.scenario = scenario;
         this.alpha = alpha;
         this.simDuration = simDuration;
-        this.reservedCostMultiplier = reservedCostMultiplier;
     }
 
     public void export(File outputDir) throws IOException {
@@ -105,10 +102,9 @@ public class CBMWDetailedResultExporter {
                                 task.getTaskCores(), task.getTaskRamMb());
             }
         }
-        double reservedCost = HybridVmPool.NUM_RESERVED
-                * HybridVmPool.RESERVED_HOURLY_COST
-                * Math.ceil(simDuration / 3600.0)
-                * reservedCostMultiplier;
+        // Reserved instances are prepaid and excluded from the paper's
+        // scheduler cost objective (Section 3.3, Equation 1).
+        double reservedCost = 0.0;
         double spotCost = workflows.stream()
                 .mapToDouble(WorkflowRecord::getTotalSpotCost).sum();
         double estimatedRawCost = workflows.stream()
@@ -258,9 +254,10 @@ public class CBMWDetailedResultExporter {
             writer.write(String.format(Locale.US,
                     "Automatically accepted price quotes: %d%n", autoAcceptedQuotes));
             writer.write(String.format(Locale.US,
-                    "Price: reserved %.4f + on-demand %.4f + spot %.4f = %.4f%n",
-                    reservedCost, onDemandCost, spotCost,
-                    reservedCost + onDemandCost + spotCost));
+                    "Paper scheduling cost: on-demand %.4f + spot %.4f = %.4f%n",
+                    onDemandCost, spotCost, onDemandCost + spotCost));
+            writer.write(String.format(Locale.US,
+                    "Reserved prepaid cost (excluded): %.4f%n", reservedCost));
         }
     }
 

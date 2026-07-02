@@ -7,16 +7,9 @@ import org.cloudbus.cloudsim.Log;
 public class CBMWResultCollector {
 
     private final List<WorkflowRecord> allWorkflows;
-    private final double reservedCostMultiplier;
 
     public CBMWResultCollector(List<WorkflowRecord> allWorkflows) {
-        this(allWorkflows, 1.0);
-    }
-
-    public CBMWResultCollector(List<WorkflowRecord> allWorkflows,
-                               double reservedCostMultiplier) {
         this.allWorkflows = allWorkflows;
-        this.reservedCostMultiplier = reservedCostMultiplier;
     }
 
     public void printReport(String scenario) {
@@ -54,9 +47,9 @@ public class CBMWResultCollector {
         Log.printLine(String.format("Spot cost ($)            : %.4f", spotCost));
         Log.printLine(String.format("Negotiated raw cost ($)  : %.4f", rawEstimate));
         Log.printLine(String.format("Offered price ($)        : %.4f", offeredPrice));
-        Log.printLine(String.format("Reserved fixed cost ($)  : %.2f", reservedCost));
+        Log.printLine(String.format("Reserved prepaid cost ($): %.2f (excluded)", reservedCost));
         Log.printLine(String.format("Total cost ($)           : %.4f",
-                odCost + spotCost + reservedCost));
+                odCost + spotCost));
         Log.printLine(String.format("Makespan (sim s)         : %.2f", makespan));
     }
 
@@ -100,7 +93,7 @@ public class CBMWResultCollector {
         double rawEstimate = totalEstimatedRawCost();
         double offeredPrice = totalOfferedPrice();
         double reservedCost = reservedCost();
-        double totalCost = odCost + spotCost + reservedCost;
+        double totalCost = odCost + spotCost;
 
         return new ScenarioMetrics(scenario, load, deadlineClass, algorithm,
                 arrivalScale, tightness, run, total, accepted, rejected, met,
@@ -154,9 +147,9 @@ public class CBMWResultCollector {
     }
 
     private double reservedCost() {
-        double hours = Math.ceil(simulationDurationSeconds() / 3600.0);
-        return HybridVmPool.NUM_RESERVED * HybridVmPool.RESERVED_HOURLY_COST
-                * hours * reservedCostMultiplier;
+        // Paper Section 3.3 treats reserved resources as prepaid: their lease
+        // cost cannot be changed by the scheduler and is excluded from Eq. (1).
+        return 0.0;
     }
 
     private double makespan() {
@@ -171,10 +164,6 @@ public class CBMWResultCollector {
         double capacity = HybridVmPool.NUM_RESERVED * HybridVmPool.RESERVED_CORES
                 * makespan();
         return capacity > 0 ? totalCpu / capacity : 0.0;
-    }
-
-    private double simulationDurationSeconds() {
-        return org.workflowsim.utils.Parameters.getSimDuration();
     }
 
     /** Raw per-run metrics that can be aggregated after the experiment. */

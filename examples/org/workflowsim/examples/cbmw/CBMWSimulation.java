@@ -264,7 +264,7 @@ public class CBMWSimulation {
         CBMWLogger.close();
 
         CBMWResultCollector collector = new CBMWResultCollector(
-                broker.getAllWorkflows(), broker.getReservedCostMultiplier());
+                broker.getAllWorkflows());
         collector.printReport(label);
         CBMWResultCollector.ScenarioMetrics metrics = collector.toScenarioMetrics(
                 scenario, load.name, deadline.name,
@@ -279,8 +279,7 @@ public class CBMWSimulation {
                 algorithm,
                 scenario,
                 deadline.tightness,
-                simDuration,
-                broker.getReservedCostMultiplier());
+                simDuration);
         detailedExporter.appendTaskCsv(
                 new File(algorithmDir, "task_execution.csv"));
         System.out.println("[tasks] Appended to "
