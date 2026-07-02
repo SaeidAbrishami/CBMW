@@ -268,6 +268,10 @@ The CSV also reports `metDeadline`, `rejectedNegotiation`, and
 `rejectedPlanning`. This prevents a high accepted-workflow `deadlineRate` from
 hiding workflows rejected before execution.
 
+Comparison charts use `overallSuccessRate`, so deadline success is measured
+against all submitted workflows. The conditional `deadlineRate` remains in CSV
+outputs for admission and execution diagnostics.
+
 ### Detailed event log
 
 `cbmw_detail.log` — written by `CBMWLogger` during each run. Contains timestamped entries for every negotiation decision, VM dispatch, task completion, and workflow outcome. Useful for diagnosing scheduling behaviour.

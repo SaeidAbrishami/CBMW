@@ -6,7 +6,7 @@ per load scenario. If the aggregate file is not available, it falls back to
 Output/results.csv. Each figure compares all experiment algorithms across
 tight/medium/loose deadlines for:
   - total cost
-  - deadline success rate
+  - overall deadline success rate (met deadline / total submitted)
   - reserved utilization
   - on-demand usage ratio
 """
@@ -30,7 +30,7 @@ ALGORITHMS = ["CBMW", "NOSF", "CEWB", "StaticGreedy", "DynamicGreedy"]
 DEADLINES = ["tight", "medium", "loose"]
 METRICS = [
     ("totalCost", "Total Cost", "Cost ($)", "dollar"),
-    ("deadlineRate", "Deadline Success Rate", "Success (%)", "percent_ratio"),
+    ("overallSuccessRate", "Deadline Success Rate", "Success (%)", "percent_ratio"),
     ("reservedUtil", "Reserved Utilization", "Utilization (%)", "percent_ratio"),
     ("onDemandUsageRatio", "On-Demand Usage Ratio", "Usage (%)", "percent_ratio"),
 ]
@@ -50,7 +50,7 @@ MARKERS = {
 }
 AGGREGATE_KEYS = {
     "totalCost": "avgTotalCost",
-    "deadlineRate": "avgDeadlineRate",
+    "overallSuccessRate": "avgOverallSuccessRate",
     "reservedUtil": "avgReservedUtil",
     "onDemandUsageRatio": "avgOnDemandUsageRatio",
 }
@@ -79,7 +79,7 @@ def value_for(rows, load, deadline, algorithm, metric):
                 and row.get("deadlineClass") == deadline
                 and row.get("algorithm") == algorithm):
             value = numeric(row, metric)
-            if metric in {"deadlineRate", "reservedUtil", "onDemandUsageRatio"}:
+            if metric in {"overallSuccessRate", "reservedUtil", "onDemandUsageRatio"}:
                 value *= 100.0
             return value
     return 0.0

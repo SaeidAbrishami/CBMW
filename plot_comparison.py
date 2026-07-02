@@ -3,7 +3,7 @@ CBMW Algorithm Comparison Charts
 ---------------------------------
 Reads results.csv and produces a 2x3 bar-chart figure comparing
 CBMW, StaticGreedy, and DynamicGreedy on five metrics:
-  - Deadline satisfaction rate
+  - Overall deadline satisfaction rate (met deadline / total submitted)
   - On-demand cost ($)
   - Total cost (on-demand + reserved) ($)
   - Makespan (simulation seconds)
@@ -46,7 +46,7 @@ for row in rows:
     algo = row["algorithm"]
     reserved_util = float(row.get("reservedUtil", 0))
     data[algo] = {
-        "deadlineRate":  float(row["deadlineRate"]),
+        "overallSuccessRate": float(row["overallSuccessRate"]),
         "onDemandCost":  float(row["onDemandCost"]),
         "totalCost":     float(row["onDemandCost"]) + float(row["reservedCost"]),
         "makespan":      float(row["makespan"]),
@@ -66,7 +66,7 @@ fig, axes = plt.subplots(2, 3, figsize=(16, 9))
 fig.suptitle("Algorithm Comparison  (TIGHTNESS = 2.0)", fontsize=14, y=1.01)
 
 metrics = [
-    (axes[0, 0], "deadlineRate",  "Deadline Satisfaction Rate",   "Rate",       "rate"),
+    (axes[0, 0], "overallSuccessRate", "Deadline Satisfaction Rate", "Rate", "rate"),
     (axes[0, 1], "onDemandCost",  "On-Demand Cost",               "Cost ($)",   "dollar"),
     (axes[0, 2], "totalCost",     "Total Cost",                   "Cost ($)",   "dollar"),
     (axes[1, 0], "makespan",      "Makespan",                     "Time (s)",   "plain"),
