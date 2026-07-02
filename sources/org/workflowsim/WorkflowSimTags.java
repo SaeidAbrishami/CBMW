@@ -56,6 +56,8 @@ public class WorkflowSimTags {
     public static final int CEWB_SPOT_TASK_INTERRUPTED = BASE + 13;
     /** StaticGreedy's pre-planned order time for a dedicated on-demand container. */
     public static final int STATIC_GREEDY_ON_DEMAND_ORDER = BASE + 14;
+    /** DynamicGreedy task reaching its OPD-adjusted latest-start threshold. */
+    public static final int DYNAMIC_GREEDY_SST_REACHED = BASE + 15;
 
     /**
      * Private Constructor

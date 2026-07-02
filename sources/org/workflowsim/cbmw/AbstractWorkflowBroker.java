@@ -149,7 +149,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
                 // registered it, which would permanently strand that VM.
                 if (reservedVmsAcknowledged < HybridVmPool.NUM_RESERVED) return;
                 processPendingVmCreations();
-                if (!isSchedulingMoment()) return;
+                if (usesPeriodicScheduling() && !isSchedulingMoment()) return;
                 super.processEvent(ev);
                 break;
             default:
@@ -208,6 +208,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         int wfId = workflowIdForJob(job);
         boolean onDemand = provisioner.isOnDemandVm(cl.getVmId());
         accounting.markTaskFinished(cl, onDemand);
+        onTaskReturned(cl, onDemand);
 
         if (onDemand) {
             CondorVM idleOnDemand = provisioner.jobCompleted(cl.getCloudletId());
@@ -247,6 +248,9 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
 
     /** Called when a reserved-VM task completes. Default no-op. */
     protected void onTaskComplete(Cloudlet cl) {}
+
+    /** Called for every returned task before resource-specific cleanup. */
+    protected void onTaskReturned(Cloudlet cl, boolean onDemand) {}
 
     protected boolean terminateOnDemandWhenIdle() { return true; }
 
@@ -628,6 +632,9 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
     protected double estimatePlanningRuntime(double meanExecutionTime) {
         return meanExecutionTime;
     }
+
+    /** Dynamic event-based baselines may bypass the periodic scheduling gate. */
+    protected boolean usesPeriodicScheduling() { return true; }
 
     /**
      * Starts the OPD countdown for a dedicated logical container. Static
