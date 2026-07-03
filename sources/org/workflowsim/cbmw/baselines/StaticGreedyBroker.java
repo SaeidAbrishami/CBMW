@@ -31,6 +31,8 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
 
     private static final double EPS = 1e-9;
     private final StaticGreedySchedulingAlgorithm dispatcher;
+    private long wakeGeneration;
+    private double scheduledWakeTime = Double.POSITIVE_INFINITY;
 
     public StaticGreedyBroker(String name, double tightness) throws Exception {
         super(name, tightness);
@@ -47,6 +49,12 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
                 cp <= wfr.getDeadline() - wfr.getArrivalTime() + EPS);
         wfr.setAccepted(true);
         return true;
+    }
+
+    /** StaticGreedy reacts to readiness, completion, provisioning, and plan wakes. */
+    @Override
+    protected boolean usesPeriodicScheduling() {
+        return false;
     }
 
     @Override
@@ -156,7 +164,14 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
         if (ev.getTag() == WorkflowSimTags.STATIC_GREEDY_ON_DEMAND_ORDER) {
             int taskId = (Integer) ev.getData();
             orderLogicalOnDemandContainer(taskId);
-            sendNow(getId(), WorkflowSimTags.CLOUDLET_UPDATE);
+            return;
+        }
+        if (ev.getTag() == WorkflowSimTags.STATIC_GREEDY_SCHEDULE_WAKE) {
+            long generation = (Long) ev.getData();
+            if (generation == wakeGeneration) {
+                scheduledWakeTime = Double.POSITIVE_INFINITY;
+                sendNow(getId(), WorkflowSimTags.CLOUDLET_UPDATE);
+            }
             return;
         }
         super.processEvent(ev);
@@ -177,10 +192,19 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
         dispatchScheduledJobs(dispatcher.getScheduledList());
 
         double nextWake = dispatcher.getNextWakeTime();
-        if (Double.isFinite(nextWake) && nextWake > CloudSim.clock() + EPS) {
-            schedule(getId(), nextWake - CloudSim.clock(),
-                    WorkflowSimTags.CLOUDLET_UPDATE);
-        }
+        scheduleNextWake(nextWake);
+    }
+
+    /** Keeps at most one effective future plan wake; older events become stale. */
+    private void scheduleNextWake(double nextWake) {
+        double now = CloudSim.clock();
+        if (!Double.isFinite(nextWake) || nextWake <= now + EPS) return;
+        if (nextWake >= scheduledWakeTime - EPS) return;
+
+        scheduledWakeTime = nextWake;
+        long generation = ++wakeGeneration;
+        schedule(getId(), nextWake - now,
+                WorkflowSimTags.STATIC_GREEDY_SCHEDULE_WAKE, generation);
     }
 
     @Override

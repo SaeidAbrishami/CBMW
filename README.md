@@ -211,22 +211,28 @@ with `:` as the classpath separator.
 java -cp "bin;lib/*" org.workflowsim.examples.cbmw.CBMWSimulation
 ```
 
-By default this runs a single scenario (`lambda=2.0`, `tightness=1.2`, `seed=0`). To run the full 180-scenario experiment, uncomment the nested loop in `CBMWSimulation.main()`.
+By default this runs the full 45-scenario matrix: three load classes, three
+deadline classes, and five algorithms, using 50 workflows per scenario for
+every algorithm. Use JVM properties such as
+`-Dcbmw.algorithms=CBMW`, `-Dcbmw.max.workflows=5`, and
+`-Dcbmw.max.scenarios=1` to restrict smoke or diagnostic runs.
 
 ---
 
 ## Simulation Parameters
 
-| Parameter | Default | Description |
-|-----------|---------|-------------|
-| `lambda` | 2.0, 3.0, 6.0 workflows/min | Poisson arrival rate |
-| `tightness` | 1.2 (tight), 3.0 (loose) | Deadline = arrival + CP × tightness |
-| `NUM_RESERVED` | 50 | Reserved VM count (fixed pool) |
-| `RESERVED_MIPS` | 1000 | Compute capacity per VM (MI/s) |
-| `RESERVED_HOURLY_COST` | $3.26/hr | Modelled on AWS hpc7a.96xlarge |
-| `ON_DEMAND_PER_SEC` | $0.000905/s | Modelled on AWS Fargate |
-| `SIM_MINUTES` | 60 | Simulated time window for arrivals |
-| `NUM_SEEDS` | 10 | Independent runs per scenario |
+| Property / scenario | Default | Description |
+|---------------------|---------|-------------|
+| Load classes | low `2.0`, moderate `1.0`, heavy `0.5` | Multipliers applied to arrival times |
+| Deadline classes | tight `1.2`, medium `2.0`, loose `4.0` | Deadline = arrival + CP × tightness |
+| `cbmw.reserved.instances` | `5` | Reserved VM count |
+| `cbmw.reserved.cores` | `192` | Cores per reserved VM |
+| `cbmw.reserved.ram.mb` | `384000` | RAM per reserved VM |
+| `cbmw.reserved.hourly.cost` | `3.26` | Prepaid reference price; excluded from scheduling cost |
+| `cbmw.ondemand.per.sec` | `0.000340` | Default CPU price per core-second |
+| `cbmw.ondemand.memory.per.gb.sec` | `0.0` | Default memory price per GB-second |
+| `cbmw.ondemand.delay.sec` | `120.0` | On-demand provisioning delay (`opd`) |
+| `cbmw.ondemand.min.billing.sec` | `60.0` | Minimum on-demand billing duration |
 
 ---
 
@@ -235,14 +241,25 @@ By default this runs a single scenario (`lambda=2.0`, `tightness=1.2`, `seed=0`)
 ### Console
 
 ```
-========== RESULTS: CBMW_tight_lam2_t1.2_seed0 ==========
-Workflows total/accepted : 94 / 94
-Deadline met rate        : 1.000 (94 / 94)
-On-demand cost ($)       : 176.0594
-Reserved fixed cost ($)  : 163.00
-Total cost ($)           : 339.0594
-Makespan (sim s)         : 6880.14
+========== RESULTS: low_tight_CBMW_t1.2 ==========
+Workflows total/accepted : 50 / 50
+Workflows rejected       : 0 (negotiation=0, planning=0)
+Acceptance rate          : 1.000 (50 / 50)
+Accepted deadline rate   : 0.780 (39 / 50)
+Overall success rate     : 0.780 (39 / 50)
+Reserved VM utilization  : 36.2%
+On-demand cost ($)       : 23.0717
+Spot cost ($)            : 0.0000
+Reserved prepaid cost ($): 0.00 (excluded)
+Total cost ($)           : 23.0717
+Makespan (sim s)         : 8652.25
 ```
+
+Following paper Section 3.3 and Equation 1, `reservedCost` is reported as zero
+because reserved capacity is prepaid and outside the scheduler's optimization
+objective. `totalCost` is therefore `onDemandCost + spotCost`; NOSF is not
+charged for a reserved pool it does not use. This is a scheduling-cost metric,
+not full operational expenditure including prepaid reservations.
 
 ### CSV
 

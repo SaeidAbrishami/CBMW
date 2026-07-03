@@ -1,7 +1,6 @@
 package org.workflowsim.cbmw.baselines;
 
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import org.cloudbus.cloudsim.Cloudlet;
@@ -37,22 +36,30 @@ public class StaticGreedySchedulingAlgorithm extends BaseSchedulingAlgorithm {
     public void run() {
         double now = CloudSim.clock();
         nextWakeTime = Double.POSITIVE_INFINITY;
-        List<Cloudlet> ready = new ArrayList<>((List<Cloudlet>) getCloudletList());
-        ready.sort(Comparator
-                .comparingDouble((Cloudlet cl) -> plannedStart((Job) cl))
-                .thenComparingInt(Cloudlet::getCloudletId));
+        List<Cloudlet> due = new ArrayList<>();
+        for (Cloudlet cloudlet : (List<Cloudlet>) getCloudletList()) {
+            double plannedStart = plannedStart((Job) cloudlet);
+            if (plannedStart > now + EPS) {
+                nextWakeTime = Math.min(nextWakeTime, plannedStart);
+            } else {
+                due.add(cloudlet);
+            }
+        }
 
-        for (Cloudlet cloudlet : ready) {
+        // Only due tasks need ordering. Sorting every future ready task on every
+        // event created an O(events * readyTasks log readyTasks) hot path.
+        due.sort((left, right) -> {
+            int byStart = Double.compare(
+                    plannedStart((Job) left), plannedStart((Job) right));
+            return byStart != 0 ? byStart
+                    : Integer.compare(left.getCloudletId(), right.getCloudletId());
+        });
+
+        for (Cloudlet cloudlet : due) {
             Job job = (Job) cloudlet;
             int taskId = primaryTaskId(job);
             WorkflowRecord workflow = workflows.get(workflowId(job));
             if (workflow == null) continue;
-
-            double plannedStart = workflow.getScheduledStart(taskId);
-            if (plannedStart > now + EPS) {
-                nextWakeTime = Math.min(nextWakeTime, plannedStart);
-                continue;
-            }
 
             int plannedVm = workflow.getAssignedVm(taskId);
             if (plannedVm != CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL) {

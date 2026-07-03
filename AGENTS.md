@@ -49,7 +49,7 @@ Entry point:
 - Load classes: `low=2.0`, `moderate=1.0`, `heavy=0.5`
 - Algorithms: `CBMW`, `NOSF`, `CEWB`, `StaticGreedy`, `DynamicGreedy`
 - Default workflow source: `test_workflows/poisson_distribution.json`
-- Default workflow count per scenario: 200
+- Default workflow count per scenario: 50 (selected from the 200-arrival source trace)
 - Full default run size: 3 deadlines x 3 loads x 5 algorithms = 45 scenarios
 
 Useful JVM switches:
@@ -58,7 +58,7 @@ Useful JVM switches:
 |--------|---------|
 | `-Dcbmw.algorithms=CBMW` | Run only selected algorithms, comma-separated. |
 | `-Dcbmw.output.dir=Output` | Root output folder; algorithm and comparison subfolders are created inside it. |
-| `-Dcbmw.max.workflows=5` | Cap workflows per scenario for smoke/debug runs. |
+| `-Dcbmw.max.workflows=5` | Override the default 50-workflow cap per scenario. |
 | `-Dcbmw.max.scenarios=1` | Stop after N completed scenarios. |
 | `-Dcbmw.export.details=false` | Skip `.rar-style` detailed export folders. |
 | `-Dcbmw.detail.log=false` | Disable `_detail.log` event logging. |
@@ -242,6 +242,9 @@ Current configurable defaults in `HybridVmPool`:
 Following Section 3.3 and Equation 1 of the paper, reserved capacity is treated
 as prepaid and excluded from each run's scheduling cost. Reported `totalCost`
 is therefore on-demand cost plus spot cost (spot is nonzero only for CEWB).
+NOSF is consequently charged only for its on-demand execution and is not
+charged for the CBMW reserved pool. This metric is scheduling cost, not full
+operational expenditure including prepaid reservations.
 On-demand cost is based on instance uptime.
 Following the paper, every on-demand assignment creates one dedicated logical
 container sized exactly like its task. Per-task requirements are read from
@@ -325,6 +328,10 @@ The run compiled and completed, producing the `.rar-style` detailed folder.
 - Disabled `CBMWLogger` calls no longer format hot-path task/container messages.
 - StaticGreedy tracks per-resource-slot availability with priority queues
   instead of copying, sorting, and rescanning all prior bookings for each task.
+- StaticGreedy runtime dispatch is event-driven, keeps only one effective
+  planned-start wake-up, does not trigger global rescheduling for container
+  order events, and sorts only tasks whose planned start has already arrived.
+  This removes the ready-queue event storm seen under moderate/heavy load.
 - `WorkflowRecord` tracks completed task IDs.
 - `AbstractWorkflowBroker.updateWorkflowCompletion()` no longer scans all
   received cloudlets for every task completion.

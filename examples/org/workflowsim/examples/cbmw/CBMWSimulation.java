@@ -50,7 +50,8 @@ import org.workflowsim.utils.ReplicaCatalog;
  *
  * Runs the new experiment matrix: CBMW plus paper and greedy baselines across
  * low/moderate/heavy load and tight/medium/loose
- * deadlines against the same 200 real workflow arrivals from test_workflows/.
+ * deadlines against the same first 50 workflow arrivals selected from the
+ * 200-arrival source trace in test_workflows/.
  * Arrival times come from poisson_distribution.json; deadlines are
  * arrivalTime + criticalPath * tightness; task runtimes use the perturbed
  * values from the matching .txt files.
@@ -86,7 +87,7 @@ public class CBMWSimulation {
     private static final int MAX_SCENARIOS = Integer.getInteger(
             "cbmw.max.scenarios", Integer.MAX_VALUE);
     private static final int MAX_WORKFLOWS = Integer.getInteger(
-            "cbmw.max.workflows", Integer.MAX_VALUE);
+            "cbmw.max.workflows", 50);
     private static final boolean QUIET = Boolean.parseBoolean(
             System.getProperty("cbmw.quiet", "false"));
 

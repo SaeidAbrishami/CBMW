@@ -58,6 +58,8 @@ public class WorkflowSimTags {
     public static final int STATIC_GREEDY_ON_DEMAND_ORDER = BASE + 14;
     /** DynamicGreedy task reaching its OPD-adjusted latest-start threshold. */
     public static final int DYNAMIC_GREEDY_SST_REACHED = BASE + 15;
+    /** Deduplicated wake-up for StaticGreedy's next planned task start. */
+    public static final int STATIC_GREEDY_SCHEDULE_WAKE = BASE + 16;
 
     /**
      * Private Constructor
