@@ -6,6 +6,8 @@ import java.util.List;
 
 /** Per-task execution accounting used by detailed result exports. */
 public class TaskExecutionRecord {
+    public static final String SPOT_CANDIDATE = "Spot Candidate";
+
     private final int taskId;
     private final String taskName;
     private final int workflowId;
@@ -140,7 +142,11 @@ public class TaskExecutionRecord {
     }
 
     public boolean isRescheduled() {
-        if (plannedVmId == null || vmType.isEmpty()) return false;
+        if (vmType.isEmpty()) return false;
+        if (SPOT_CANDIDATE.equals(plannedVmType)) {
+            return !"Spot".equals(vmType);
+        }
+        if (plannedVmId == null || "Unassigned".equals(plannedVmType)) return false;
         if ("On-Demand".equals(plannedVmType)) return !"On-Demand".equals(vmType);
         return plannedVmId != vmId;
     }

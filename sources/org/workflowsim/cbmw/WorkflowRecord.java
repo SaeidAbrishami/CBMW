@@ -39,6 +39,7 @@ public class WorkflowRecord {
     private final Map<Integer, Double> plannedProvisionOrderTimes = new HashMap<>();
     private final Map<Integer, Double> plannedContainerReadyTimes = new HashMap<>();
     private final Map<Integer, Integer> taskVmAssignment  = new HashMap<>();  // taskId -> vmId
+    private final Map<Integer, String> plannedVmTypes = new HashMap<>();
     private final Set<Integer> completedTaskIds = new HashSet<>();
 
     private boolean deadlineMet;
@@ -184,6 +185,18 @@ public class WorkflowRecord {
     public boolean hasAssignedVm(int taskId) { return taskVmAssignment.containsKey(taskId); }
     public int getAssignedVm(int taskId) {
         return taskVmAssignment.getOrDefault(taskId, -1);
+    }
+    public void setPlannedVmType(int taskId, String vmType) {
+        if (vmType == null || vmType.trim().isEmpty()) {
+            throw new IllegalArgumentException("Planned VM type must not be blank");
+        }
+        plannedVmTypes.put(taskId, vmType);
+    }
+    public boolean hasPlannedVmType(int taskId) {
+        return plannedVmTypes.containsKey(taskId);
+    }
+    public String getPlannedVmType(int taskId) {
+        return plannedVmTypes.getOrDefault(taskId, "Unassigned");
     }
 
     // --- results ---

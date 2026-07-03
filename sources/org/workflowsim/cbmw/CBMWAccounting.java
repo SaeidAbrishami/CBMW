@@ -47,7 +47,9 @@ public class CBMWAccounting {
             double subDeadline = Double.isFinite(lft) ? lft : wfr.getDeadline();
             Integer plannedVmId = wfr.hasAssignedVm(taskId)
                     ? wfr.getAssignedVm(taskId) : null;
-            String plannedVmType = plannedVmId == null ? "Unassigned"
+            String plannedVmType = wfr.hasPlannedVmType(taskId)
+                    ? wfr.getPlannedVmType(taskId)
+                    : plannedVmId == null ? "Unassigned"
                     : plannedVmId < 0 ? "On-Demand" : "Reserved";
             List<Integer> parentIds = new ArrayList<>();
             for (Task parent : task.getParentList()) parentIds.add(parent.getCloudletId());
@@ -232,10 +234,15 @@ public class CBMWAccounting {
 
     private String schedulingReason(TaskExecutionRecord record, int actualVmId,
                                     String actualVmType) {
+        String plannedVmType = record.getPlannedVmType();
+        if (TaskExecutionRecord.SPOT_CANDIDATE.equals(plannedVmType)) {
+            if ("Spot".equals(actualVmType)) return "CEWB_SPOT_SELECTION";
+            if ("On-Demand".equals(actualVmType)) return "CEWB_ON_DEMAND_FALLBACK";
+            return "CEWB_RESOURCE_CHANGE";
+        }
         Integer plannedVmId = record.getPlannedVmId();
         if (plannedVmId == null) return "DYNAMIC_ASSIGNMENT";
         if ("Spot".equals(actualVmType)) return "CEWB_SPOT_SELECTION";
-        String plannedVmType = record.getPlannedVmType();
         if ("On-Demand".equals(plannedVmType)) {
             return "On-Demand".equals(actualVmType)
                     ? "PLANNED_ON_DEMAND" : "ADVANCED_TO_IDLE_RESERVED";

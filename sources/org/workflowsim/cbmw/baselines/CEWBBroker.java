@@ -18,6 +18,7 @@ import org.workflowsim.WorkflowSimTags;
 import org.workflowsim.cbmw.AbstractWorkflowBroker;
 import org.workflowsim.cbmw.CBMWLogger;
 import org.workflowsim.cbmw.HybridVmPool;
+import org.workflowsim.cbmw.TaskExecutionRecord;
 import org.workflowsim.cbmw.WorkflowRecord;
 import org.workflowsim.utils.Parameters;
 
@@ -118,7 +119,10 @@ public class CEWBBroker extends AbstractWorkflowBroker {
             wfr.setLST(taskId, lst);
             wfr.setLFT(taskId, lft);
             wfr.setScheduledStart(taskId, sst);
-            wfr.setAssignedVm(taskId, -1);
+            // CEWB chooses a concrete spot offer only when the task becomes
+            // ready.  This is a resource-class intent, not a fake on-demand
+            // VM assignment.
+            wfr.setPlannedVmType(taskId, TaskExecutionRecord.SPOT_CANDIDATE);
             task.setVmId(-1);
         }
         return true;

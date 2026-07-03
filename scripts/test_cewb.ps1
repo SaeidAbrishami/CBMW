@@ -35,9 +35,35 @@ try {
     if ($results.Count -ne 1 -or [int]$results[0].total -ne 2) {
         throw 'CEWB smoke output did not contain one two-workflow scenario'
     }
-    $tasks = Get-Item (Join-Path $output 'algorithms/CEWB/task_execution.csv')
-    if ($tasks.Length -le 0) {
+    $taskCsv = Join-Path $output 'algorithms/CEWB/task_execution.csv'
+    $taskFile = Get-Item $taskCsv
+    if ($taskFile.Length -le 0) {
         throw 'CEWB smoke task_execution.csv is empty'
+    }
+    $tasks = @(Import-Csv $taskCsv)
+    $badPlans = @($tasks | Where-Object {
+        $_.'Workflow Disposition' -eq 'ACCEPTED' -and
+        ($_.'Planned VM Type' -ne 'Spot Candidate' -or
+         -not [string]::IsNullOrWhiteSpace($_.'Planned VM ID'))
+    })
+    if ($badPlans.Count -ne 0) {
+        throw 'CEWB tasks must be exported as Spot Candidate with no fake planned VM ID'
+    }
+    $badSpotRows = @($tasks | Where-Object {
+        $_.'Actual VM Type' -eq 'Spot' -and
+        ($_.'Rescheduled' -ne 'NO' -or
+         $_.'Scheduling Reason' -ne 'CEWB_SPOT_SELECTION')
+    })
+    if ($badSpotRows.Count -ne 0) {
+        throw 'Intended CEWB spot selections must not be classified as rescheduling'
+    }
+    $badFallbackRows = @($tasks | Where-Object {
+        $_.'Actual VM Type' -eq 'On-Demand' -and
+        ($_.'Rescheduled' -ne 'YES' -or
+         $_.'Scheduling Reason' -ne 'CEWB_ON_DEMAND_FALLBACK')
+    })
+    if ($badFallbackRows.Count -ne 0) {
+        throw 'CEWB on-demand fallbacks must be classified explicitly'
     }
     $detailLog = Get-ChildItem -Path $output -Recurse -Filter '*_detail.log' |
         Select-Object -First 1
