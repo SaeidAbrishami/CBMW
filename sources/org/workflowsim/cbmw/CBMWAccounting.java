@@ -21,6 +21,7 @@ public class CBMWAccounting {
     private final Set<Integer> runningReservedTasks = new HashSet<>();
     private final Set<Integer> runningOnDemandTasks = new HashSet<>();
     private final Set<Integer> runningSpotTasks = new HashSet<>();
+    private final Map<Integer, List<Integer>> childrenByParentTask = new HashMap<>();
 
     public void registerWorkflowTasks(WorkflowRecord wfr, List<Task> tasks,
                                       double deadlineTightness,
@@ -52,15 +53,23 @@ public class CBMWAccounting {
                     : plannedVmId == null ? "Unassigned"
                     : plannedVmId < 0 ? "On-Demand" : "Reserved";
             List<Integer> parentIds = new ArrayList<>();
-            for (Task parent : task.getParentList()) parentIds.add(parent.getCloudletId());
-            taskRecords.put(taskId, new TaskExecutionRecord(
+            for (Task parent : task.getParentList()) {
+                int parentId = parent.getCloudletId();
+                parentIds.add(parentId);
+                childrenByParentTask.computeIfAbsent(parentId,
+                        ignored -> new ArrayList<>()).add(taskId);
+            }
+            TaskExecutionRecord record = new TaskExecutionRecord(
                     taskId, task.getType(), wfr.getWorkflowId(), wfr.getDaxPath(),
+                    wfr.getArrivalTime(),
                     workflowDisposition, wfr.getTaskCores(taskId),
                     wfr.getTaskRamMb(taskId), wfr.getTaskResourceSource(taskId),
                     nominalRuntime, runtimeStddev,
                     conservativeRuntime, planningRuntime, actualRuntime,
                     est, eft, lst, lft, scheduledStart, subDeadline,
-                    deadlineTightness, plannedVmId, plannedVmType, parentIds));
+                    deadlineTightness, plannedVmId, plannedVmType, parentIds);
+            if (parentIds.isEmpty()) record.markDependencyReady(wfr.getArrivalTime());
+            taskRecords.put(taskId, record);
         }
     }
 
@@ -102,6 +111,11 @@ public class CBMWAccounting {
                     : Math.max(0.0, finish - cl.getActualCPUTime());
             String status = cl.getCloudletStatus() == Cloudlet.SUCCESS ? "SUCCESS" : "FAILED";
             record.markFinished(start, finish, status);
+            for (int childId : childrenByParentTask.getOrDefault(taskId,
+                    Collections.emptyList())) {
+                TaskExecutionRecord child = taskRecords.get(childId);
+                if (child != null) child.markDependencyReady(finish);
+            }
         }
         if ("On-Demand".equals(vmType)) runningOnDemandTasks.remove(taskId);
         else if ("Spot".equals(vmType)) runningSpotTasks.remove(taskId);

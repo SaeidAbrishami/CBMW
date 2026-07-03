@@ -12,6 +12,7 @@ public class TaskExecutionRecord {
     private final String taskName;
     private final int workflowId;
     private final String workflowPath;
+    private final double workflowArrivalTime;
     private final String workflowDisposition;
     private final int taskCores;
     private final int taskRamMb;
@@ -33,6 +34,7 @@ public class TaskExecutionRecord {
     private final List<Integer> parentIds;
 
     private int vmId = -1;
+    private double dependencyReadyTime = Double.NaN;
     private double readyTime = Double.NaN;
     private double submitTime = Double.NaN;
     private double provisioningOrderTime = Double.NaN;
@@ -45,7 +47,8 @@ public class TaskExecutionRecord {
     private int interruptionCount;
 
     public TaskExecutionRecord(int taskId, String taskName, int workflowId,
-                               String workflowPath, String workflowDisposition,
+                               String workflowPath, double workflowArrivalTime,
+                               String workflowDisposition,
                                int taskCores, int taskRamMb,
                                String resourceRequirementSource,
                                double nominalRuntime, double runtimeStddev,
@@ -60,6 +63,7 @@ public class TaskExecutionRecord {
         this.taskName = taskName;
         this.workflowId = workflowId;
         this.workflowPath = workflowPath;
+        this.workflowArrivalTime = workflowArrivalTime;
         this.workflowDisposition = workflowDisposition;
         this.taskCores = taskCores;
         this.taskRamMb = taskRamMb;
@@ -89,6 +93,7 @@ public class TaskExecutionRecord {
     public String getTaskName() { return taskName; }
     public int getWorkflowId() { return workflowId; }
     public String getWorkflowPath() { return workflowPath; }
+    public double getWorkflowArrivalTime() { return workflowArrivalTime; }
     public String getWorkflowDisposition() { return workflowDisposition; }
     public int getTaskCores() { return taskCores; }
     public int getTaskRamMb() { return taskRamMb; }
@@ -104,6 +109,8 @@ public class TaskExecutionRecord {
     public double getLatestFinishTime() { return latestFinishTime; }
     public double getScheduledStartTime() { return scheduledStartTime; }
     public int getVmId() { return vmId; }
+    public double getDependencyReadyTime() { return dependencyReadyTime; }
+    /** Time at which the scheduler first observed this task in its ready queue. */
     public double getReadyTime() { return readyTime; }
     public double getSubmitTime() { return submitTime; }
     public double getExecutionTime() { return actualRuntime; }
@@ -153,6 +160,13 @@ public class TaskExecutionRecord {
 
     public void markReady(double time) {
         if (Double.isNaN(readyTime)) readyTime = time;
+    }
+
+    public void markDependencyReady(double time) {
+        if (!Double.isFinite(time)) return;
+        if (!Double.isFinite(dependencyReadyTime) || time > dependencyReadyTime) {
+            dependencyReadyTime = time;
+        }
     }
 
     public void markProvisioningOrdered(double orderTime, double readyTime) {
