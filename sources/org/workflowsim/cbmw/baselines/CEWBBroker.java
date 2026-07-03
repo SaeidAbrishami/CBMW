@@ -28,6 +28,7 @@ import org.workflowsim.utils.Parameters;
  */
 public class CEWBBroker extends AbstractWorkflowBroker {
 
+    private static final double EPS = 1e-9;
     private static final int MAX_SPOT_ATTEMPTS = Integer.getInteger(
             "cbmw.cewb.spot.max.attempts", 3);
 
@@ -47,6 +48,13 @@ public class CEWBBroker extends AbstractWorkflowBroker {
     private final Map<Integer, Integer> spotAttemptCounts = new HashMap<>();
     private final Set<Integer> forceOnDemand = new HashSet<>();
     private final Set<Integer> onDemandLogged = new HashSet<>();
+    private final Set<Integer> scheduledSstWakeups = new HashSet<>();
+    private long fallbackDispatches;
+    private long predictedFallbackMisses;
+    private long sstWakeupsScheduled;
+    private long sstWakeupsFired;
+    private boolean configurationLogged;
+    private boolean summaryLogged;
 
     public CEWBBroker(String name, double tightness) throws Exception {
         super(name, tightness);
@@ -54,6 +62,14 @@ public class CEWBBroker extends AbstractWorkflowBroker {
 
     @Override
     public void processEvent(SimEvent ev) {
+        if (ev.getTag() == WorkflowSimTags.CEWB_SST_REACHED) {
+            int taskId = (Integer) ev.getData();
+            if (scheduledSstWakeups.remove(taskId)) {
+                sstWakeupsFired++;
+                sendNow(getId(), WorkflowSimTags.CLOUDLET_UPDATE);
+            }
+            return;
+        }
         if (ev.getTag() == WorkflowSimTags.CEWB_SPOT_TASK_COMPLETE) {
             completeSpotAttempt((SpotAttempt) ev.getData());
             return;
@@ -63,6 +79,19 @@ public class CEWBBroker extends AbstractWorkflowBroker {
             return;
         }
         super.processEvent(ev);
+    }
+
+    /** Emit final invariants only when WorkflowSim has drained every workflow. */
+    @Override
+    public void shutdownEntity() {
+        emitDiagnostics();
+        super.shutdownEntity();
+    }
+
+    /** CEWB is a just-in-time event-driven policy, not a polling policy. */
+    @Override
+    protected boolean usesPeriodicScheduling() {
+        return false;
     }
 
     @Override
@@ -76,10 +105,16 @@ public class CEWBBroker extends AbstractWorkflowBroker {
             task.setWorkflowId(wfr.getWorkflowId());
             double duration = wfr.getEstimatedExecTime(taskId);
             double remCP = remainingCPs.getOrDefault(taskId, duration);
+            if (!Double.isFinite(duration) || duration <= 0.0
+                    || !Double.isFinite(remCP) || remCP < duration - EPS) {
+                throw new IllegalStateException("Invalid CEWB timing input for wf="
+                        + wfr.getWorkflowId() + " task=" + taskId
+                        + " duration=" + duration + " remainingCP=" + remCP);
+            }
             double lst = deadline - remCP;
             double lft = lst + duration;
-            double sst = Math.max(arrival,
-                    lst - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
+            double sst = CEWBTimingPolicy.safeStart(arrival, lst,
+                    HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
             wfr.setLST(taskId, lst);
             wfr.setLFT(taskId, lft);
             wfr.setScheduledStart(taskId, sst);
@@ -92,6 +127,7 @@ public class CEWBBroker extends AbstractWorkflowBroker {
     @Override
     @SuppressWarnings("unchecked")
     protected void processCloudletUpdate(SimEvent ev) {
+        logConfigurationOnce();
         recordReadyQueue((List<Cloudlet>) getCloudletList());
         List<Cloudlet> readyJobs = new ArrayList<>(
                 (List<Cloudlet>) getCloudletList());
@@ -110,15 +146,32 @@ public class CEWBBroker extends AbstractWorkflowBroker {
             if (wfr == null) continue;
 
             if (forceOnDemand.contains(jobId) || now >= getSst(job)) {
+                scheduledSstWakeups.remove(jobId);
                 CondorVM vm = provisioner.getOrProvision(job);
                 cl.setVmId(vm.getId());
                 onDemandJobs.add(cl);
                 if (onDemandLogged.add(jobId)) {
+                    fallbackDispatches++;
+                    boolean predictedMiss = CEWBTimingPolicy.predictedFallbackMiss(
+                            now, HybridVmPool.ON_DEMAND_PROVISIONING_DELAY,
+                            wfr.getEstimatedExecTime(taskId), getLft(job));
+                    if (predictedMiss) predictedFallbackMisses++;
                     CBMWLogger.logf("CEWB-ON-DEMAND",
-                            "wf=%d task=%d attempts=%d sst=%.2f now=%.2f vm=%d",
+                            "wf=%d task=%d attempts=%d sst=%.2f now=%.2f vm=%d"
+                                    + " forced=%s predictedMiss=%s",
                             wfr.getWorkflowId(), taskId,
                             spotAttemptCounts.getOrDefault(jobId, 0),
-                            getSst(job), now, vm.getId());
+                            getSst(job), now, vm.getId(),
+                            forceOnDemand.contains(jobId), predictedMiss);
+                    CBMWLogger.logf("CEWB-FALLBACK",
+                            "wf=%d task=%d order=%.2f predictedReady=%.2f"
+                                    + " predictedFinish=%.2f subDeadline=%.2f miss=%s",
+                            wfr.getWorkflowId(), taskId, now,
+                            now + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY,
+                            CEWBTimingPolicy.predictedOnDemandFinish(now,
+                                    HybridVmPool.ON_DEMAND_PROVISIONING_DELAY,
+                                    wfr.getEstimatedExecTime(taskId)),
+                            getLft(job), predictedMiss);
                 }
                 continue;
             }
@@ -127,9 +180,26 @@ public class CEWBBroker extends AbstractWorkflowBroker {
                     wfr.getTaskCores(taskId), wfr.getTaskRamMb(taskId),
                     wfr.getEstimatedExecTime(taskId), cl.getCloudletLength(),
                     now, getLft(job), vmPool.getOnDemandPricePerSecond(taskId));
-            if (offer != null) dispatchSpot(job, offer);
+            if (offer != null) {
+                scheduledSstWakeups.remove(jobId);
+                dispatchSpot(job, offer);
+            } else {
+                scheduleSstWake(job, now);
+            }
         }
         dispatchScheduledJobs(onDemandJobs);
+    }
+
+    private void scheduleSstWake(Job job, double now) {
+        int taskId = job.getCloudletId();
+        double sst = getSst(job);
+        if (sst <= now + EPS || !scheduledSstWakeups.add(taskId)) return;
+        schedule(getId(), CEWBTimingPolicy.exactWakeDelay(now, sst),
+                WorkflowSimTags.CEWB_SST_REACHED, taskId);
+        sstWakeupsScheduled++;
+        CBMWLogger.logf("CEWB-WAIT",
+                "wf=%d task=%d no feasible spot offer; exact wake at sst=%.2f",
+                workflowIdForJob(job), primaryTaskId(job), sst);
     }
 
     private void dispatchSpot(Job job, CEWBSpotMarket.Offer offer) {
@@ -251,5 +321,31 @@ public class CEWBBroker extends AbstractWorkflowBroker {
     private double getLft(Job job) {
         WorkflowRecord wfr = activeWorkflows.get(workflowIdForJob(job));
         return wfr != null ? wfr.getLFT(primaryTaskId(job)) : Double.MAX_VALUE;
+    }
+
+    private void logConfigurationOnce() {
+        if (configurationLogged) return;
+        configurationLogged = true;
+        String summary = spotMarket.configurationSummary();
+        System.out.println("[CEWB-CONFIG] " + summary);
+        CBMWLogger.log("CEWB-CONFIG", summary);
+    }
+
+    private void emitDiagnostics() {
+        if (summaryLogged) return;
+        summaryLogged = true;
+        String summary = spotMarket.diagnosticSummary()
+                + " fallbacks=" + fallbackDispatches
+                + " predictedFallbackMisses=" + predictedFallbackMisses
+                + " wakesScheduled=" + sstWakeupsScheduled
+                + " wakesFired=" + sstWakeupsFired;
+        System.out.println("[CEWB-SUMMARY] " + summary);
+        CBMWLogger.log("CEWB-SUMMARY", summary);
+        assert spotMarket.getActiveInstances() == 0
+                : "CEWB simulation ended with active spot instances: "
+                        + spotMarket.getActiveInstances();
+        assert spotMarket.getActiveCores() == 0
+                : "CEWB simulation ended with active spot cores: "
+                        + spotMarket.getActiveCores();
     }
 }

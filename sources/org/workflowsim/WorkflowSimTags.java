@@ -60,6 +60,8 @@ public class WorkflowSimTags {
     public static final int DYNAMIC_GREEDY_SST_REACHED = BASE + 15;
     /** Deduplicated wake-up for StaticGreedy's next planned task start. */
     public static final int STATIC_GREEDY_SCHEDULE_WAKE = BASE + 16;
+    /** CEWB ready task reaching its exact on-demand safe-start threshold. */
+    public static final int CEWB_SST_REACHED = BASE + 17;
 
     /**
      * Private Constructor

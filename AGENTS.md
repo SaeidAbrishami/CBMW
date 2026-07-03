@@ -73,6 +73,7 @@ Useful JVM switches:
 | `-Dcbmw.cewb.spot.mtbi.sec=3600` | Override mean time between spot interruptions for every CEWB class. |
 | `-Dcbmw.cewb.spot.max.attempts=3` | Spot attempts before CEWB forces on-demand fallback. |
 | `-Dcbmw.cewb.spot.min.success.prob=0.80` | Minimum predicted probability that a spot attempt survives. |
+| `-Dcbmw.cewb.spot.total.cores=960` | Capacity-matched physical spot-core envelope; divided equally across the three fixed classes unless per-class capacities override it. |
 
 Linux VM helper for one algorithm:
 
@@ -284,6 +285,12 @@ price, capacity, and mean time between interruptions. Prices vary per attempt;
 interruptions follow an exponential reliability model and restart the task.
 CEWB is charged no reserved-pool fixed cost, and spot cost/usage are exported
 separately from on-demand cost/usage.
+The default capacities are 320 economy, 160 standard, and 80 performance
+instances: 320 physical cores per class and 960 in total. This is an explicitly
+reported capacity-matched experimental environment, not a claimed CEWB paper
+constant. `cbmw.cewb.spot.total.cores=192` restores the former 64/32/16 pool.
+CEWB uses exact deduplicated safe-start wake events and logs configuration,
+peak capacity, saturation, fallback, predicted-miss, and wake diagnostics.
 
 ---
 
@@ -311,6 +318,12 @@ java '-Dcbmw.algorithms=CBMW' '-Dcbmw.max.workflows=2' '-Dcbmw.max.scenarios=1' 
 ```
 
 The run compiled and completed, producing the `.rar-style` detailed folder.
+
+CEWB invariant and smoke validation:
+
+```powershell
+.\scripts\test_cewb.ps1
+```
 
 ---
 

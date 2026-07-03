@@ -11,6 +11,16 @@ import org.workflowsim.cbmw.HybridVmPool;
 /** Configurable spot instance classes, prices, capacity, and reliability. */
 final class CEWBSpotMarket {
 
+    /**
+     * Environmental normalization only: by default CEWB receives the same
+     * physical core envelope as the prepaid CBMW reserved pool. The CEWB
+     * selection, bid, reliability, and fallback rules are unchanged.
+     */
+    private static final int DEFAULT_TOTAL_SPOT_CORES = Integer.getInteger(
+            "cbmw.cewb.spot.total.cores",
+            HybridVmPool.NUM_RESERVED * HybridVmPool.RESERVED_CORES);
+    private static final int SPOT_CLASS_COUNT = 3;
+
     static final class Offer {
         private final SpotType type;
         private final int instanceId;
@@ -33,6 +43,17 @@ final class CEWBSpotMarket {
             this.executionSeconds = executionSeconds;
             this.interruptionDelaySeconds = interruptionDelaySeconds;
             this.successProbability = successProbability;
+            if (!Double.isFinite(pricePerSecond) || pricePerSecond < 0.0
+                    || !Double.isFinite(startupSeconds) || startupSeconds < 0.0
+                    || !Double.isFinite(predictedExecutionSeconds)
+                    || predictedExecutionSeconds <= 0.0
+                    || !Double.isFinite(executionSeconds) || executionSeconds <= 0.0
+                    || !Double.isFinite(interruptionDelaySeconds)
+                    || interruptionDelaySeconds < 0.0
+                    || !Double.isFinite(successProbability)
+                    || successProbability < 0.0 || successProbability > 1.0) {
+                throw new IllegalArgumentException("Invalid CEWB spot offer");
+            }
         }
 
         String getTypeName() { return type.name; }
@@ -95,30 +116,51 @@ final class CEWBSpotMarket {
     private final Map<String, Integer> activeByType = new HashMap<>();
     private final Random random;
     private int nextInstanceId = 1_000_000;
+    private long acquireCalls;
+    private long acquiredOffers;
+    private long noOfferCalls;
+    private long saturatedCalls;
+    private int activeInstances;
+    private int activeCores;
+    private int peakActiveInstances;
+    private int peakActiveCores;
 
     CEWBSpotMarket(long seed) {
+        if (DEFAULT_TOTAL_SPOT_CORES <= 0) {
+            throw new IllegalArgumentException(
+                    "cbmw.cewb.spot.total.cores must be positive");
+        }
         random = new Random(seed);
-        types.add(type("economy", 1, 1024, 900.0, 0.000085, 1800.0, 64));
-        types.add(type("standard", 2, 4096, 1000.0, 0.000140, 3600.0, 32));
-        types.add(type("performance", 4, 8192, 1500.0, 0.000240, 7200.0, 16));
+        types.add(type("economy", 1, 1024, 900.0, 0.000085, 1800.0));
+        types.add(type("standard", 2, 4096, 1000.0, 0.000140, 3600.0));
+        types.add(type("performance", 4, 8192, 1500.0, 0.000240, 7200.0));
+        validateConfiguration();
     }
 
     Offer acquire(int taskCores, int taskRamMb, double estimatedRuntime,
                   long cloudletLength,
                   double now, double subDeadline,
                   double onDemandPricePerSecond) {
+        validateAcquireRequest(taskCores, taskRamMb, estimatedRuntime,
+                cloudletLength, now, subDeadline, onDemandPricePerSecond);
+        acquireCalls++;
         List<Offer> candidates = new ArrayList<>();
+        boolean hasResourceFit = false;
+        boolean hasCapacity = false;
         for (SpotType type : types) {
             if (taskCores > type.cores || taskRamMb > type.ramMb) continue;
+            hasResourceFit = true;
             if (activeByType.getOrDefault(type.name, 0) >= type.capacity) continue;
+            hasCapacity = true;
 
             double price = currentPrice(type);
             if (price > onDemandPricePerSecond * MAX_BID_TO_ON_DEMAND_RATIO) continue;
             double predictedExecution = estimatedRuntime * 1000.0 / type.mips;
             double execution = HybridVmPool.executionTimeSeconds(
                     cloudletLength, taskCores, type.mips);
-            double successProbability = Math.exp(
-                    -predictedExecution / type.meanTimeBetweenInterruptions);
+            double successProbability = type.meanTimeBetweenInterruptions == 0.0
+                    ? 0.0 : Math.exp(-predictedExecution
+                            / type.meanTimeBetweenInterruptions);
             if (successProbability < MIN_SUCCESS_PROBABILITY) continue;
             if (now + STARTUP_SECONDS + predictedExecution > subDeadline) continue;
 
@@ -126,38 +168,158 @@ final class CEWBSpotMarket {
                     type.meanTimeBetweenInterruptions);
             candidates.add(new Offer(type, nextInstanceId, price,
                     STARTUP_SECONDS, predictedExecution, execution,
-                    interruptionDelay,
-                    successProbability));
+                    interruptionDelay, successProbability));
         }
-        if (candidates.isEmpty()) return null;
+        if (candidates.isEmpty()) {
+            noOfferCalls++;
+            if (hasResourceFit && !hasCapacity) saturatedCalls++;
+            return null;
+        }
 
         candidates.sort(Comparator.comparingDouble(offer ->
                 offer.getPricePerSecond() * offer.getPredictedExecutionSeconds()
                         / Math.max(offer.getSuccessProbability(), 1e-9)));
         Offer selected = candidates.get(0);
         nextInstanceId++;
-        activeByType.merge(selected.getTypeName(), 1, Integer::sum);
+        int activeForType = activeByType.merge(
+                selected.getTypeName(), 1, Integer::sum);
+        if (activeForType > selected.type.capacity) {
+            throw new IllegalStateException("CEWB spot capacity exceeded for "
+                    + selected.getTypeName() + ": " + activeForType + "/"
+                    + selected.type.capacity);
+        }
+        activeInstances++;
+        activeCores += selected.type.cores;
+        peakActiveInstances = Math.max(peakActiveInstances, activeInstances);
+        peakActiveCores = Math.max(peakActiveCores, activeCores);
+        if (activeCores > getConfiguredTotalCores()) {
+            throw new IllegalStateException("CEWB active spot cores exceeded configured pool: "
+                    + activeCores + "/" + getConfiguredTotalCores());
+        }
+        acquiredOffers++;
         return selected;
     }
 
     void release(Offer offer) {
-        activeByType.computeIfPresent(offer.getTypeName(),
-                (name, active) -> Math.max(0, active - 1));
+        if (offer == null) {
+            throw new IllegalArgumentException("Cannot release a null CEWB offer");
+        }
+        int active = activeByType.getOrDefault(offer.getTypeName(), 0);
+        if (active <= 0 || activeInstances <= 0
+                || activeCores < offer.type.cores) {
+            throw new IllegalStateException("CEWB spot offer released without"
+                    + " a matching active allocation: " + offer.getTypeName());
+        }
+        activeByType.put(offer.getTypeName(), active - 1);
+        activeInstances--;
+        activeCores -= offer.type.cores;
+    }
+
+    int getConfiguredTotalCores() {
+        int total = 0;
+        for (SpotType type : types) total += type.capacity * type.cores;
+        return total;
+    }
+
+    int getConfiguredTotalInstances() {
+        int total = 0;
+        for (SpotType type : types) total += type.capacity;
+        return total;
+    }
+
+    int getActiveInstances() { return activeInstances; }
+    int getActiveCores() { return activeCores; }
+    int getPeakActiveInstances() { return peakActiveInstances; }
+    int getPeakActiveCores() { return peakActiveCores; }
+    long getAcquireCalls() { return acquireCalls; }
+    long getAcquiredOffers() { return acquiredOffers; }
+    long getNoOfferCalls() { return noOfferCalls; }
+    long getSaturatedCalls() { return saturatedCalls; }
+
+    String configurationSummary() {
+        StringBuilder summary = new StringBuilder();
+        summary.append("targetCores=").append(DEFAULT_TOTAL_SPOT_CORES)
+                .append(" configuredCores=").append(getConfiguredTotalCores())
+                .append(" instances=").append(getConfiguredTotalInstances());
+        for (SpotType type : types) {
+            summary.append(' ').append(type.name).append('=')
+                    .append(type.capacity).append('x').append(type.cores)
+                    .append("core");
+        }
+        return summary.toString();
+    }
+
+    String diagnosticSummary() {
+        return "acquireCalls=" + acquireCalls
+                + " acquired=" + acquiredOffers
+                + " noOffer=" + noOfferCalls
+                + " saturated=" + saturatedCalls
+                + " peakInstances=" + peakActiveInstances
+                + " peakCores=" + peakActiveCores
+                + "/" + getConfiguredTotalCores()
+                + " activeAtEnd=" + activeInstances;
     }
 
     private SpotType type(String name, int defaultCores, int defaultRamMb,
                           double defaultMips, double defaultPrice,
-                          double defaultMtbi, int defaultCapacity) {
+                          double defaultMtbi) {
         String prefix = "cbmw.cewb.spot." + name + ".";
         double globalMtbi = property("cbmw.cewb.spot.mtbi.sec", Double.NaN);
+        int cores = intProperty(prefix + "cores", defaultCores);
         return new SpotType(name,
-                intProperty(prefix + "cores", defaultCores),
+                cores,
                 intProperty(prefix + "ram.mb", defaultRamMb),
                 property(prefix + "mips", defaultMips),
                 property(prefix + "price.per.sec", defaultPrice),
                 Double.isFinite(globalMtbi) ? globalMtbi
                         : property(prefix + "mtbi.sec", defaultMtbi),
-                intProperty(prefix + "capacity", defaultCapacity));
+                intProperty(prefix + "capacity",
+                        matchedDefaultCapacity(cores)));
+    }
+
+    private static int matchedDefaultCapacity(int coresPerInstance) {
+        int perClassCoreBudget = DEFAULT_TOTAL_SPOT_CORES / SPOT_CLASS_COUNT;
+        return Math.max(1, perClassCoreBudget / Math.max(1, coresPerInstance));
+    }
+
+    private void validateConfiguration() {
+        int enabledClasses = 0;
+        for (SpotType type : types) {
+            if (type.cores <= 0 || type.ramMb <= 0 || type.mips <= 0.0
+                    || type.basePricePerSecond < 0.0
+                    || type.meanTimeBetweenInterruptions < 0.0
+                    || type.capacity < 0) {
+                throw new IllegalArgumentException("Invalid CEWB spot class "
+                        + type.name + " (cores=" + type.cores
+                        + ", ramMb=" + type.ramMb + ", mips=" + type.mips
+                        + ", price=" + type.basePricePerSecond + ", mtbi="
+                        + type.meanTimeBetweenInterruptions + ", capacity="
+                        + type.capacity + ")");
+            }
+            if (type.capacity > 0) enabledClasses++;
+        }
+        if (enabledClasses == 0 || getConfiguredTotalCores() <= 0) {
+            throw new IllegalArgumentException(
+                    "CEWB spot market must enable at least one class");
+        }
+    }
+
+    private static void validateAcquireRequest(
+            int taskCores, int taskRamMb, double estimatedRuntime,
+            long cloudletLength, double now, double subDeadline,
+            double onDemandPricePerSecond) {
+        if (taskCores <= 0 || taskRamMb <= 0 || cloudletLength <= 0
+                || !Double.isFinite(estimatedRuntime) || estimatedRuntime <= 0.0
+                || !Double.isFinite(now) || !Double.isFinite(subDeadline)
+                || subDeadline < now
+                || !Double.isFinite(onDemandPricePerSecond)
+                || onDemandPricePerSecond < 0.0) {
+            throw new IllegalArgumentException("Invalid CEWB spot request: cores="
+                    + taskCores + " ramMb=" + taskRamMb + " runtime="
+                    + estimatedRuntime + " length=" + cloudletLength
+                    + " now=" + now + " subDeadline=" + subDeadline
+                    + " onDemandPrice=" + onDemandPricePerSecond);
+        }
     }
 
     private double currentPrice(SpotType type) {

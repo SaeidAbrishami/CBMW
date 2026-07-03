@@ -106,15 +106,30 @@ Default spot classes are explicit simulation assumptions:
 
 | Class | Cores | RAM | MIPS | Base price/s | MTBI | Capacity |
 |-------|------:|----:|-----:|-------------:|-----:|---------:|
-| economy | 1 | 1024 MB | 900 | 0.000085 | 1800 s | 64 |
-| standard | 2 | 4096 MB | 1000 | 0.000140 | 3600 s | 32 |
-| performance | 4 | 8192 MB | 1500 | 0.000240 | 7200 s | 16 |
+| economy | 1 | 1024 MB | 900 | 0.000085 | 1800 s | 320 |
+| standard | 2 | 4096 MB | 1000 | 0.000140 | 3600 s | 160 |
+| performance | 4 | 8192 MB | 1500 | 0.000240 | 7200 s | 80 |
 
 Important properties include `cbmw.cewb.spot.startup.sec`,
 `cbmw.cewb.spot.mtbi.sec`, `cbmw.cewb.spot.min.success.prob`,
-`cbmw.cewb.spot.max.bid.ratio`, `cbmw.cewb.spot.max.attempts`, and per-class
-properties under `cbmw.cewb.spot.<class>.*`. Results report `spotCost`,
+`cbmw.cewb.spot.max.bid.ratio`, `cbmw.cewb.spot.max.attempts`,
+`cbmw.cewb.spot.total.cores`, and per-class properties under
+`cbmw.cewb.spot.<class>.*`. Results report `spotCost`,
 `spotUsageRatio`, actual VM type `Spot`, and per-task interruption counts.
+
+The default class capacities are an explicitly labelled capacity-matched
+experimental normalization, not a CEWB paper constant. They divide 960
+physical spot cores equally across the three fixed instance classes, matching
+the five 192-core reserved instances available to CBMW. Setting
+`-Dcbmw.cewb.spot.total.cores=192` reproduces the previous 64/32/16 capacities.
+Per-class `capacity` properties override the derived defaults. CEWB keeps its
+own spot/on-demand selection, bidding, reliability, and retry policy.
+
+CEWB scheduling is event-driven. A ready task with no feasible spot offer gets
+one deduplicated wake event at its exact safe-start threshold rather than being
+rounded to the next global scheduling tick. Scenario logs contain
+`CEWB-CONFIG` and `CEWB-SUMMARY` records with configured/peak cores,
+saturation, no-offer, fallback, predicted-miss, and wake counters.
 
 The external CEWB paper's complete pseudocode and experimental spot constants
 are not available in this repository. These defaults must therefore be cited as
@@ -135,6 +150,12 @@ all experimental constants are not available in this repository.
 Results should label both algorithms as **paper-informed reconstructed
 baselines**, not exact reference implementations. Exact certification requires
 the original algorithms and experiment parameters from their authors.
+
+Focused CEWB validation (capacity/timing invariants plus a two-workflow smoke):
+
+```powershell
+.\scripts\test_cewb.ps1
+```
 
 ### Unresolved Parameters
 

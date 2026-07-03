@@ -32,7 +32,12 @@ public class CBMWLogger {
             "CEWB-SPOT-START",
             "CEWB-SPOT-COMPLETE",
             "CEWB-SPOT-INTERRUPT",
-            "CEWB-ON-DEMAND"
+            "CEWB-ON-DEMAND",
+            "CEWB-CONFIG",
+            "CEWB-CAPACITY",
+            "CEWB-FALLBACK",
+            "CEWB-WAIT",
+            "CEWB-SUMMARY"
     );
 
     private static PrintWriter writer;
