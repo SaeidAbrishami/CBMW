@@ -21,6 +21,7 @@ public class CBMWAccounting {
     private final Set<Integer> runningReservedTasks = new HashSet<>();
     private final Set<Integer> runningOnDemandTasks = new HashSet<>();
     private final Set<Integer> runningSpotTasks = new HashSet<>();
+    private final Set<Integer> deadlineRiskTasks = new HashSet<>();
     private final Map<Integer, List<Integer>> childrenByParentTask = new HashMap<>();
 
     public void registerWorkflowTasks(WorkflowRecord wfr, List<Task> tasks,
@@ -127,6 +128,35 @@ public class CBMWAccounting {
         TaskExecutionRecord record = taskRecords.get(taskId);
         if (record != null) record.markInterrupted();
         runningSpotTasks.remove(taskId);
+    }
+
+    public void markDeadlineRisk(int taskId) {
+        deadlineRiskTasks.add(taskId);
+    }
+
+    public int getDeadlineRiskTaskCount() {
+        return deadlineRiskTasks.size();
+    }
+
+    public int getProvisionedOnDemandVmCount() {
+        return onDemandRecords.size();
+    }
+
+    /** Reference NOSF-style aggregate VM utilization: total busy / total active. */
+    public double getOnDemandVmUtilization() {
+        double busy = 0.0;
+        for (TaskExecutionRecord record : taskRecords.values()) {
+            if ("On-Demand".equals(record.getVmType())
+                    && Double.isFinite(record.getExecutionTime())) {
+                busy += record.getExecutionTime();
+            }
+        }
+        double active = 0.0;
+        for (OnDemandInstanceRecord record : onDemandRecords.values()) {
+            double uptime = record.getUptime();
+            if (Double.isFinite(uptime)) active += uptime;
+        }
+        return active > 0.0 ? busy / active : 0.0;
     }
 
     public void markTaskProvisioningOrdered(Cloudlet cl, double orderTime,

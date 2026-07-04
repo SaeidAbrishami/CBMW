@@ -70,6 +70,9 @@ Useful JVM switches:
 | `-Dcbmw.runtime.stddev.ratio=0.10` | Paper runtime uncertainty, sigma divided by mean runtime. |
 | `-Dcbmw.negotiation.beta=1.0` | Workflow-level safety factor applied to the conservative critical path. |
 | `-Dcbmw.negotiation.gamma=1.0` | Markup applied to CBMW's post-planning raw execution-cost quote. |
+| `-Dnosf.provisioning.delay.sec=0` | NOSF-only provisioning delay; zero is the faithful reference default. |
+| `-Dnosf.billing.quantum.sec=60` | NOSF VM billing quantum in seconds. |
+| `-Dnosf.vm.type.count=1` | Number of NOSF VM types; configure `nosf.vm.type.<i>.{name,cores,ram.mb,mips,price.per.sec}`. |
 | `-Dcbmw.cewb.spot.mtbi.sec=3600` | Override mean time between spot interruptions for every CEWB class. |
 | `-Dcbmw.cewb.spot.max.attempts=3` | Spot attempts before CEWB forces on-demand fallback. |
 | `-Dcbmw.cewb.spot.min.success.prob=0.80` | Minimum predicted probability that a spot attempt survives. |
@@ -128,6 +131,8 @@ Scenario CSVs distinguish admission from execution success: `acceptanceRate`
 is accepted/total, the legacy `deadlineRate` remains met/accepted, and
 `overallSuccessRate` is met/total. They also include rejected workflow counts
 split into negotiation and planning failures.
+They also report provisioned on-demand VM count, aggregate on-demand VM
+utilization, and deadline-risk task count.
 
 Detailed `.rar-style` outputs, when `cbmw.export.details=true`:
 
@@ -246,9 +251,10 @@ is therefore on-demand cost plus spot cost (spot is nonzero only for CEWB).
 NOSF is consequently charged only for its on-demand execution and is not
 charged for the CBMW reserved pool. This metric is scheduling cost, not full
 operational expenditure including prepaid reservations.
-On-demand cost is based on instance uptime.
-Following the paper, every on-demand assignment creates one dedicated logical
-container sized exactly like its task. Per-task requirements are read from
+On-demand cost is based on instance uptime. CBMW and the container-based
+baselines create a dedicated logical container per on-demand assignment. NOSF
+instead owns reusable logical VMs so it can minimize incremental billing cost.
+Per-task requirements are read from
 common DAX attributes/profile keys (`cores`, `cpu`, `num_procs`, `ram`, or
 `memory`); `cbmw.task.cores` and `cbmw.task.ram.mb` are explicit fallbacks.
 The supplied DAX files do not contain CPU/RAM metadata, so those defaults still
@@ -274,7 +280,7 @@ All brokers extend `AbstractWorkflowBroker`.
 | Broker | planWorkflow | processCloudletUpdate |
 |--------|--------------|-----------------------|
 | CBMW | Paper-style EST/EFT/LFT backward sweep-line using estimated durations | Periodic LST-aware dynamic dispatch with on-demand fallback |
-| NOSF | Paper-informed uncertainty-aware EST/EFT and sub-deadline preprocessing | EST-priority, cost-aware on-demand dispatch with completion feedback |
+| NOSF | Uncertainty-aware EST/EFT and proportional sub-deadline preprocessing | EDF, minimum incremental-cost reusable on-demand VM selection, deadline-risk fallback, and completion feedback |
 | CEWB | Computes task safe-start/sub-deadline timing for spot selection | Explicit spot-class selection, interruption/retry, and on-demand fallback |
 | StaticGreedy | Static round-robin reserved planning | Assigned VM, any reserved, then on-demand |
 | DynamicGreedy | No static planning | First idle reserved, then on-demand FCFS |
@@ -325,6 +331,12 @@ CEWB invariant and smoke validation:
 .\scripts\test_cewb.ps1
 ```
 
+NOSF invariant and smoke validation:
+
+```powershell
+.\scripts\test_nosf.ps1
+```
+
 ---
 
 ## Recent Performance Fixes
@@ -335,7 +347,8 @@ CEWB invariant and smoke validation:
   indexed scan over a `LinkedList` became cubic for SIPHT tasks with hundreds
   of input files.
 - `HybridVmPool` uses constant-time VM lookup and on-demand removal.
-- Paper-style on-demand containers are dedicated and task-sized. They execute
+- Paper-style on-demand containers are dedicated and task-sized for CBMW and
+  the container-based baselines; NOSF uses reusable logical VMs. They execute
   through a lightweight logical path rather than registering tens of thousands
   of heavyweight CloudSim VMs.
 - Disabled `CBMWLogger` calls no longer format hot-path task/container messages.
@@ -355,10 +368,11 @@ CEWB invariant and smoke validation:
 - `CBMWSimulation` saves `results.csv` and `results_aggregate.csv` after each
   completed scenario.
 
-Paper-container validation: all five algorithms completed a detailed-output
-five-workflow smoke run. A clean full 200-workflow NOSF scenario (the worst
-case, because every task uses on-demand) completed in 118 seconds with logical
-dedicated containers. A full 200-workflow CBMW scenario also completed.
+Historical paper-container validation: all five algorithms completed a
+detailed-output five-workflow smoke run. The former dedicated-container NOSF
+completed 200 workflows in 118 seconds, but those results predate the reusable
+reference implementation and must be rebenchmarked. A full 200-workflow CBMW
+scenario also completed.
 
 ---
 
@@ -372,9 +386,9 @@ dedicated containers. A full 200-workflow CBMW scenario also completed.
   default is `1.0` and must be reported with each experiment.
 - `NegotiationModule.remainingCP()` still needs cycle detection.
 - NOSF is a paper-informed reconstruction because its source article is not
-  included and its full pseudocode could not be verified. The current
-  single-type dedicated-container environment also collapses heterogeneous VM
-  selection and utilization tie-breaking to one candidate.
+  included and its full pseudocode could not be verified. The reusable VM
+  scheduler supports configurable heterogeneous types, but the default
+  experiment still provides one homogeneous type.
 - CEWB's resource behavior is now explicit rather than borrowing reserved VMs,
   but its configurable spot-market defaults remain simulation assumptions: the
   external paper's full pseudocode and experimental market constants are not

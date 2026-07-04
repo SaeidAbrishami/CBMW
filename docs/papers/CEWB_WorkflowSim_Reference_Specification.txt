@@ -1,0 +1,939 @@
+CEWB IMPLEMENTATION REFERENCE FOR WORKFLOWSIM
+================================================
+
+Algorithm name:
+CEWB — Cost-Efficient Workflow-as-a-Service Broker
+
+Goal:
+Schedule multiple deadline-constrained workflows on a mixture of on-demand
+and spot VMs, minimizing execution cost while satisfying workflow deadlines.
+
+Label meanings:
+[Paper-defined] stated in accessible CEWB metadata/abstract/preview.
+[Referenced-paper-defined] standard formula from HEFT/PCP-style workflow scheduling.
+[WorkflowSim adaptation] required because WorkflowSim does not directly model CEWB.
+[Implementation assumption] reconstructed behavior needed for implementation.
+
+
+1. OVERVIEW
+------------------------------------------------
+
+[Paper-defined]
+CEWB is a workflow broker for executing multiple workflows submitted by
+different users.
+
+[Paper-defined]
+It uses both on-demand and spot instances.
+
+[Paper-defined]
+Its main goal is to minimize cost while respecting workflow deadlines.
+
+[Paper-defined]
+Resources are divided into reliability classes:
+- on-demand resources are the most reliable;
+- spot resources are classified according to maximum bid price.
+
+[Paper-defined]
+Tasks are assigned to resource classes according to task criticality.
+
+[Paper-defined]
+Task criticality is determined using slack time.
+
+[Paper-defined]
+CEWB uses containers on large VMs to reduce VM provisioning delay and improve
+resource utilization.
+
+[WorkflowSim adaptation]
+WorkflowSim does not natively model containers inside VMs. Therefore, implement
+containers as execution slots inside each CondorVM.
+
+
+2. WORKFLOW MODEL
+------------------------------------------------
+
+[Paper-defined]
+The system schedules multiple scientific workflows.
+
+[Referenced-paper-defined]
+Each workflow is modeled as a directed acyclic graph:
+
+    W = (T, E)
+
+where:
+    T = set of tasks
+    E = dependency edges
+
+An edge (ti, tj) means task tj can start only after ti finishes.
+
+[Referenced-paper-defined]
+Each task ti has:
+    length_i        = task size in MI
+    parents(ti)    = predecessor tasks
+    children(ti)   = successor tasks
+
+[Referenced-paper-defined]
+Each edge has:
+    data_ij = amount of data transferred from ti to tj
+
+[WorkflowSim adaptation]
+WorkflowSim represents tasks as Job objects. Parent-child dependencies are
+already parsed from the DAX file.
+
+
+3. VM MODEL
+------------------------------------------------
+
+[Paper-defined]
+CEWB uses on-demand and spot instances.
+
+[Implementation assumption]
+Each VM type k has:
+
+    mips_k
+    pes_k
+    price_k
+    billing_period_k
+    provisioning_delay_k
+    reliability_k
+    class_k
+
+[Implementation assumption]
+Reliability classes:
+
+    class 0 = on-demand, highest reliability
+    class 1 = expensive spot, high reliability
+    class 2 = medium spot
+    class 3 = cheap spot, low reliability
+
+[Paper-defined]
+Spot instances are classified by maximum price.
+
+[Implementation assumption]
+Higher spot bid price means higher reliability.
+
+[WorkflowSim adaptation]
+CondorVM does not include spot price, bid price, or failure probability by
+default. Extend CondorVM or wrap it in a custom VM metadata object.
+
+
+4. DEADLINE MODEL
+------------------------------------------------
+
+[Paper-defined]
+Workflows are deadline-constrained.
+
+[Implementation assumption]
+Each workflow W has a user-specified deadline:
+
+    D_W
+
+[Implementation assumption]
+If no deadline is provided, generate one using:
+
+    D_W = arrival_time_W + alpha * critical_path_length_W
+
+where:
+    alpha > 1
+    critical_path_length_W = estimated minimum execution time of the workflow
+
+[WorkflowSim adaptation]
+Store the workflow deadline in a map:
+
+    Map<Integer, Double> workflowDeadline
+
+
+5. EXECUTION TIME FORMULAS
+------------------------------------------------
+
+[Referenced-paper-defined]
+Estimated execution time of task ti on VM type k:
+
+    exec_time(ti, vk) = length_i / mips_k
+
+If a VM has multiple processing elements and a task can use only one PE:
+
+    exec_time(ti, vk) = length_i / mips_per_pe_k
+
+[WorkflowSim adaptation]
+WorkflowSim Job length is usually in MI. CondorVM has MIPS. Use:
+
+    runtime = job.getCloudletLength() / vm.getMips()
+
+[Implementation assumption]
+Use average execution time for priority calculations:
+
+    avg_exec_time(ti) = average over all VM types k of exec_time(ti, vk)
+
+
+6. COMMUNICATION TIME FORMULAS
+------------------------------------------------
+
+[Referenced-paper-defined]
+Communication time between ti and tj:
+
+    comm_time(ti, tj) = data_ij / bandwidth
+
+[WorkflowSim adaptation]
+If WorkflowSim clustering or file-transfer modeling is not used, set:
+
+    comm_time(ti, tj) = 0
+
+or use a fixed bandwidth value.
+
+[Implementation assumption]
+If parent and child are scheduled on the same VM:
+
+    comm_time(ti, tj) = 0
+
+
+7. UPWARD RANK
+------------------------------------------------
+
+[Referenced-paper-defined]
+HEFT-style upward rank:
+
+    rank_u(ti) = avg_exec_time(ti) + max over tj in children(ti)
+                 (comm_time(ti, tj) + rank_u(tj))
+
+For exit task:
+
+    rank_u(exit) = avg_exec_time(exit)
+
+Meaning:
+    Larger upward rank means task is closer to the critical path.
+
+Where used:
+    Sort ready tasks by descending priority.
+
+WorkflowSim implementation:
+    Compute once before scheduling starts for each workflow DAG.
+
+
+8. DOWNWARD RANK
+------------------------------------------------
+
+[Referenced-paper-defined]
+Downward rank:
+
+    rank_d(ti) = max over tp in parents(ti)
+                 (rank_d(tp) + avg_exec_time(tp) + comm_time(tp, ti))
+
+For entry task:
+
+    rank_d(entry) = 0
+
+Meaning:
+    Estimated time from workflow entry to this task.
+
+Where used:
+    Estimate task position inside the workflow and assign sub-deadlines.
+
+
+9. CRITICAL PATH ESTIMATE
+------------------------------------------------
+
+[Referenced-paper-defined]
+
+    CP_W = max over ti in W (rank_d(ti) + avg_exec_time(ti) + rank_u_suffix(ti))
+
+Simpler implementation:
+
+    CP_W = rank_u(entry)
+
+Where used:
+    Deadline distribution and slack calculation.
+
+
+10. SUB-DEADLINE ASSIGNMENT
+------------------------------------------------
+
+[Implementation assumption]
+Because CEWB uses slack time to determine task criticality, each task needs a
+latest finish time or sub-deadline.
+
+Use proportional deadline distribution:
+
+    sub_deadline(ti) =
+        arrival_time_W +
+        (rank_d(ti) + avg_exec_time(ti)) / CP_W
+        * (D_W - arrival_time_W)
+
+Variables:
+    arrival_time_W = workflow submission time
+    D_W            = workflow deadline
+    CP_W           = critical path estimate
+
+Meaning:
+    Tasks later on the critical path receive later sub-deadlines.
+
+Where used:
+    Compute slack and criticality.
+
+
+11. EARLIEST START TIME
+------------------------------------------------
+
+[Referenced-paper-defined]
+
+    EST(ti, vm) = max(
+        available_time(vm),
+        max over tp in parents(ti) (AFT(tp) + comm_time(tp, ti))
+    )
+
+where:
+    AFT(tp) = actual finish time of parent task tp
+
+[WorkflowSim adaptation]
+available_time(vm) must be maintained by the custom scheduler because
+WorkflowSim’s default scheduler does not expose all future reservations in the
+form required by CEWB.
+
+
+12. EARLIEST FINISH TIME
+------------------------------------------------
+
+[Referenced-paper-defined]
+
+    EFT(ti, vm) = EST(ti, vm) + exec_time(ti, vm)
+
+Where used:
+    VM selection and deadline feasibility test.
+
+
+13. LATEST FINISH TIME
+------------------------------------------------
+
+[Implementation assumption]
+
+    LFT(ti) = sub_deadline(ti)
+
+For exit tasks:
+
+    LFT(exit) = D_W
+
+Alternative backward formula:
+
+    LFT(ti) = min over tj in children(ti)
+              (LST(tj) - comm_time(ti, tj))
+
+    LST(ti) = LFT(ti) - avg_exec_time(ti)
+
+Where used:
+    Slack calculation.
+
+
+14. SLACK TIME
+------------------------------------------------
+
+[Paper-defined]
+CEWB uses slack time to determine task criticality.
+
+[Implementation assumption]
+
+    slack(ti, vm) = LFT(ti) - EFT(ti, vm)
+
+or VM-independent:
+
+    slack(ti) = sub_deadline(ti) - earliest_possible_finish(ti)
+
+Meaning:
+    Low slack means the task is more critical.
+
+Where used:
+    Assign task to reliability class.
+
+
+15. TASK CRITICALITY
+------------------------------------------------
+
+[Paper-defined]
+Tasks are assigned to resource classes based on criticality determined by slack.
+
+[Implementation assumption]
+Normalize slack:
+
+    normalized_slack(ti) =
+        slack(ti) / max_slack_of_ready_tasks
+
+Criticality:
+
+    criticality(ti) = 1 - normalized_slack(ti)
+
+Interpretation:
+    criticality close to 1 = very urgent
+    criticality close to 0 = relaxed
+
+Class assignment:
+
+    if slack(ti) <= 0:
+        task_class = 0        // on-demand
+    else if criticality >= 0.75:
+        task_class = 0        // on-demand
+    else if criticality >= 0.50:
+        task_class = 1        // high-bid spot
+    else if criticality >= 0.25:
+        task_class = 2        // medium-bid spot
+    else:
+        task_class = 3        // cheap spot
+
+[Implementation assumption]
+The exact thresholds are not available from public CEWB preview. Make them
+configuration parameters.
+
+
+16. COST FORMULA
+------------------------------------------------
+
+[Paper-defined]
+CEWB minimizes execution cost.
+
+[Referenced-paper-defined]
+Cost of VM vm:
+
+    cost(vm) =
+        ceil((finish_time(vm) - start_time(vm)) / billing_period)
+        * price_per_period(vm)
+
+[Implementation assumption]
+For second-based billing:
+
+    cost(vm) =
+        (finish_time(vm) - start_time(vm)) * price_per_second(vm)
+
+Total cost:
+
+    total_cost = sum over all VMs cost(vm)
+
+[WorkflowSim adaptation]
+WorkflowSim/CloudSim usually stores cost per second or cost per processing.
+For CEWB, compute your own broker-level cost instead of relying only on
+CloudSim’s default cost model.
+
+
+17. MAKESPAN
+------------------------------------------------
+
+[Referenced-paper-defined]
+
+    makespan(W) = max over exit tasks te in W AFT(te) - arrival_time_W
+
+For multiple workflows:
+
+    global_makespan =
+        max over all workflows W completion_time(W)
+        - min over all workflows W arrival_time(W)
+
+
+18. OBJECTIVE FUNCTION
+------------------------------------------------
+
+[Paper-defined]
+Minimize cost while satisfying deadlines.
+
+[Implementation assumption]
+Primary constrained objective:
+
+    minimize total_cost
+
+subject to:
+
+    completion_time(W) <= D_W
+    for every workflow W
+
+Penalty version for experiments:
+
+    objective =
+        total_cost + penalty_factor * number_of_deadline_violations
+
+or:
+
+    objective =
+        total_cost + penalty_factor *
+        sum over W max(0, completion_time(W) - D_W)
+
+
+19. VM SELECTION POLICY
+------------------------------------------------
+
+[Paper-defined]
+More critical tasks should be assigned to more reliable resource classes.
+
+[Implementation assumption]
+For a ready task ti:
+
+    1. Compute slack and task_class.
+    2. Search idle or reusable VMs in the same or more reliable class.
+    3. Among feasible VMs, choose the VM with minimum incremental cost.
+    4. If no feasible VM exists, provision a new VM from the required class.
+    5. If deadline cannot be met on spot resources, escalate to on-demand.
+
+Feasibility condition:
+
+    EFT(ti, vm) <= LFT(ti)
+
+Incremental cost:
+
+    incremental_cost(ti, vm) =
+        cost_after_assigning(ti, vm) - current_cost(vm)
+
+Selection:
+
+    selected_vm =
+        argmin over feasible vm incremental_cost(ti, vm)
+
+Tie-breakers:
+    1. lower EFT
+    2. higher reliability
+    3. already-running VM preferred over new VM
+
+
+20. RESOURCE PROVISIONING POLICY
+------------------------------------------------
+
+[Paper-defined]
+CEWB provisions resources from on-demand and spot classes.
+
+[Paper-defined]
+CEWB uses containers on large VMs.
+
+[WorkflowSim adaptation]
+Represent a large VM as a CondorVM with multiple container slots.
+
+Implementation:
+
+    CEWB_VM:
+        CondorVM vm
+        int vmClass
+        boolean isSpot
+        double bidPrice
+        double startTime
+        double availableTime
+        int totalSlots
+        int usedSlots
+        List<ScheduledJob> schedule
+
+[Implementation assumption]
+Provisioning rule:
+
+    if existing VM in selected class can meet LFT:
+        reuse it
+    else:
+        create new VM of selected class
+
+[Implementation assumption]
+Shutdown rule:
+
+    if VM has no running task and no expected ready task before next billing boundary:
+        terminate VM
+
+[WorkflowSim adaptation]
+WorkflowSim VM creation is usually done before simulation starts. For dynamic
+CEWB, use broker-level VM creation events or pre-create a VM pool and mark VMs
+as inactive until CEWB provisions them.
+
+
+21. EVENT HANDLING
+------------------------------------------------
+
+[Paper-defined]
+CEWB acts as a broker for multiple arriving workflows.
+
+[WorkflowSim adaptation]
+Implement scheduling as event-driven.
+
+Events:
+
+    WORKFLOW_ARRIVAL
+    TASK_READY
+    TASK_FINISH
+    VM_CREATED
+    VM_TERMINATED
+    SPOT_FAILURE          // optional
+    BILLING_CHECK         // optional
+
+On workflow arrival:
+    parse workflow tasks
+    store workflow deadline
+    compute ranks
+    compute sub-deadlines
+    add entry tasks to ready queue
+
+On task finish:
+    mark task complete
+    update VM available time
+    release container slot
+    check children
+    if child parents are complete:
+        add child to ready queue
+    call scheduleReadyTasks()
+
+On spot failure:
+    mark running task as failed
+    return task to ready queue
+    blacklist failed VM
+    reschedule task on more reliable class
+
+[Implementation assumption]
+If spot failure is not modeled, CEWB still uses spot classes as cheaper VMs
+with reliability represented only in class selection.
+
+
+22. COMPLETE CEWB PSEUDOCODE
+------------------------------------------------
+
+Algorithm CEWB
+
+Input:
+    workflow arrivals A
+    VM types V
+    deadlines D
+    spot price classes C
+
+Output:
+    schedule of tasks to VMs
+    total cost
+    deadline satisfaction results
+
+INITIALIZE:
+    activeWorkflows = empty
+    readyQueue = empty
+    activeVMs = empty
+    completedTasks = empty
+
+ON WORKFLOW_ARRIVAL(W):
+    activeWorkflows.add(W)
+    arrivalTime[W] = currentTime
+    deadline[W] = userDeadline(W)
+
+    compute avg_exec_time for all tasks in W
+    compute rank_u for all tasks in W
+    compute rank_d for all tasks in W
+    compute CP_W
+    assign sub_deadline for all tasks in W
+
+    for each task t in W:
+        if parents(t) is empty:
+            readyQueue.add(t)
+
+    scheduleReadyTasks()
+
+PROCEDURE scheduleReadyTasks():
+
+    while readyQueue is not empty:
+
+        updateSlackForReadyTasks()
+
+        sort readyQueue by:
+            1. lower slack first
+            2. higher rank_u first
+            3. earlier workflow deadline first
+
+        t = readyQueue.removeFirst()
+
+        taskClass = classifyTaskBySlack(t)
+
+        candidateVMs = getVMsWithClassAtLeastReliable(taskClass)
+
+        bestVM = null
+        bestCost = infinity
+        bestEFT = infinity
+
+        for each vm in candidateVMs:
+
+            est = computeEST(t, vm)
+            eft = est + exec_time(t, vm)
+
+            if eft <= LFT(t):
+                incCost = incrementalCost(t, vm, est, eft)
+
+                if incCost < bestCost:
+                    bestVM = vm
+                    bestCost = incCost
+                    bestEFT = eft
+
+                else if incCost == bestCost and eft < bestEFT:
+                    bestVM = vm
+                    bestEFT = eft
+
+        if bestVM is null:
+
+            for class c from taskClass down to 0:
+                newVMType = cheapestVMTypeInClass(c)
+                est = currentTime + provisioningDelay(newVMType)
+                eft = est + exec_time(t, newVMType)
+
+                if eft <= LFT(t):
+                    bestVM = provisionVM(newVMType)
+                    break
+
+        if bestVM is null:
+
+            // deadline cannot be satisfied using normal class rule
+            bestVM = provisionFastestOnDemandVM()
+            est = currentTime + provisioningDelay(bestVM)
+            eft = est + exec_time(t, bestVM)
+
+        assignTaskToVM(t, bestVM, est, eft)
+
+END PROCEDURE
+
+PROCEDURE assignTaskToVM(t, vm, est, eft):
+    reserve container slot on vm
+    scheduledStart[t] = est
+    scheduledFinish[t] = eft
+    assignedVM[t] = vm
+    update vm.availableTime
+    submit job to WorkflowSim broker
+
+ON TASK_FINISH(t):
+    completedTasks.add(t)
+    vm = assignedVM[t]
+    release slot on vm
+
+    for each child in children(t):
+        if all parents(child) are completed:
+            readyQueue.add(child)
+
+    if workflow of t is complete:
+        record workflow completion time
+
+    terminateIdleVMsIfUseful()
+    scheduleReadyTasks()
+
+ON SPOT_FAILURE(vm):
+    for each running task t on vm:
+        mark t as not completed
+        readyQueue.add(t)
+    terminate vm
+    scheduleReadyTasks()
+
+
+23. WORKFLOWSIM IMPLEMENTATION MAPPING
+------------------------------------------------
+
+Create:
+
+    CEWBScheduler.java
+    CEWBBroker.java
+    CEWBVm.java
+    CEWBParameters.java
+    CEWBTaskInfo.java
+    CEWBWorkflowInfo.java
+    CEWBCostCalculator.java
+
+Main classes:
+
+1. CEWBScheduler
+    Responsible for:
+        ready queue
+        rank calculation
+        slack calculation
+        VM selection
+        task ordering
+
+2. CEWBBroker
+    Extends WorkflowSim broker behavior.
+    Responsible for:
+        workflow arrival
+        job submission
+        task completion event
+        dynamic VM provisioning
+
+3. CEWBVm
+    Wrapper around CondorVM.
+    Stores:
+        vm class
+        reliability
+        spot/on-demand flag
+        bid price
+        start time
+        finish time
+        container slots
+        current schedule
+
+4. CEWBTaskInfo
+    Stores:
+        job id
+        workflow id
+        rank_u
+        rank_d
+        sub_deadline
+        slack
+        assigned VM
+        EST
+        EFT
+        AFT
+
+5. CEWBWorkflowInfo
+    Stores:
+        workflow id
+        arrival time
+        deadline
+        critical path length
+        task list
+        completion time
+
+6. CEWBCostCalculator
+    Computes:
+        VM cost
+        total cost
+        spot cost
+        on-demand cost
+        wasted idle cost
+
+
+24. READY TASK MANAGEMENT
+------------------------------------------------
+
+[WorkflowSim adaptation]
+WorkflowSim already enforces dependencies, but CEWB needs its own ready queue.
+
+Maintain:
+
+    Set<Job> unscheduledJobs
+    Set<Job> runningJobs
+    Set<Job> completedJobs
+    PriorityQueue<Job> readyQueue
+
+A task is ready if:
+
+    all parent jobs are in completedJobs
+    and task is not scheduled
+    and task is not running
+    and task is not completed
+
+
+25. CLOUDLET/JOB SCHEDULING
+------------------------------------------------
+
+[WorkflowSim adaptation]
+WorkflowSim uses Job objects extending Cloudlet.
+
+When CEWB selects a VM:
+
+    job.setVmId(selectedVm.getId())
+
+Then submit the job through the broker.
+
+Important:
+    Do not submit all jobs at once.
+    Submit only ready jobs selected by CEWB.
+
+
+26. VM LIFECYCLE IN WORKFLOWSIM
+------------------------------------------------
+
+[WorkflowSim adaptation]
+Two possible approaches:
+
+Option A — Easier:
+    Pre-create many VMs.
+    CEWB marks them active/inactive internally.
+    Cost is calculated only from CEWB activation time.
+
+Option B — More faithful:
+    Dynamically create and destroy VMs using broker events.
+    More complex but closer to real CEWB.
+
+Recommended for Codex:
+    Start with Option A for correctness.
+    Then add dynamic provisioning later.
+
+
+27. BILLING MODEL
+------------------------------------------------
+
+[Implementation assumption]
+Use configurable billing model:
+
+    SECOND_BASED
+    HOUR_BASED
+
+For hour-based billing:
+
+    charged_periods =
+        ceil((vmEndTime - vmStartTime) / 3600)
+
+    vmCost =
+        charged_periods * hourlyPrice
+
+For second-based billing:
+
+    vmCost =
+        (vmEndTime - vmStartTime) * pricePerSecond
+
+
+28. SIMULATION METRICS
+------------------------------------------------
+
+Report:
+
+    totalCost
+    makespan
+    numberOfDeadlineViolations
+    deadlineViolationRate
+    averageWorkflowDelay
+    VMUtilization
+    spotCost
+    onDemandCost
+    numberOfSpotFailures
+    numberOfProvisionedVMs
+    averageSlack
+    totalIdleTime
+
+VM utilization:
+
+    utilization(vm) =
+        busyTime(vm) / (finishTime(vm) - startTime(vm))
+
+
+29. IMPLEMENTATION CHECKLIST FOR CODEX
+------------------------------------------------
+
+[ ] Create CEWB parameter file.
+[ ] Add VM classes: on-demand, high-bid spot, medium-bid spot, low-bid spot.
+[ ] Add price, MIPS, reliability, and bid price to each VM type.
+[ ] Parse multiple workflows.
+[ ] Assign each workflow an arrival time.
+[ ] Assign each workflow a deadline.
+[ ] Compute average execution time for each task.
+[ ] Compute upward rank.
+[ ] Compute downward rank.
+[ ] Compute workflow critical path.
+[ ] Compute task sub-deadline.
+[ ] Maintain CEWB ready queue.
+[ ] Sort ready tasks by slack and rank.
+[ ] Classify task by slack.
+[ ] Select cheapest feasible VM.
+[ ] Reuse active VMs before provisioning new VMs.
+[ ] Escalate critical tasks to on-demand.
+[ ] Submit only selected ready jobs to WorkflowSim.
+[ ] Handle task completion.
+[ ] Release VM/container slot.
+[ ] Add newly ready child tasks.
+[ ] Compute custom CEWB cost.
+[ ] Report deadline violations.
+[ ] Report cost and utilization metrics.
+
+
+30. MOST IMPORTANT IMPLEMENTATION ASSUMPTIONS
+------------------------------------------------
+
+1. Exact CEWB class thresholds are not publicly visible.
+   Use configurable thresholds.
+
+2. Exact CEWB pseudocode is not publicly visible.
+   Use the reconstructed event-driven broker pseudocode above.
+
+3. WorkflowSim does not directly support CEWB containers.
+   Model containers as VM execution slots.
+
+4. WorkflowSim does not directly model spot market failures.
+   Add optional simulated failures, or disable failures and use spot classes
+   only as cheaper reliability classes.
+
+5. WorkflowSim default cost calculation is insufficient.
+   Use custom CEWB cost calculation.
+
+6. Dynamic VM provisioning in WorkflowSim is complex.
+   Pre-created inactive VM pools are acceptable for first implementation.

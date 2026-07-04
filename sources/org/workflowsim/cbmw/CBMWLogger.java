@@ -27,6 +27,7 @@ public class CBMWLogger {
             "TASK-COMPLETE",  // task finished (running -> done)
             "WF-COMPLETE",    // workflow done, deadline met or missed
             "NOSF-PREPROCESS",
+            "NOSF-CONFIG",
             "NOSF-ALLOCATE",
             "NOSF-FEEDBACK",
             "CEWB-SPOT-START",

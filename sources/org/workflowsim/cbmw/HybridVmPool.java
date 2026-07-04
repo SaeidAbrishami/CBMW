@@ -181,12 +181,20 @@ public class HybridVmPool {
 
     /** Creates the paper's dedicated, task-sized on-demand container. */
     public CondorVM provisionOnDemandVm(int userId, int taskId) {
-        int id = nextOnDemandId++;
         int cores = getTaskCores(taskId);
         int ramMb = getTaskRamMb(taskId);
-        CondorVM vm = new CondorVM(id, userId, RESERVED_MIPS, cores,
+        return provisionOnDemandVm(userId, taskId, cores, ramMb,
+                RESERVED_MIPS, onDemandPricePerSecond(cores, ramMb));
+    }
+
+    /** Creates a logical on-demand VM with an algorithm-selected type. */
+    public CondorVM provisionOnDemandVm(int userId, int taskId, int cores,
+                                        int ramMb, double mipsPerCore,
+                                        double pricePerSecond) {
+        int id = nextOnDemandId++;
+        CondorVM vm = new CondorVM(id, userId, mipsPerCore, cores,
                 ramMb, 10000, 100000, "Xen",
-                onDemandPricePerSecond(cores, ramMb), 0.0, 0.0, 0.0,
+                pricePerSecond, 0.0, 0.0, 0.0,
                 new CloudletSchedulerSpaceShared());
         onDemandVms.add(vm);
         vmsById.put(id, vm);

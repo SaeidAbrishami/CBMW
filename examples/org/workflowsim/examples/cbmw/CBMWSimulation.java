@@ -265,7 +265,7 @@ public class CBMWSimulation {
         CBMWLogger.close();
 
         CBMWResultCollector collector = new CBMWResultCollector(
-                broker.getAllWorkflows());
+                broker.getAllWorkflows(), broker.getAccounting());
         collector.printReport(label);
         CBMWResultCollector.ScenarioMetrics metrics = collector.toScenarioMetrics(
                 scenario, load.name, deadline.name,
@@ -490,6 +490,9 @@ public class CBMWSimulation {
         private double reservedUtil;
         private double onDemandUsageRatio;
         private double spotUsageRatio;
+        private double provisionedOnDemandVms;
+        private double onDemandVmUtilization;
+        private double deadlineRiskTasks;
 
         Aggregate(CBMWResultCollector.ScenarioMetrics first) {
             this.scenario = first.scenario;
@@ -521,13 +524,16 @@ public class CBMWSimulation {
             reservedUtil += row.reservedUtil;
             onDemandUsageRatio += row.onDemandUsageRatio;
             spotUsageRatio += row.spotUsageRatio;
+            provisionedOnDemandVms += row.provisionedOnDemandVms;
+            onDemandVmUtilization += row.onDemandVmUtilization;
+            deadlineRiskTasks += row.deadlineRiskTasks;
         }
 
         String toCsvRow() {
             return String.format(Locale.US,
                     "%s,%s,%s,%s,%.4f,%.1f,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,"
                             + "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.2f,%.4f,"
-                            + "%.2f,%.4f,%.4f,%.4f",
+                            + "%.2f,%.4f,%.4f,%.4f,%.2f,%.4f,%.2f",
                     scenario, load, deadlineClass, algorithm, arrivalScale,
                     tightness, runs, total / runs, accepted / runs,
                     rejected / runs, metDeadline / runs,
@@ -538,7 +544,8 @@ public class CBMWSimulation {
                     estimatedRawCost / runs, offeredPrice / runs,
                     reservedCost / runs, totalCost / runs, makespan / runs,
                     reservedUtil / runs, onDemandUsageRatio / runs,
-                    spotUsageRatio / runs);
+                    spotUsageRatio / runs, provisionedOnDemandVms / runs,
+                    onDemandVmUtilization / runs, deadlineRiskTasks / runs);
         }
     }
 

@@ -7,9 +7,16 @@ import org.cloudbus.cloudsim.Log;
 public class CBMWResultCollector {
 
     private final List<WorkflowRecord> allWorkflows;
+    private final CBMWAccounting accounting;
 
     public CBMWResultCollector(List<WorkflowRecord> allWorkflows) {
+        this(allWorkflows, new CBMWAccounting());
+    }
+
+    public CBMWResultCollector(List<WorkflowRecord> allWorkflows,
+                               CBMWAccounting accounting) {
         this.allWorkflows = allWorkflows;
+        this.accounting = accounting;
     }
 
     public void printReport(String scenario) {
@@ -59,7 +66,8 @@ public class CBMWResultCollector {
                 + "rejectedPlanning,acceptanceRate,deadlineRate,overallSuccessRate,"
                 + "onDemandCost,spotCost,estimatedRawCost,"
                 + "offeredPrice,reservedCost,"
-                + "totalCost,makespan,reservedUtil,onDemandUsageRatio,spotUsageRatio";
+                + "totalCost,makespan,reservedUtil,onDemandUsageRatio,spotUsageRatio,"
+                + "provisionedOnDemandVms,onDemandVmUtilization,deadlineRiskTasks";
     }
 
     public String toCsvRow(String scenario, String load, String deadlineClass,
@@ -101,13 +109,16 @@ public class CBMWResultCollector {
                 deadlineRate, overallSuccessRate,
                 odCost, spotCost, rawEstimate, offeredPrice, reservedCost,
                 totalCost, makespan(),
-                reservedUtilization(), onDemandUsageRatio, spotUsageRatio);
+                reservedUtilization(), onDemandUsageRatio, spotUsageRatio,
+                accounting.getProvisionedOnDemandVmCount(),
+                accounting.getOnDemandVmUtilization(),
+                accounting.getDeadlineRiskTaskCount());
     }
 
     public static String toCsvRow(ScenarioMetrics metrics) {
         return String.format("%s,%s,%s,%s,%.4f,%.1f,%d,%d,%d,%d,%d,%d,%d,"
                         + "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.2f,%.4f,"
-                        + "%.2f,%.4f,%.4f,%.4f",
+                        + "%.2f,%.4f,%.4f,%.4f,%d,%.4f,%d",
                 metrics.scenario, metrics.load, metrics.deadlineClass,
                 metrics.algorithm, metrics.arrivalScale, metrics.tightness,
                 metrics.run, metrics.total, metrics.accepted, metrics.rejected,
@@ -118,7 +129,8 @@ public class CBMWResultCollector {
                 metrics.estimatedRawCost, metrics.offeredPrice,
                 metrics.reservedCost, metrics.totalCost, metrics.makespan,
                 metrics.reservedUtil, metrics.onDemandUsageRatio,
-                metrics.spotUsageRatio);
+                metrics.spotUsageRatio, metrics.provisionedOnDemandVms,
+                metrics.onDemandVmUtilization, metrics.deadlineRiskTasks);
     }
 
     private double totalOnDemandCost() {
@@ -194,6 +206,9 @@ public class CBMWResultCollector {
         public final double reservedUtil;
         public final double onDemandUsageRatio;
         public final double spotUsageRatio;
+        public final int provisionedOnDemandVms;
+        public final double onDemandVmUtilization;
+        public final int deadlineRiskTasks;
 
         public ScenarioMetrics(String scenario, String load, String deadlineClass,
                                String algorithm, double arrivalScale,
@@ -206,8 +221,11 @@ public class CBMWResultCollector {
                                double estimatedRawCost, double offeredPrice,
                                double reservedCost, double totalCost,
                                double makespan, double reservedUtil,
-                               double onDemandUsageRatio,
-                               double spotUsageRatio) {
+                                double onDemandUsageRatio,
+                                double spotUsageRatio,
+                                int provisionedOnDemandVms,
+                                double onDemandVmUtilization,
+                                int deadlineRiskTasks) {
             this.scenario = scenario;
             this.load = load;
             this.deadlineClass = deadlineClass;
@@ -234,6 +252,9 @@ public class CBMWResultCollector {
             this.reservedUtil = reservedUtil;
             this.onDemandUsageRatio = onDemandUsageRatio;
             this.spotUsageRatio = spotUsageRatio;
+            this.provisionedOnDemandVms = provisionedOnDemandVms;
+            this.onDemandVmUtilization = onDemandVmUtilization;
+            this.deadlineRiskTasks = deadlineRiskTasks;
         }
     }
 }

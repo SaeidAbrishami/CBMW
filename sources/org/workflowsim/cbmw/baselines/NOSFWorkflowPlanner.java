@@ -18,10 +18,11 @@ final class NOSFWorkflowPlanner {
 
     void preprocess(WorkflowRecord wfr, List<Task> tasks) {
         Map<Integer, Double> finishMemo = new HashMap<>();
+        Set<Integer> visiting = new LinkedHashSet<>();
         double predictedFinish = wfr.getArrivalTime();
         for (Task task : tasks) {
             predictedFinish = Math.max(predictedFinish,
-                    computePredictedFinish(task, wfr, finishMemo));
+                    computePredictedFinish(task, wfr, finishMemo, visiting));
         }
         distributeSubDeadlines(wfr, tasks, wfr.getArrivalTime(), predictedFinish);
 
@@ -51,31 +52,38 @@ final class NOSFWorkflowPlanner {
         if (successors.isEmpty()) return;
 
         Map<Integer, Double> finishMemo = new HashMap<>();
+        Set<Integer> visiting = new LinkedHashSet<>();
         double predictedFinish = finishTime;
         for (Task task : successors) {
             predictedFinish = Math.max(predictedFinish,
-                    computePredictedFinish(task, wfr, finishMemo));
+                    computePredictedFinish(task, wfr, finishMemo, visiting));
         }
         distributeSubDeadlines(wfr, new ArrayList<>(successors), finishTime,
                 predictedFinish);
     }
 
     private double computePredictedFinish(Task task, WorkflowRecord wfr,
-                                          Map<Integer, Double> memo) {
+                                          Map<Integer, Double> memo,
+                                          Set<Integer> visiting) {
         int taskId = task.getCloudletId();
         Double actualFinish = actualFinishes(wfr).get(taskId);
         if (actualFinish != null) return actualFinish;
         Double cached = memo.get(taskId);
         if (cached != null) return cached;
+        if (!visiting.add(taskId)) {
+            throw new IllegalArgumentException("NOSF workflow contains a cycle at task "
+                    + taskId);
+        }
 
         double est = wfr.getArrivalTime();
         for (Task parent : task.getParentList()) {
-            est = Math.max(est, computePredictedFinish(parent, wfr, memo));
+            est = Math.max(est, computePredictedFinish(parent, wfr, memo, visiting));
         }
         double eft = est + wfr.getEstimatedExecTime(task);
         wfr.setEST(taskId, est);
         wfr.setEFT(taskId, eft);
         memo.put(taskId, eft);
+        visiting.remove(taskId);
         return eft;
     }
 
@@ -90,7 +98,6 @@ final class NOSFWorkflowPlanner {
             double progress = (wfr.getEFT(taskId) - origin) / predictedSpan;
             progress = Math.max(0.0, Math.min(1.0, progress));
             double subDeadline = origin + deadlineSpan * progress;
-            subDeadline = Math.max(wfr.getEFT(taskId), subDeadline);
             subDeadline = Math.min(wfr.getDeadline(), subDeadline);
             double duration = wfr.getEstimatedExecTime(task);
             wfr.setLFT(taskId, subDeadline);

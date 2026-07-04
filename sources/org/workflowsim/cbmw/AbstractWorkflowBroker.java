@@ -209,23 +209,25 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         onTaskReturned(cl, onDemand);
 
         if (onDemand) {
-            CondorVM idleOnDemand = provisioner.jobCompleted(cl.getCloudletId());
-            if (idleOnDemand != null && terminateOnDemandWhenIdle()) {
-                accounting.markOnDemandDestroyed(idleOnDemand.getId(),
-                        accounting.billableDestroyTime(idleOnDemand.getId(), CloudSim.clock()));
-                vmPool.terminateOnDemandVm(idleOnDemand.getId());
-                readyOnDemandContainers.remove(idleOnDemand.getId());
+            if (!managesOwnOnDemandLifecycle()) {
+                CondorVM idleOnDemand = provisioner.jobCompleted(cl.getCloudletId());
+                if (idleOnDemand != null && terminateOnDemandWhenIdle()) {
+                    accounting.markOnDemandDestroyed(idleOnDemand.getId(),
+                            accounting.billableDestroyTime(idleOnDemand.getId(), CloudSim.clock()));
+                    vmPool.terminateOnDemandVm(idleOnDemand.getId());
+                    readyOnDemandContainers.remove(idleOnDemand.getId());
+                }
+                WorkflowRecord wfr = activeWorkflows.get(wfId);
+                double uptime = accounting.getOnDemandUptime(cl.getVmId());
+                double pricePerSecond = vmPool.getOnDemandPricePerSecond(
+                        primaryTaskId(job));
+                double cost = (Double.isFinite(uptime) ? uptime : cl.getActualCPUTime())
+                        * pricePerSecond;
+                if (wfr != null) wfr.addOnDemandCost(cost);
+                CBMWLogger.logf("TASK-COMPLETE",
+                        "task=%d wf=%d vm=%d(on-demand) actualCPU=%.4fs cost=$%.6f",
+                        cl.getCloudletId(), wfId, cl.getVmId(), cl.getActualCPUTime(), cost);
             }
-            WorkflowRecord wfr = activeWorkflows.get(wfId);
-            double uptime = accounting.getOnDemandUptime(cl.getVmId());
-            double pricePerSecond = vmPool.getOnDemandPricePerSecond(
-                    primaryTaskId(job));
-            double cost = (Double.isFinite(uptime) ? uptime : cl.getActualCPUTime())
-                    * pricePerSecond;
-            if (wfr != null) wfr.addOnDemandCost(cost);
-            CBMWLogger.logf("TASK-COMPLETE",
-                    "task=%d wf=%d vm=%d(on-demand) actualCPU=%.4fs cost=$%.6f",
-                    cl.getCloudletId(), wfId, cl.getVmId(), cl.getActualCPUTime(), cost);
         } else {
             onTaskComplete(cl);
             WorkflowRecord wfrRes = activeWorkflows.get(wfId);
@@ -254,6 +256,12 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
     protected void onTaskReturned(Cloudlet cl, boolean onDemand) {}
 
     protected boolean terminateOnDemandWhenIdle() { return true; }
+
+    /**
+     * Algorithms with reusable logical VMs may own their on-demand lifecycle
+     * and accounting instead of using the shared dedicated-container policy.
+     */
+    protected boolean managesOwnOnDemandLifecycle() { return false; }
 
     /** Records the current ready queue before an algorithm dispatches from it. */
     protected void recordReadyQueue(List<Cloudlet> readyJobs) {
