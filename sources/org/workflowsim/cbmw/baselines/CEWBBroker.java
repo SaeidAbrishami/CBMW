@@ -32,21 +32,26 @@ public class CEWBBroker extends AbstractWorkflowBroker {
     private static final double EPS = 1e-9;
     private static final int MAX_SPOT_ATTEMPTS = Integer.getInteger(
             "cbmw.cewb.spot.max.attempts", 3);
+    private final boolean paperAligned;
+    private final CEWBCriticalityPolicy criticalityPolicy;
+    private final CEWBPricingPolicy pricingPolicy;
 
     private static final class SpotAttempt {
         private final Job job;
         private final CEWBSpotMarket.Offer offer;
+        private final double startTime;
 
         SpotAttempt(Job job, CEWBSpotMarket.Offer offer) {
             this.job = job;
             this.offer = offer;
+            this.startTime = CloudSim.clock();
         }
     }
 
-    private final CEWBSpotMarket spotMarket = new CEWBSpotMarket(
-            Long.getLong("cbmw.cewb.seed", 42L));
+    private final CEWBSpotMarket spotMarket;
     private final Map<Integer, SpotAttempt> activeSpotAttempts = new HashMap<>();
     private final Map<Integer, Integer> spotAttemptCounts = new HashMap<>();
+    private final Map<Integer, Integer> maximumSpotClassByJob = new HashMap<>();
     private final Set<Integer> forceOnDemand = new HashSet<>();
     private final Set<Integer> onDemandLogged = new HashSet<>();
     private final Set<Integer> scheduledSstWakeups = new HashSet<>();
@@ -58,7 +63,18 @@ public class CEWBBroker extends AbstractWorkflowBroker {
     private boolean summaryLogged;
 
     public CEWBBroker(String name, double tightness) throws Exception {
+        this(name, tightness, true);
+    }
+
+    public CEWBBroker(String name, double tightness,
+                      boolean paperAligned) throws Exception {
         super(name, tightness);
+        this.paperAligned = paperAligned;
+        this.spotMarket = new CEWBSpotMarket(
+                Long.getLong("cbmw.cewb.seed", 42L), paperAligned);
+        this.criticalityPolicy = paperAligned
+                ? new CEWBCriticalityPolicy() : null;
+        this.pricingPolicy = paperAligned ? new CEWBPricingPolicy() : null;
     }
 
     @Override
@@ -97,6 +113,16 @@ public class CEWBBroker extends AbstractWorkflowBroker {
 
     @Override
     protected boolean planWorkflow(WorkflowRecord wfr, List<Task> tasks) {
+        if (paperAligned) {
+            criticalityPolicy.preprocess(wfr, tasks);
+            for (Task task : tasks) {
+                int taskId = task.getCloudletId();
+                task.setWorkflowId(wfr.getWorkflowId());
+                wfr.setPlannedVmType(taskId, TaskExecutionRecord.SPOT_CANDIDATE);
+                task.setVmId(-1);
+            }
+            return true;
+        }
         Map<Integer, Double> remainingCPs = negotiation.computeRemainingCPs(wfr);
         double deadline = wfr.getDeadline();
         double arrival = wfr.getArrivalTime();
@@ -129,16 +155,53 @@ public class CEWBBroker extends AbstractWorkflowBroker {
     }
 
     @Override
+    protected boolean negotiateWorkflow(WorkflowRecord wfr) {
+        if (!paperAligned) return super.negotiateWorkflow(wfr);
+        double cp = negotiation.computeCriticalPath(wfr);
+        boolean feasible = cp <= wfr.getDeadline() - wfr.getArrivalTime() + EPS;
+        wfr.setCriticalPathLength(cp);
+        wfr.setDeadlineFeasible(feasible);
+        wfr.setAccepted(feasible);
+        return feasible;
+    }
+
+    @Override
+    protected void finalizeWorkflowNegotiation(WorkflowRecord wfr) {
+        if (paperAligned) pricingPolicy.quoteBeforeExecution(wfr);
+    }
+
+    @Override
+    protected void onWorkflowTaskComplete(WorkflowRecord wfr, int taskId,
+                                          double finishTime) {
+        if (paperAligned && wfr.isComplete()) {
+            pricingPolicy.settleAfterExecution(wfr);
+        }
+    }
+
+    @Override
     @SuppressWarnings("unchecked")
     protected void processCloudletUpdate(SimEvent ev) {
         logConfigurationOnce();
         recordReadyQueue((List<Cloudlet>) getCloudletList());
         List<Cloudlet> readyJobs = new ArrayList<>(
                 (List<Cloudlet>) getCloudletList());
-        readyJobs.sort(Comparator
-                .comparingDouble((Cloudlet cl) -> getSst((Job) cl))
-                .thenComparingDouble(cl -> getLft((Job) cl))
-                .thenComparingInt(Cloudlet::getCloudletId));
+        Map<Integer, CEWBCriticalityPolicy.Decision> decisions = paperAligned
+                ? classifyReadyJobs(readyJobs, CloudSim.clock()) : new HashMap<>();
+        if (paperAligned) {
+            readyJobs.sort(Comparator
+                    .comparingDouble((Cloudlet cl) -> decisions
+                            .get(cl.getCloudletId()).getSlack())
+                    .thenComparing((Cloudlet cl) -> -criticalityPolicy
+                            .getUpwardRank(primaryTaskId((Job) cl)))
+                    .thenComparingDouble(cl -> activeWorkflows
+                            .get(workflowIdForJob((Job) cl)).getDeadline())
+                    .thenComparingInt(Cloudlet::getCloudletId));
+        } else {
+            readyJobs.sort(Comparator
+                    .comparingDouble((Cloudlet cl) -> getSst((Job) cl))
+                    .thenComparingDouble(cl -> getLft((Job) cl))
+                    .thenComparingInt(Cloudlet::getCloudletId));
+        }
 
         List<Cloudlet> onDemandJobs = new ArrayList<>();
         double now = CloudSim.clock();
@@ -149,7 +212,11 @@ public class CEWBBroker extends AbstractWorkflowBroker {
             WorkflowRecord wfr = activeWorkflows.get(workflowIdForJob(job));
             if (wfr == null) continue;
 
-            if (forceOnDemand.contains(jobId) || now >= getSst(job)) {
+            CEWBCriticalityPolicy.Decision decision = decisions.get(jobId);
+            boolean criticalOnDemand = paperAligned && decision != null
+                    && decision.getResourceClass() == CEWBCriticalityPolicy.ON_DEMAND;
+            if (forceOnDemand.contains(jobId) || criticalOnDemand
+                    || (!paperAligned && now >= getSst(job))) {
                 scheduledSstWakeups.remove(jobId);
                 CondorVM vm = provisioner.getOrProvision(job);
                 cl.setVmId(vm.getId());
@@ -183,15 +250,53 @@ public class CEWBBroker extends AbstractWorkflowBroker {
             CEWBSpotMarket.Offer offer = spotMarket.acquire(
                     wfr.getTaskCores(taskId), wfr.getTaskRamMb(taskId),
                     wfr.getEstimatedExecTime(taskId), cl.getCloudletLength(),
-                    now, getLft(job), vmPool.getOnDemandPricePerSecond(taskId));
+                    now, getLft(job), vmPool.getOnDemandPricePerSecond(taskId),
+                    paperAligned ? effectiveSpotClass(jobId, decision)
+                            : CEWBCriticalityPolicy.LOW_RELIABILITY_SPOT);
             if (offer != null) {
                 scheduledSstWakeups.remove(jobId);
                 dispatchSpot(job, offer);
+            } else if (paperAligned) {
+                forceOnDemand.add(jobId);
+                CondorVM vm = provisioner.getOrProvision(job);
+                cl.setVmId(vm.getId());
+                onDemandJobs.add(cl);
+                fallbackDispatches++;
             } else {
                 scheduleSstWake(job, now);
             }
         }
         dispatchScheduledJobs(onDemandJobs);
+    }
+
+    private Map<Integer, CEWBCriticalityPolicy.Decision> classifyReadyJobs(
+            List<Cloudlet> jobs, double now) {
+        Map<Integer, List<Task>> byWorkflow = new HashMap<>();
+        for (Cloudlet cloudlet : jobs) {
+            Job job = (Job) cloudlet;
+            if (job.getTaskList().isEmpty()) continue;
+            byWorkflow.computeIfAbsent(workflowIdForJob(job), unused ->
+                    new ArrayList<>()).add(job.getTaskList().get(0));
+        }
+        Map<Integer, CEWBCriticalityPolicy.Decision> result = new HashMap<>();
+        for (Map.Entry<Integer, List<Task>> entry : byWorkflow.entrySet()) {
+            WorkflowRecord workflow = activeWorkflows.get(entry.getKey());
+            if (workflow != null) {
+                result.putAll(criticalityPolicy.classify(
+                        entry.getValue(), workflow, now));
+            }
+        }
+        return result;
+    }
+
+    private int effectiveSpotClass(int jobId,
+            CEWBCriticalityPolicy.Decision decision) {
+        int requested = decision != null ? decision.getResourceClass()
+                : CEWBCriticalityPolicy.HIGH_RELIABILITY_SPOT;
+        requested = Math.max(CEWBCriticalityPolicy.HIGH_RELIABILITY_SPOT,
+                requested);
+        return Math.min(requested, maximumSpotClassByJob.getOrDefault(jobId,
+                CEWBCriticalityPolicy.LOW_RELIABILITY_SPOT));
     }
 
     private void scheduleSstWake(Job job, double now) {
@@ -282,13 +387,26 @@ public class CEWBBroker extends AbstractWorkflowBroker {
     }
 
     private void interruptSpotAttempt(SpotAttempt attempt) {
-        Job job = attempt.job;
-        SpotAttempt active = activeSpotAttempts.get(job.getCloudletId());
+        SpotAttempt active = activeSpotAttempts.get(attempt.job.getCloudletId());
         if (active != attempt) return;
-        activeSpotAttempts.remove(job.getCloudletId());
-        spotMarket.release(attempt.offer);
+        spotMarket.revoke(attempt.offer);
+        List<SpotAttempt> revokedAttempts = new ArrayList<>();
+        for (SpotAttempt candidate : activeSpotAttempts.values()) {
+            if (candidate.offer.getInstanceId() == attempt.offer.getInstanceId()) {
+                revokedAttempts.add(candidate);
+            }
+        }
+        for (SpotAttempt revoked : revokedAttempts) {
+            retryInterruptedAttempt(revoked);
+        }
+        schedule(getId(), 0.0, WorkflowSimTags.CLOUDLET_UPDATE);
+    }
 
-        double cost = attempt.offer.getAttemptCost();
+    private void retryInterruptedAttempt(SpotAttempt attempt) {
+        Job job = attempt.job;
+        activeSpotAttempts.remove(job.getCloudletId());
+        double cost = attempt.offer.getCostForElapsed(
+                CloudSim.clock() - attempt.startTime);
         WorkflowRecord wfr = activeWorkflows.get(workflowIdForJob(job));
         if (wfr != null) wfr.addSpotCost(cost);
         getCloudletSubmittedList().remove(job);
@@ -296,7 +414,14 @@ public class CEWBBroker extends AbstractWorkflowBroker {
         accounting.markTaskInterrupted(job);
 
         int attempts = spotAttemptCounts.getOrDefault(job.getCloudletId(), 1);
-        if (attempts >= Math.max(1, MAX_SPOT_ATTEMPTS)) {
+        if (paperAligned) {
+            int attemptedClass = attempt.offer.getReliabilityClass();
+            if (attemptedClass <= CEWBCriticalityPolicy.HIGH_RELIABILITY_SPOT) {
+                forceOnDemand.add(job.getCloudletId());
+            } else {
+                maximumSpotClassByJob.put(job.getCloudletId(), attemptedClass - 1);
+            }
+        } else if (attempts >= Math.max(1, MAX_SPOT_ATTEMPTS)) {
             forceOnDemand.add(job.getCloudletId());
         }
         try {
@@ -314,7 +439,6 @@ public class CEWBBroker extends AbstractWorkflowBroker {
                 workflowIdForJob(job), primaryTaskId(job),
                 attempt.offer.getInstanceId(), attempt.offer.getTypeName(), cost,
                 attempts, forceOnDemand.contains(job.getCloudletId()) ? "yes" : "no");
-        schedule(getId(), 0.0, WorkflowSimTags.CLOUDLET_UPDATE);
     }
 
     private double getSst(Job job) {
@@ -331,6 +455,8 @@ public class CEWBBroker extends AbstractWorkflowBroker {
         if (configurationLogged) return;
         configurationLogged = true;
         String summary = spotMarket.configurationSummary();
+        summary += " mode=" + (paperAligned ? "paper-aligned" : "reconstructed");
+        if (paperAligned) summary += " pricing=" + pricingPolicy.getMode();
         System.out.println("[CEWB-CONFIG] " + summary);
         CBMWLogger.log("CEWB-CONFIG", summary);
     }
@@ -345,6 +471,7 @@ public class CEWBBroker extends AbstractWorkflowBroker {
                 + " wakesFired=" + sstWakeupsFired;
         System.out.println("[CEWB-SUMMARY] " + summary);
         CBMWLogger.log("CEWB-SUMMARY", summary);
+        spotMarket.terminateAll();
         assert spotMarket.getActiveInstances() == 0
                 : "CEWB simulation ended with active spot instances: "
                         + spotMarket.getActiveInstances();

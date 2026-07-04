@@ -266,7 +266,8 @@ public class CBMWDetailedResultExporter {
         rows.add(row("Workflow Name", "Status", "Start Time (s)", "Finish Time (s)",
                 "Critical Path Time (s)", "Deadline (s)", "Met Deadline", "Alpha",
                 "Deadline Feasible", "Estimated Raw Cost", "Gamma",
-                "Offered Price", "Price Accepted"));
+                "Offered Price", "Broker Revenue", "Broker Profit",
+                "Price Accepted"));
         List<WorkflowCompletionRecord> records = new ArrayList<>(accounting.getWorkflowRecords());
         records.sort(Comparator.comparingInt(WorkflowCompletionRecord::getWorkflowId));
         for (WorkflowCompletionRecord record : records) {
@@ -278,6 +279,8 @@ public class CBMWDetailedResultExporter {
                     fmtPrecise(record.getEstimatedRawCost()),
                     fmtPrecise(record.getPriceMarkupGamma()),
                     fmtPrecise(record.getOfferedPrice()),
+                    fmtPrecise(record.getBrokerRevenue()),
+                    fmtPrecise(record.getBrokerProfit()),
                     record.isPriceAccepted() ? "AUTO_ACCEPTED" : "NOT_QUOTED"));
         }
         SimpleXlsxWriter.write(file, "Workflow Completion Summary", rows);

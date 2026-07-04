@@ -91,16 +91,17 @@ priority, uncertainty, cost, and feedback rules are still applied.
 
 ### CEWB Spot Baseline
 
-`CEWBBroker` uses an explicit logical spot market instead of treating reserved
-VMs as fake low-cost capacity. For every ready task it:
+`CEWBBroker` now has two explicit modes. `CEWB` uses the paper-aligned
+WorkflowSim reconstruction; `CEWB-Reconstructed` preserves the earlier
+safe-start/attempt-limit policy. Paper-aligned CEWB:
 
-1. filters spot classes by task cores/RAM, current capacity, bid price,
+1. assigns proportional sub-deadlines and recomputes ready-task slack;
+2. maps normalized criticality to on-demand/high/medium/low reliability;
+3. filters spot classes by task cores/RAM, current capacity, bid price,
    predicted sub-deadline finish, and interruption success probability;
-2. selects the class with the lowest reliability-adjusted expected cost;
-3. samples a volatile spot price and an exponential interruption time;
-4. retries an interrupted task from the beginning, then falls back to a
-   dedicated on-demand container after the configured attempt limit or when
-   the task reaches its safe start time.
+4. executes task containers in reusable logical spot VMs with CPU/RAM slots;
+5. revokes all containers on an interrupted VM and escalates each task to a
+   more reliable class, eventually falling back to on-demand.
 
 Default spot classes are explicit simulation assumptions:
 
@@ -116,6 +117,11 @@ Important properties include `cbmw.cewb.spot.startup.sec`,
 `cbmw.cewb.spot.total.cores`, and per-class properties under
 `cbmw.cewb.spot.<class>.*`. Results report `spotCost`,
 `spotUsageRatio`, actual VM type `Spot`, and per-task interruption counts.
+Results also include `brokerRevenue` and `brokerProfit`. The reconstructed
+pricing families are selected by `cbmw.cewb.pricing.policy` with values
+`CONSTANT_PROFIT`, `CONSTANT_DISCOUNT`, or `PREDICTION_BASED`.
+These fields are retained by `scripts/merge_algorithm_outputs.py` in combined
+per-run and aggregate results.
 
 The default class capacities are an explicitly labelled capacity-matched
 experimental normalization, not a CEWB paper constant. They divide 960
@@ -125,9 +131,9 @@ the five 192-core reserved instances available to CBMW. Setting
 Per-class `capacity` properties override the derived defaults. CEWB keeps its
 own spot/on-demand selection, bidding, reliability, and retry policy.
 
-CEWB scheduling is event-driven. A ready task with no feasible spot offer gets
-one deduplicated wake event at its exact safe-start threshold rather than being
-rounded to the next global scheduling tick. Scenario logs contain
+CEWB scheduling is event-driven. Paper-aligned ready tasks are ordered by
+slack, upward rank, workflow deadline, and task ID. The older
+`CEWB-Reconstructed` mode retains exact safe-start wake events. Scenario logs contain
 `CEWB-CONFIG` and `CEWB-SUMMARY` records with configured/peak cores,
 saturation, no-offer, fallback, predicted-miss, and wake counters.
 
@@ -143,9 +149,9 @@ all experimental constants are not available in this repository.
 
 - **NOSF** is a paper-informed reconstruction of preprocessing, sub-deadlines,
   EST-priority allocation, uncertainty handling, and completion feedback.
-- **CEWB** implements explicit reliability classes, dynamic spot prices,
-  interruptions, retries, and on-demand fallback using documented configurable
-  simulation assumptions.
+- **CEWB** additionally implements proportional sub-deadlines, dynamic
+  slack/criticality classification, shared spot-VM containers, class escalation,
+  and reconstructed broker pricing policies.
 
 Results should label both algorithms as **paper-informed reconstructed
 baselines**, not exact reference implementations. Exact certification requires

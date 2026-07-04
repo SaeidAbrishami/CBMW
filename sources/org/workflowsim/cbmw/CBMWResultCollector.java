@@ -31,6 +31,8 @@ public class CBMWResultCollector {
         double spotCost = totalSpotCost();
         double rawEstimate = totalEstimatedRawCost();
         double offeredPrice = totalOfferedPrice();
+        double brokerRevenue = totalBrokerRevenue();
+        double brokerProfit = totalBrokerProfit();
         double makespan = makespan();
         double deadlineRate = accepted == 0 ? 0.0 : (double) met / accepted;
         double acceptanceRate = total == 0 ? 0.0 : (double) accepted / total;
@@ -54,6 +56,8 @@ public class CBMWResultCollector {
         Log.printLine(String.format("Spot cost ($)            : %.4f", spotCost));
         Log.printLine(String.format("Negotiated raw cost ($)  : %.4f", rawEstimate));
         Log.printLine(String.format("Offered price ($)        : %.4f", offeredPrice));
+        Log.printLine(String.format("Broker revenue ($)       : %.4f", brokerRevenue));
+        Log.printLine(String.format("Broker profit ($)        : %.4f", brokerProfit));
         Log.printLine(String.format("Reserved prepaid cost ($): %.2f (excluded)", reservedCost));
         Log.printLine(String.format("Total cost ($)           : %.4f",
                 odCost + spotCost));
@@ -65,7 +69,7 @@ public class CBMWResultCollector {
                 + "total,accepted,rejected,metDeadline,rejectedNegotiation,"
                 + "rejectedPlanning,acceptanceRate,deadlineRate,overallSuccessRate,"
                 + "onDemandCost,spotCost,estimatedRawCost,"
-                + "offeredPrice,reservedCost,"
+                + "offeredPrice,brokerRevenue,brokerProfit,reservedCost,"
                 + "totalCost,makespan,reservedUtil,onDemandUsageRatio,spotUsageRatio,"
                 + "provisionedOnDemandVms,onDemandVmUtilization,deadlineRiskTasks";
     }
@@ -100,6 +104,8 @@ public class CBMWResultCollector {
         double spotCost = totalSpotCost();
         double rawEstimate = totalEstimatedRawCost();
         double offeredPrice = totalOfferedPrice();
+        double brokerRevenue = totalBrokerRevenue();
+        double brokerProfit = totalBrokerProfit();
         double reservedCost = reservedCost();
         double totalCost = odCost + spotCost;
 
@@ -107,7 +113,8 @@ public class CBMWResultCollector {
                 arrivalScale, tightness, run, total, accepted, rejected, met,
                 rejectedNegotiation, rejectedPlanning, acceptanceRate,
                 deadlineRate, overallSuccessRate,
-                odCost, spotCost, rawEstimate, offeredPrice, reservedCost,
+                odCost, spotCost, rawEstimate, offeredPrice,
+                brokerRevenue, brokerProfit, reservedCost,
                 totalCost, makespan(),
                 reservedUtilization(), onDemandUsageRatio, spotUsageRatio,
                 accounting.getProvisionedOnDemandVmCount(),
@@ -117,8 +124,8 @@ public class CBMWResultCollector {
 
     public static String toCsvRow(ScenarioMetrics metrics) {
         return String.format("%s,%s,%s,%s,%.4f,%.1f,%d,%d,%d,%d,%d,%d,%d,"
-                        + "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.2f,%.4f,"
-                        + "%.2f,%.4f,%.4f,%.4f,%d,%.4f,%d",
+                        + "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,"
+                        + "%.4f,%.4f,%.2f,%.4f,%.2f,%.4f,%.4f,%.4f,%d,%.4f,%d",
                 metrics.scenario, metrics.load, metrics.deadlineClass,
                 metrics.algorithm, metrics.arrivalScale, metrics.tightness,
                 metrics.run, metrics.total, metrics.accepted, metrics.rejected,
@@ -127,6 +134,7 @@ public class CBMWResultCollector {
                 metrics.deadlineRate, metrics.overallSuccessRate,
                 metrics.onDemandCost, metrics.spotCost,
                 metrics.estimatedRawCost, metrics.offeredPrice,
+                metrics.brokerRevenue, metrics.brokerProfit,
                 metrics.reservedCost, metrics.totalCost, metrics.makespan,
                 metrics.reservedUtil, metrics.onDemandUsageRatio,
                 metrics.spotUsageRatio, metrics.provisionedOnDemandVms,
@@ -151,6 +159,16 @@ public class CBMWResultCollector {
     private double totalOfferedPrice() {
         return allWorkflows.stream()
                 .mapToDouble(WorkflowRecord::getOfferedPrice).sum();
+    }
+
+    private double totalBrokerRevenue() {
+        return allWorkflows.stream()
+                .mapToDouble(WorkflowRecord::getBrokerRevenue).sum();
+    }
+
+    private double totalBrokerProfit() {
+        return allWorkflows.stream()
+                .mapToDouble(WorkflowRecord::getBrokerProfit).sum();
     }
 
     private long rejectionCount(String reason) {
@@ -200,6 +218,8 @@ public class CBMWResultCollector {
         public final double spotCost;
         public final double estimatedRawCost;
         public final double offeredPrice;
+        public final double brokerRevenue;
+        public final double brokerProfit;
         public final double reservedCost;
         public final double totalCost;
         public final double makespan;
@@ -219,6 +239,7 @@ public class CBMWResultCollector {
                                double overallSuccessRate,
                                double onDemandCost, double spotCost,
                                double estimatedRawCost, double offeredPrice,
+                               double brokerRevenue, double brokerProfit,
                                double reservedCost, double totalCost,
                                double makespan, double reservedUtil,
                                 double onDemandUsageRatio,
@@ -246,6 +267,8 @@ public class CBMWResultCollector {
             this.spotCost = spotCost;
             this.estimatedRawCost = estimatedRawCost;
             this.offeredPrice = offeredPrice;
+            this.brokerRevenue = brokerRevenue;
+            this.brokerProfit = brokerProfit;
             this.reservedCost = reservedCost;
             this.totalCost = totalCost;
             this.makespan = makespan;

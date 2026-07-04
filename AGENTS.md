@@ -77,6 +77,8 @@ Useful JVM switches:
 | `-Dcbmw.cewb.spot.max.attempts=3` | Spot attempts before CEWB forces on-demand fallback. |
 | `-Dcbmw.cewb.spot.min.success.prob=0.80` | Minimum predicted probability that a spot attempt survives. |
 | `-Dcbmw.cewb.spot.total.cores=960` | Capacity-matched physical spot-core envelope; divided equally across the three fixed classes unless per-class capacities override it. |
+| `-Dcbmw.cewb.pricing.policy=CONSTANT_PROFIT` | CEWB reconstructed pricing family; alternatives are `CONSTANT_DISCOUNT` and `PREDICTION_BASED`. |
+| `-Dcbmw.cewb.criticality.ondemand=0.75` | Normalized criticality threshold for the most reliable on-demand class. |
 
 Linux VM helper for one algorithm:
 
@@ -133,6 +135,9 @@ is accepted/total, the legacy `deadlineRate` remains met/accepted, and
 split into negotiation and planning failures.
 They also report provisioned on-demand VM count, aggregate on-demand VM
 utilization, and deadline-risk task count.
+Scenario and aggregate CSVs also report broker revenue and broker profit. For
+paper-aligned CEWB these are settled by the selected reconstructed pricing
+policy; other algorithms leave them at zero unless they implement pricing.
 
 Detailed `.rar-style` outputs, when `cbmw.export.details=true`:
 
@@ -281,22 +286,25 @@ All brokers extend `AbstractWorkflowBroker`.
 |--------|--------------|-----------------------|
 | CBMW | Paper-style EST/EFT/LFT backward sweep-line using estimated durations | Periodic LST-aware dynamic dispatch with on-demand fallback |
 | NOSF | Uncertainty-aware EST/EFT and proportional sub-deadline preprocessing | EDF, minimum incremental-cost reusable on-demand VM selection, deadline-risk fallback, and completion feedback |
-| CEWB | Computes task safe-start/sub-deadline timing for spot selection | Explicit spot-class selection, interruption/retry, and on-demand fallback |
+| CEWB | HEFT-style ranks and proportional sub-deadlines | Dynamic slack classification, shared spot-VM containers, reliability escalation, and on-demand fallback |
 | StaticGreedy | Static round-robin reserved planning | Assigned VM, any reserved, then on-demand |
 | DynamicGreedy | No static planning | First idle reserved, then on-demand FCFS |
 
 CEWB has a separate configurable logical spot market with economy, standard,
 and performance classes. Each class has independent cores, RAM, MIPS, base
-price, capacity, and mean time between interruptions. Prices vary per attempt;
-interruptions follow an exponential reliability model and restart the task.
+price, capacity, and mean time between interruptions. Paper-aligned CEWB keeps
+logical VMs alive and multiplexes task containers within CPU/RAM capacity.
+Prices vary per instance; interruptions follow an exponential reliability
+model, revoke every container on that VM, restart tasks, and escalate them.
 CEWB is charged no reserved-pool fixed cost, and spot cost/usage are exported
 separately from on-demand cost/usage.
 The default capacities are 320 economy, 160 standard, and 80 performance
 instances: 320 physical cores per class and 960 in total. This is an explicitly
 reported capacity-matched experimental environment, not a claimed CEWB paper
 constant. `cbmw.cewb.spot.total.cores=192` restores the former 64/32/16 pool.
-CEWB uses exact deduplicated safe-start wake events and logs configuration,
-peak capacity, saturation, fallback, predicted-miss, and wake diagnostics.
+`CEWB-Reconstructed` retains the former safe-start/attempt-limit behavior.
+Both modes log configuration, peak capacity, saturation, fallback,
+predicted-miss, and wake diagnostics.
 
 ---
 

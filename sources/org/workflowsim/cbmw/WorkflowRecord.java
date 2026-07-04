@@ -24,6 +24,8 @@ public class WorkflowRecord {
     private double priceMarkupGamma = 1.0;
     private double offeredPrice;
     private boolean priceAccepted;
+    private double brokerRevenue;
+    private double brokerProfit;
 
     private List<Task> taskList;
     private final Map<Integer, Double> earliestStartTimes  = new HashMap<>();  // taskId -> estji
@@ -90,6 +92,10 @@ public class WorkflowRecord {
     public void setOfferedPrice(double price) { this.offeredPrice = price; }
     public boolean isPriceAccepted() { return priceAccepted; }
     public void setPriceAccepted(boolean accepted) { this.priceAccepted = accepted; }
+    public double getBrokerRevenue() { return brokerRevenue; }
+    public void setBrokerRevenue(double revenue) { this.brokerRevenue = revenue; }
+    public double getBrokerProfit() { return brokerProfit; }
+    public void setBrokerProfit(double profit) { this.brokerProfit = profit; }
 
     // --- tasks ---
     public List<Task> getTaskList() { return taskList; }

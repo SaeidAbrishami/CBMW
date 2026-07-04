@@ -23,26 +23,36 @@ final class CEWBSpotMarket {
 
     static final class Offer {
         private final SpotType type;
-        private final int instanceId;
+        private final SpotInstance instance;
         private final double pricePerSecond;
         private final double startupSeconds;
         private final double predictedExecutionSeconds;
         private final double executionSeconds;
         private final double interruptionDelaySeconds;
         private final double successProbability;
+        private final int allocatedCores;
+        private final int allocatedRamMb;
+        private final double allocationShare;
 
-        Offer(SpotType type, int instanceId, double pricePerSecond,
+        Offer(SpotType type, SpotInstance instance, double pricePerSecond,
               double startupSeconds, double predictedExecutionSeconds,
               double executionSeconds,
-              double interruptionDelaySeconds, double successProbability) {
+              double interruptionDelaySeconds, double successProbability,
+              int allocatedCores, int allocatedRamMb,
+              boolean sharedContainers) {
             this.type = type;
-            this.instanceId = instanceId;
+            this.instance = instance;
             this.pricePerSecond = pricePerSecond;
             this.startupSeconds = startupSeconds;
             this.predictedExecutionSeconds = predictedExecutionSeconds;
             this.executionSeconds = executionSeconds;
             this.interruptionDelaySeconds = interruptionDelaySeconds;
             this.successProbability = successProbability;
+            this.allocatedCores = allocatedCores;
+            this.allocatedRamMb = allocatedRamMb;
+            this.allocationShare = sharedContainers ? Math.max(
+                    allocatedCores / (double) type.cores,
+                    allocatedRamMb / (double) type.ramMb) : 1.0;
             if (!Double.isFinite(pricePerSecond) || pricePerSecond < 0.0
                     || !Double.isFinite(startupSeconds) || startupSeconds < 0.0
                     || !Double.isFinite(predictedExecutionSeconds)
@@ -57,7 +67,8 @@ final class CEWBSpotMarket {
         }
 
         String getTypeName() { return type.name; }
-        int getInstanceId() { return instanceId; }
+        int getReliabilityClass() { return type.reliabilityClass; }
+        int getInstanceId() { return instance.id; }
         double getPricePerSecond() { return pricePerSecond; }
         double getStartupSeconds() { return startupSeconds; }
         double getExecutionSeconds() { return executionSeconds; }
@@ -75,7 +86,33 @@ final class CEWBSpotMarket {
             return startupSeconds + getAttemptRuntimeSeconds();
         }
         double getAttemptCost() {
-            return getEventDelaySeconds() * pricePerSecond;
+            return getEventDelaySeconds() * pricePerSecond * allocationShare;
+        }
+        double getCostForElapsed(double elapsed) {
+            return Math.max(0.0, elapsed) * pricePerSecond * allocationShare;
+        }
+    }
+
+    private static final class SpotInstance {
+        private final int id;
+        private final SpotType type;
+        private final double pricePerSecond;
+        private final double interruptionTime;
+        private int usedCores;
+        private int usedRamMb;
+        private boolean active = true;
+
+        SpotInstance(int id, SpotType type, double pricePerSecond,
+                     double interruptionTime) {
+            this.id = id;
+            this.type = type;
+            this.pricePerSecond = pricePerSecond;
+            this.interruptionTime = interruptionTime;
+        }
+
+        boolean fits(int cores, int ramMb) {
+            return active && usedCores + cores <= type.cores
+                    && usedRamMb + ramMb <= type.ramMb;
         }
     }
 
@@ -87,10 +124,12 @@ final class CEWBSpotMarket {
         private final double basePricePerSecond;
         private final double meanTimeBetweenInterruptions;
         private final int capacity;
+        private final int reliabilityClass;
 
         SpotType(String name, int cores, int ramMb, double mips,
                  double basePricePerSecond,
-                 double meanTimeBetweenInterruptions, int capacity) {
+                 double meanTimeBetweenInterruptions, int capacity,
+                 int reliabilityClass) {
             this.name = name;
             this.cores = cores;
             this.ramMb = ramMb;
@@ -98,6 +137,7 @@ final class CEWBSpotMarket {
             this.basePricePerSecond = basePricePerSecond;
             this.meanTimeBetweenInterruptions = meanTimeBetweenInterruptions;
             this.capacity = capacity;
+            this.reliabilityClass = reliabilityClass;
         }
     }
 
@@ -114,7 +154,9 @@ final class CEWBSpotMarket {
 
     private final List<SpotType> types = new ArrayList<>();
     private final Map<String, Integer> activeByType = new HashMap<>();
+    private final Map<Integer, SpotInstance> instances = new HashMap<>();
     private final Random random;
+    private final boolean sharedContainers;
     private int nextInstanceId = 1_000_000;
     private long acquireCalls;
     private long acquiredOffers;
@@ -126,14 +168,22 @@ final class CEWBSpotMarket {
     private int peakActiveCores;
 
     CEWBSpotMarket(long seed) {
+        this(seed, true);
+    }
+
+    CEWBSpotMarket(long seed, boolean sharedContainers) {
         if (DEFAULT_TOTAL_SPOT_CORES <= 0) {
             throw new IllegalArgumentException(
                     "cbmw.cewb.spot.total.cores must be positive");
         }
         random = new Random(seed);
-        types.add(type("economy", 1, 1024, 900.0, 0.000085, 1800.0));
-        types.add(type("standard", 2, 4096, 1000.0, 0.000140, 3600.0));
-        types.add(type("performance", 4, 8192, 1500.0, 0.000240, 7200.0));
+        this.sharedContainers = sharedContainers;
+        types.add(type("economy", 1, 1024, 900.0, 0.000085, 1800.0,
+                CEWBCriticalityPolicy.LOW_RELIABILITY_SPOT));
+        types.add(type("standard", 2, 4096, 1000.0, 0.000140, 3600.0,
+                CEWBCriticalityPolicy.MEDIUM_RELIABILITY_SPOT));
+        types.add(type("performance", 4, 8192, 1500.0, 0.000240, 7200.0,
+                CEWBCriticalityPolicy.HIGH_RELIABILITY_SPOT));
         validateConfiguration();
     }
 
@@ -141,20 +191,35 @@ final class CEWBSpotMarket {
                   long cloudletLength,
                   double now, double subDeadline,
                   double onDemandPricePerSecond) {
+        return acquire(taskCores, taskRamMb, estimatedRuntime, cloudletLength,
+                now, subDeadline, onDemandPricePerSecond,
+                CEWBCriticalityPolicy.LOW_RELIABILITY_SPOT);
+    }
+
+    Offer acquire(int taskCores, int taskRamMb, double estimatedRuntime,
+                  long cloudletLength,
+                  double now, double subDeadline,
+                  double onDemandPricePerSecond, int requiredReliabilityClass) {
         validateAcquireRequest(taskCores, taskRamMb, estimatedRuntime,
                 cloudletLength, now, subDeadline, onDemandPricePerSecond);
+        if (requiredReliabilityClass < CEWBCriticalityPolicy.HIGH_RELIABILITY_SPOT
+                || requiredReliabilityClass
+                        > CEWBCriticalityPolicy.LOW_RELIABILITY_SPOT) {
+            throw new IllegalArgumentException("Invalid CEWB spot reliability class: "
+                    + requiredReliabilityClass);
+        }
         acquireCalls++;
         List<Offer> candidates = new ArrayList<>();
         boolean hasResourceFit = false;
         boolean hasCapacity = false;
         for (SpotType type : types) {
+            // A lower class number means a more reliable resource. A task may
+            // use its requested class or a more reliable spot class.
+            if (type.reliabilityClass > requiredReliabilityClass) continue;
             if (taskCores > type.cores || taskRamMb > type.ramMb) continue;
             hasResourceFit = true;
-            if (activeByType.getOrDefault(type.name, 0) >= type.capacity) continue;
-            hasCapacity = true;
 
             double price = currentPrice(type);
-            if (price > onDemandPricePerSecond * MAX_BID_TO_ON_DEMAND_RATIO) continue;
             double predictedExecution = estimatedRuntime * 1000.0 / type.mips;
             double execution = HybridVmPool.executionTimeSeconds(
                     cloudletLength, taskCores, type.mips);
@@ -162,13 +227,36 @@ final class CEWBSpotMarket {
                     ? 0.0 : Math.exp(-predictedExecution
                             / type.meanTimeBetweenInterruptions);
             if (successProbability < MIN_SUCCESS_PROBABILITY) continue;
-            if (now + STARTUP_SECONDS + predictedExecution > subDeadline) continue;
 
-            double interruptionDelay = sampleInterruptionDelay(
-                    type.meanTimeBetweenInterruptions);
-            candidates.add(new Offer(type, nextInstanceId, price,
-                    STARTUP_SECONDS, predictedExecution, execution,
-                    interruptionDelay, successProbability));
+            for (SpotInstance instance : sharedContainers
+                    ? instances.values() : java.util.Collections.<SpotInstance>emptyList()) {
+                if (instance.type != type || !instance.fits(taskCores, taskRamMb)) {
+                    continue;
+                }
+                hasCapacity = true;
+                if (now + predictedExecution > subDeadline) continue;
+                if (instance.pricePerSecond
+                        > onDemandPricePerSecond * MAX_BID_TO_ON_DEMAND_RATIO) continue;
+                candidates.add(new Offer(type, instance, instance.pricePerSecond,
+                        0.0, predictedExecution, execution,
+                        Math.max(0.0, instance.interruptionTime - now),
+                        successProbability, taskCores, taskRamMb,
+                        sharedContainers));
+            }
+
+            if (activeByType.getOrDefault(type.name, 0) < type.capacity
+                    && price <= onDemandPricePerSecond * MAX_BID_TO_ON_DEMAND_RATIO) {
+                hasCapacity = true;
+                if (now + STARTUP_SECONDS + predictedExecution > subDeadline) continue;
+                double interruptionDelay = sampleInterruptionDelay(
+                        type.meanTimeBetweenInterruptions);
+                SpotInstance instance = new SpotInstance(nextInstanceId, type, price,
+                        now + STARTUP_SECONDS + interruptionDelay);
+                candidates.add(new Offer(type, instance, price,
+                        STARTUP_SECONDS, predictedExecution, execution,
+                        interruptionDelay, successProbability,
+                        taskCores, taskRamMb, sharedContainers));
+            }
         }
         if (candidates.isEmpty()) {
             noOfferCalls++;
@@ -180,22 +268,28 @@ final class CEWBSpotMarket {
                 offer.getPricePerSecond() * offer.getPredictedExecutionSeconds()
                         / Math.max(offer.getSuccessProbability(), 1e-9)));
         Offer selected = candidates.get(0);
-        nextInstanceId++;
-        int activeForType = activeByType.merge(
-                selected.getTypeName(), 1, Integer::sum);
-        if (activeForType > selected.type.capacity) {
-            throw new IllegalStateException("CEWB spot capacity exceeded for "
-                    + selected.getTypeName() + ": " + activeForType + "/"
-                    + selected.type.capacity);
+        SpotInstance instance = selected.instance;
+        if (!instances.containsKey(instance.id)) {
+            instances.put(instance.id, instance);
+            nextInstanceId++;
+            int activeForType = activeByType.merge(
+                    selected.getTypeName(), 1, Integer::sum);
+            if (activeForType > selected.type.capacity) {
+                throw new IllegalStateException("CEWB spot capacity exceeded for "
+                        + selected.getTypeName() + ": " + activeForType + "/"
+                        + selected.type.capacity);
+            }
+            activeInstances++;
+            activeCores += selected.type.cores;
+            peakActiveInstances = Math.max(peakActiveInstances, activeInstances);
+            peakActiveCores = Math.max(peakActiveCores, activeCores);
+            if (activeCores > getConfiguredTotalCores()) {
+                throw new IllegalStateException("CEWB active spot cores exceeded configured pool: "
+                        + activeCores + "/" + getConfiguredTotalCores());
+            }
         }
-        activeInstances++;
-        activeCores += selected.type.cores;
-        peakActiveInstances = Math.max(peakActiveInstances, activeInstances);
-        peakActiveCores = Math.max(peakActiveCores, activeCores);
-        if (activeCores > getConfiguredTotalCores()) {
-            throw new IllegalStateException("CEWB active spot cores exceeded configured pool: "
-                    + activeCores + "/" + getConfiguredTotalCores());
-        }
+        instance.usedCores += selected.allocatedCores;
+        instance.usedRamMb += selected.allocatedRamMb;
         acquiredOffers++;
         return selected;
     }
@@ -204,15 +298,39 @@ final class CEWBSpotMarket {
         if (offer == null) {
             throw new IllegalArgumentException("Cannot release a null CEWB offer");
         }
-        int active = activeByType.getOrDefault(offer.getTypeName(), 0);
-        if (active <= 0 || activeInstances <= 0
-                || activeCores < offer.type.cores) {
-            throw new IllegalStateException("CEWB spot offer released without"
-                    + " a matching active allocation: " + offer.getTypeName());
+        SpotInstance instance = offer.instance;
+        if (!instance.active) return;
+        if (instance.usedCores < offer.allocatedCores
+                || instance.usedRamMb < offer.allocatedRamMb) {
+            throw new IllegalStateException("CEWB spot container released without"
+                    + " a matching allocation: " + offer.getTypeName());
         }
-        activeByType.put(offer.getTypeName(), active - 1);
+        instance.usedCores -= offer.allocatedCores;
+        instance.usedRamMb -= offer.allocatedRamMb;
+        if (!sharedContainers) terminateInstance(instance);
+    }
+
+    void revoke(Offer offer) {
+        SpotInstance instance = offer.instance;
+        if (!instance.active) return;
+        terminateInstance(instance);
+    }
+
+    private void terminateInstance(SpotInstance instance) {
+        if (!instance.active) return;
+        instance.active = false;
+        instances.remove(instance.id);
+        int active = activeByType.getOrDefault(instance.type.name, 0);
+        activeByType.put(instance.type.name, Math.max(0, active - 1));
         activeInstances--;
-        activeCores -= offer.type.cores;
+        activeCores -= instance.type.cores;
+    }
+
+    void terminateAll() {
+        instances.clear();
+        activeByType.clear();
+        activeInstances = 0;
+        activeCores = 0;
     }
 
     int getConfiguredTotalCores() {
@@ -262,7 +380,7 @@ final class CEWBSpotMarket {
 
     private SpotType type(String name, int defaultCores, int defaultRamMb,
                           double defaultMips, double defaultPrice,
-                          double defaultMtbi) {
+                          double defaultMtbi, int reliabilityClass) {
         String prefix = "cbmw.cewb.spot." + name + ".";
         double globalMtbi = property("cbmw.cewb.spot.mtbi.sec", Double.NaN);
         int cores = intProperty(prefix + "cores", defaultCores);
@@ -274,7 +392,8 @@ final class CEWBSpotMarket {
                 Double.isFinite(globalMtbi) ? globalMtbi
                         : property(prefix + "mtbi.sec", defaultMtbi),
                 intProperty(prefix + "capacity",
-                        matchedDefaultCapacity(cores)));
+                        matchedDefaultCapacity(cores)),
+                reliabilityClass);
     }
 
     private static int matchedDefaultCapacity(int coresPerInstance) {

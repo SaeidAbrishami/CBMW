@@ -15,6 +15,8 @@ public class WorkflowCompletionRecord {
     private final double estimatedRawCost;
     private final double priceMarkupGamma;
     private final double offeredPrice;
+    private final double brokerRevenue;
+    private final double brokerProfit;
     private final boolean priceAccepted;
 
     public WorkflowCompletionRecord(int workflowId, String workflowPath, String status,
@@ -25,6 +27,8 @@ public class WorkflowCompletionRecord {
                                     double estimatedRawCost,
                                     double priceMarkupGamma,
                                     double offeredPrice,
+                                    double brokerRevenue,
+                                    double brokerProfit,
                                     boolean priceAccepted) {
         this.workflowId = workflowId;
         this.workflowPath = workflowPath;
@@ -39,6 +43,8 @@ public class WorkflowCompletionRecord {
         this.estimatedRawCost = estimatedRawCost;
         this.priceMarkupGamma = priceMarkupGamma;
         this.offeredPrice = offeredPrice;
+        this.brokerRevenue = brokerRevenue;
+        this.brokerProfit = brokerProfit;
         this.priceAccepted = priceAccepted;
     }
 
@@ -55,5 +61,7 @@ public class WorkflowCompletionRecord {
     public double getEstimatedRawCost() { return estimatedRawCost; }
     public double getPriceMarkupGamma() { return priceMarkupGamma; }
     public double getOfferedPrice() { return offeredPrice; }
+    public double getBrokerRevenue() { return brokerRevenue; }
+    public double getBrokerProfit() { return brokerProfit; }
     public boolean isPriceAccepted() { return priceAccepted; }
 }

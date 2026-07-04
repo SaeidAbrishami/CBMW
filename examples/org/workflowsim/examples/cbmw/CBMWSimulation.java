@@ -307,7 +307,9 @@ public class CBMWSimulation {
         switch (algorithm) {
             case "CBMW":          return new CBMWBroker("CBMWBroker_0", tightness);
             case "NOSF":          return new NOSFBroker("NOSFBroker_0", tightness);
-            case "CEWB":          return new CEWBBroker("CEWBBroker_0", tightness);
+            case "CEWB":          return new CEWBBroker("CEWBBroker_0", tightness, true);
+            case "CEWB-Reconstructed":
+                return new CEWBBroker("CEWBReconstructedBroker_0", tightness, false);
             case "StaticGreedy":  return new StaticGreedyBroker("StaticGreedyBroker_0", tightness);
             case "DynamicGreedy": return new DynamicGreedyBroker("DynamicGreedyBroker_0", tightness);
             default: throw new IllegalArgumentException("Unknown algorithm: " + algorithm);
@@ -401,8 +403,11 @@ public class CBMWSimulation {
                 .append("avgAcceptanceRate,avgDeadlineRate,avgOverallSuccessRate,")
                 .append("avgOnDemandCost,")
                 .append("avgSpotCost,avgEstimatedRawCost,avgOfferedPrice,")
+                .append("avgBrokerRevenue,avgBrokerProfit,")
                 .append("avgReservedCost,avgTotalCost,avgMakespan,")
-                .append("avgReservedUtil,avgOnDemandUsageRatio,avgSpotUsageRatio\n");
+                .append("avgReservedUtil,avgOnDemandUsageRatio,avgSpotUsageRatio,")
+                .append("avgProvisionedOnDemandVms,avgOnDemandVmUtilization,")
+                .append("avgDeadlineRiskTasks\n");
         for (Aggregate aggregate : groups.values()) {
             csv.append(aggregate.toCsvRow()).append("\n");
         }
@@ -484,6 +489,8 @@ public class CBMWSimulation {
         private double spotCost;
         private double estimatedRawCost;
         private double offeredPrice;
+        private double brokerRevenue;
+        private double brokerProfit;
         private double reservedCost;
         private double totalCost;
         private double makespan;
@@ -518,6 +525,8 @@ public class CBMWSimulation {
             spotCost += row.spotCost;
             estimatedRawCost += row.estimatedRawCost;
             offeredPrice += row.offeredPrice;
+            brokerRevenue += row.brokerRevenue;
+            brokerProfit += row.brokerProfit;
             reservedCost += row.reservedCost;
             totalCost += row.totalCost;
             makespan += row.makespan;
@@ -532,8 +541,9 @@ public class CBMWSimulation {
         String toCsvRow() {
             return String.format(Locale.US,
                     "%s,%s,%s,%s,%.4f,%.1f,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,"
-                            + "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.2f,%.4f,"
-                            + "%.2f,%.4f,%.4f,%.4f,%.2f,%.4f,%.2f",
+                            + "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,"
+                            + "%.4f,%.4f,%.2f,%.4f,%.2f,%.4f,%.4f,%.4f,"
+                            + "%.4f,%.4f,%.2f",
                     scenario, load, deadlineClass, algorithm, arrivalScale,
                     tightness, runs, total / runs, accepted / runs,
                     rejected / runs, metDeadline / runs,
@@ -542,6 +552,7 @@ public class CBMWSimulation {
                     overallSuccessRate / runs,
                     onDemandCost / runs, spotCost / runs,
                     estimatedRawCost / runs, offeredPrice / runs,
+                    brokerRevenue / runs, brokerProfit / runs,
                     reservedCost / runs, totalCost / runs, makespan / runs,
                     reservedUtil / runs, onDemandUsageRatio / runs,
                     spotUsageRatio / runs, provisionedOnDemandVms / runs,

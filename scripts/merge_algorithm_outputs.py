@@ -44,12 +44,17 @@ CSV_HEADER = [
     "spotCost",
     "estimatedRawCost",
     "offeredPrice",
+    "brokerRevenue",
+    "brokerProfit",
     "reservedCost",
     "totalCost",
     "makespan",
     "reservedUtil",
     "onDemandUsageRatio",
     "spotUsageRatio",
+    "provisionedOnDemandVms",
+    "onDemandVmUtilization",
+    "deadlineRiskTasks",
 ]
 
 AGGREGATE_HEADER = [
@@ -73,12 +78,17 @@ AGGREGATE_HEADER = [
     "avgSpotCost",
     "avgEstimatedRawCost",
     "avgOfferedPrice",
+    "avgBrokerRevenue",
+    "avgBrokerProfit",
     "avgReservedCost",
     "avgTotalCost",
     "avgMakespan",
     "avgReservedUtil",
     "avgOnDemandUsageRatio",
     "avgSpotUsageRatio",
+    "avgProvisionedOnDemandVms",
+    "avgOnDemandVmUtilization",
+    "avgDeadlineRiskTasks",
 ]
 
 NUMERIC_FIELDS = [
@@ -95,12 +105,17 @@ NUMERIC_FIELDS = [
     "spotCost",
     "estimatedRawCost",
     "offeredPrice",
+    "brokerRevenue",
+    "brokerProfit",
     "reservedCost",
     "totalCost",
     "makespan",
     "reservedUtil",
     "onDemandUsageRatio",
     "spotUsageRatio",
+    "provisionedOnDemandVms",
+    "onDemandVmUtilization",
+    "deadlineRiskTasks",
 ]
 
 
@@ -183,12 +198,17 @@ def aggregate_rows(rows):
             "avgSpotCost": f"{group['spotCost'] / runs:.4f}",
             "avgEstimatedRawCost": f"{group['estimatedRawCost'] / runs:.4f}",
             "avgOfferedPrice": f"{group['offeredPrice'] / runs:.4f}",
+            "avgBrokerRevenue": f"{group['brokerRevenue'] / runs:.4f}",
+            "avgBrokerProfit": f"{group['brokerProfit'] / runs:.4f}",
             "avgReservedCost": f"{group['reservedCost'] / runs:.2f}",
             "avgTotalCost": f"{group['totalCost'] / runs:.4f}",
             "avgMakespan": f"{group['makespan'] / runs:.2f}",
             "avgReservedUtil": f"{group['reservedUtil'] / runs:.4f}",
             "avgOnDemandUsageRatio": f"{group['onDemandUsageRatio'] / runs:.4f}",
             "avgSpotUsageRatio": f"{group['spotUsageRatio'] / runs:.4f}",
+            "avgProvisionedOnDemandVms": f"{group['provisionedOnDemandVms'] / runs:.2f}",
+            "avgOnDemandVmUtilization": f"{group['onDemandVmUtilization'] / runs:.4f}",
+            "avgDeadlineRiskTasks": f"{group['deadlineRiskTasks'] / runs:.2f}",
         })
     return aggregate
 

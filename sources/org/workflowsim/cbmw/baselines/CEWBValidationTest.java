@@ -1,7 +1,11 @@
 package org.workflowsim.cbmw.baselines;
 
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Map;
 import java.util.List;
+import org.workflowsim.Task;
+import org.workflowsim.cbmw.WorkflowRecord;
 
 /** Dependency-free invariant tests for CEWB's environment and timing helpers. */
 public final class CEWBValidationTest {
@@ -12,8 +16,58 @@ public final class CEWBValidationTest {
         configureDeterministicMarket();
         testCapacityMatchedMarket();
         testTimingPolicy();
+        testCriticalityPolicy();
+        testPricingPolicy();
         testInvalidRequests();
         System.out.println("CEWBValidationTest: PASS");
+    }
+
+    private static void testCriticalityPolicy() {
+        Task entry = new Task(1, 10_000L);
+        Task exit = new Task(2, 10_000L);
+        entry.getChildList().add(exit);
+        exit.getParentList().add(entry);
+        WorkflowRecord workflow = new WorkflowRecord(0, "synthetic.xml", 0.0);
+        workflow.setTaskList(Arrays.asList(entry, exit));
+        workflow.setDeadline(40.0);
+        workflow.setEstimatedExecTime(1, 10.0);
+        workflow.setEstimatedExecTime(2, 10.0);
+
+        CEWBCriticalityPolicy policy = new CEWBCriticalityPolicy();
+        policy.preprocess(workflow, workflow.getTaskList());
+        checkClose(20.0, workflow.getLFT(1), "entry proportional subdeadline");
+        checkClose(40.0, workflow.getLFT(2), "exit subdeadline");
+
+        workflow.setLFT(1, 5.0);
+        workflow.setLFT(2, 40.0);
+        Map<Integer, CEWBCriticalityPolicy.Decision> decisions = policy.classify(
+                workflow.getTaskList(), workflow, 0.0);
+        check(decisions.get(1).getResourceClass()
+                        == CEWBCriticalityPolicy.ON_DEMAND,
+                "negative-slack task must use on-demand");
+        check(decisions.get(2).getResourceClass()
+                        == CEWBCriticalityPolicy.LOW_RELIABILITY_SPOT,
+                "relaxed task must use low-reliability spot");
+    }
+
+    private static void testPricingPolicy() {
+        System.setProperty("cbmw.cewb.pricing.policy", "CONSTANT_PROFIT");
+        System.setProperty("cbmw.cewb.pricing.profit.margin", "0.10");
+        Task task = new Task(11, 10_000L);
+        WorkflowRecord workflow = new WorkflowRecord(1, "pricing.xml", 0.0);
+        workflow.setTaskList(Arrays.asList(task));
+        workflow.setEstimatedExecTime(11, 10.0);
+        CEWBPricingPolicy policy = new CEWBPricingPolicy();
+        policy.quoteBeforeExecution(workflow);
+        check(workflow.getOfferedPrice() > 0.0,
+                "pre-execution CEWB quote must be positive");
+        workflow.addOnDemandCost(0.02);
+        workflow.addSpotCost(0.01);
+        policy.settleAfterExecution(workflow);
+        checkClose(0.033, workflow.getBrokerRevenue(),
+                "constant-profit revenue");
+        checkClose(0.003, workflow.getBrokerProfit(),
+                "constant-profit settlement");
     }
 
     private static void configureDeterministicMarket() {
@@ -32,7 +86,7 @@ public final class CEWBValidationTest {
                 "320/160/80 class capacities must provide 560 instances");
 
         List<CEWBSpotMarket.Offer> offers = new ArrayList<>();
-        for (int i = 0; i < 560; i++) {
+        for (int i = 0; i < 960; i++) {
             CEWBSpotMarket.Offer offer = market.acquire(
                     1, 1, 10.0, 10_000L, 0.0, 1_000.0, 0.000340);
             check(offer != null, "offer " + i + " unexpectedly unavailable");
@@ -51,10 +105,10 @@ public final class CEWBValidationTest {
                 "saturation telemetry must count the rejected request");
 
         for (CEWBSpotMarket.Offer offer : offers) market.release(offer);
-        check(market.getActiveInstances() == 0,
-                "all spot instances must be released");
-        check(market.getActiveCores() == 0,
-                "all spot cores must be released");
+        check(market.getActiveInstances() == 560,
+                "idle shared spot instances must remain provisioned");
+        check(market.getActiveCores() == 960,
+                "idle shared spot cores must remain provisioned");
 
         boolean doubleReleaseRejected = false;
         try {
@@ -63,6 +117,9 @@ public final class CEWBValidationTest {
             doubleReleaseRejected = true;
         }
         check(doubleReleaseRejected, "double release must fail fast");
+        market.terminateAll();
+        check(market.getActiveInstances() == 0,
+                "terminateAll must release physical instances");
     }
 
     private static void testTimingPolicy() {

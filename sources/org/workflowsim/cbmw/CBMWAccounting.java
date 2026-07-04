@@ -177,7 +177,8 @@ public class CBMWAccounting {
                 wfr.getCriticalPathLength(), wfr.getDeadline(),
                 wfr.isDeadlineMet(), alpha, wfr.isDeadlineFeasible(),
                 wfr.getEstimatedRawCost(), wfr.getPriceMarkupGamma(),
-                wfr.getOfferedPrice(), wfr.isPriceAccepted()));
+                wfr.getOfferedPrice(), wfr.getBrokerRevenue(),
+                wfr.getBrokerProfit(), wfr.isPriceAccepted()));
     }
 
     public void markOnDemandOrdered(int vmId, double orderTime, double readyTime) {
