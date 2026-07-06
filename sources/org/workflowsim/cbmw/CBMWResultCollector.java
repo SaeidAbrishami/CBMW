@@ -34,6 +34,8 @@ public class CBMWResultCollector {
         double brokerRevenue = totalBrokerRevenue();
         double brokerProfit = totalBrokerProfit();
         double makespan = makespan();
+        double simulationStartTime = simulationStartTime();
+        double simulationDuration = simulationDuration();
         double deadlineRate = accepted == 0 ? 0.0 : (double) met / accepted;
         double acceptanceRate = total == 0 ? 0.0 : (double) accepted / total;
         double overallSuccessRate = total == 0 ? 0.0 : (double) met / total;
@@ -62,6 +64,9 @@ public class CBMWResultCollector {
         Log.printLine(String.format("Total cost ($)           : %.4f",
                 odCost + spotCost));
         Log.printLine(String.format("Makespan (sim s)         : %.2f", makespan));
+        Log.printLine(String.format("Simulation start (sim s) : %.2f", simulationStartTime));
+        Log.printLine(String.format("Simulation duration      : %.2f s (%.2f h)",
+                simulationDuration, simulationDuration / 3600.0));
     }
 
     public static String csvHeader() {
@@ -70,7 +75,8 @@ public class CBMWResultCollector {
                 + "rejectedPlanning,acceptanceRate,deadlineRate,overallSuccessRate,"
                 + "onDemandCost,spotCost,estimatedRawCost,"
                 + "offeredPrice,brokerRevenue,brokerProfit,reservedCost,"
-                + "totalCost,makespan,reservedUtil,onDemandUsageRatio,spotUsageRatio,"
+                + "totalCost,makespan,simulationStartTime,simulationDuration,"
+                + "simulationDurationHours,reservedUtil,onDemandUsageRatio,spotUsageRatio,"
                 + "provisionedOnDemandVms,onDemandVmUtilization,deadlineRiskTasks";
     }
 
@@ -115,7 +121,7 @@ public class CBMWResultCollector {
                 deadlineRate, overallSuccessRate,
                 odCost, spotCost, rawEstimate, offeredPrice,
                 brokerRevenue, brokerProfit, reservedCost,
-                totalCost, makespan(),
+                totalCost, makespan(), simulationStartTime(), simulationDuration(),
                 reservedUtilization(), onDemandUsageRatio, spotUsageRatio,
                 accounting.getProvisionedOnDemandVmCount(),
                 accounting.getOnDemandVmUtilization(),
@@ -125,7 +131,7 @@ public class CBMWResultCollector {
     public static String toCsvRow(ScenarioMetrics metrics) {
         return String.format("%s,%s,%s,%s,%.4f,%.1f,%d,%d,%d,%d,%d,%d,%d,"
                         + "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,"
-                        + "%.4f,%.4f,%.2f,%.4f,%.2f,%.4f,%.4f,%.4f,%d,%.4f,%d",
+                        + "%.4f,%.4f,%.2f,%.4f,%.2f,%.2f,%.2f,%.4f,%.4f,%.4f,%.4f,%d,%.4f,%d",
                 metrics.scenario, metrics.load, metrics.deadlineClass,
                 metrics.algorithm, metrics.arrivalScale, metrics.tightness,
                 metrics.run, metrics.total, metrics.accepted, metrics.rejected,
@@ -136,6 +142,8 @@ public class CBMWResultCollector {
                 metrics.estimatedRawCost, metrics.offeredPrice,
                 metrics.brokerRevenue, metrics.brokerProfit,
                 metrics.reservedCost, metrics.totalCost, metrics.makespan,
+                metrics.simulationStartTime, metrics.simulationDuration,
+                metrics.simulationDurationHours,
                 metrics.reservedUtil, metrics.onDemandUsageRatio,
                 metrics.spotUsageRatio, metrics.provisionedOnDemandVms,
                 metrics.onDemandVmUtilization, metrics.deadlineRiskTasks);
@@ -188,6 +196,18 @@ public class CBMWResultCollector {
                 .filter(t -> t < Double.MAX_VALUE).max().orElse(0.0);
     }
 
+    /** First workload arrival; makespan remains the absolute final completion time. */
+    private double simulationStartTime() {
+        return allWorkflows.stream()
+                .mapToDouble(WorkflowRecord::getArrivalTime)
+                .min().orElse(0.0);
+    }
+
+    /** Simulated elapsed workload time from first arrival to final completion. */
+    private double simulationDuration() {
+        return Math.max(0.0, makespan() - simulationStartTime());
+    }
+
     private double reservedUtilization() {
         double totalCpu = allWorkflows.stream()
                 .mapToDouble(WorkflowRecord::getTotalReservedCpuTime).sum();
@@ -223,6 +243,9 @@ public class CBMWResultCollector {
         public final double reservedCost;
         public final double totalCost;
         public final double makespan;
+        public final double simulationStartTime;
+        public final double simulationDuration;
+        public final double simulationDurationHours;
         public final double reservedUtil;
         public final double onDemandUsageRatio;
         public final double spotUsageRatio;
@@ -241,7 +264,8 @@ public class CBMWResultCollector {
                                double estimatedRawCost, double offeredPrice,
                                double brokerRevenue, double brokerProfit,
                                double reservedCost, double totalCost,
-                               double makespan, double reservedUtil,
+                               double makespan, double simulationStartTime,
+                               double simulationDuration, double reservedUtil,
                                 double onDemandUsageRatio,
                                 double spotUsageRatio,
                                 int provisionedOnDemandVms,
@@ -272,6 +296,9 @@ public class CBMWResultCollector {
             this.reservedCost = reservedCost;
             this.totalCost = totalCost;
             this.makespan = makespan;
+            this.simulationStartTime = simulationStartTime;
+            this.simulationDuration = simulationDuration;
+            this.simulationDurationHours = simulationDuration / 3600.0;
             this.reservedUtil = reservedUtil;
             this.onDemandUsageRatio = onDemandUsageRatio;
             this.spotUsageRatio = spotUsageRatio;

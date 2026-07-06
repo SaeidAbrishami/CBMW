@@ -405,6 +405,8 @@ public class CBMWSimulation {
                 .append("avgSpotCost,avgEstimatedRawCost,avgOfferedPrice,")
                 .append("avgBrokerRevenue,avgBrokerProfit,")
                 .append("avgReservedCost,avgTotalCost,avgMakespan,")
+                .append("avgSimulationStartTime,avgSimulationDuration,")
+                .append("avgSimulationDurationHours,")
                 .append("avgReservedUtil,avgOnDemandUsageRatio,avgSpotUsageRatio,")
                 .append("avgProvisionedOnDemandVms,avgOnDemandVmUtilization,")
                 .append("avgDeadlineRiskTasks\n");
@@ -494,6 +496,9 @@ public class CBMWSimulation {
         private double reservedCost;
         private double totalCost;
         private double makespan;
+        private double simulationStartTime;
+        private double simulationDuration;
+        private double simulationDurationHours;
         private double reservedUtil;
         private double onDemandUsageRatio;
         private double spotUsageRatio;
@@ -530,6 +535,9 @@ public class CBMWSimulation {
             reservedCost += row.reservedCost;
             totalCost += row.totalCost;
             makespan += row.makespan;
+            simulationStartTime += row.simulationStartTime;
+            simulationDuration += row.simulationDuration;
+            simulationDurationHours += row.simulationDurationHours;
             reservedUtil += row.reservedUtil;
             onDemandUsageRatio += row.onDemandUsageRatio;
             spotUsageRatio += row.spotUsageRatio;
@@ -542,7 +550,7 @@ public class CBMWSimulation {
             return String.format(Locale.US,
                     "%s,%s,%s,%s,%.4f,%.1f,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,"
                             + "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,"
-                            + "%.4f,%.4f,%.2f,%.4f,%.2f,%.4f,%.4f,%.4f,"
+                            + "%.4f,%.4f,%.2f,%.4f,%.2f,%.2f,%.2f,%.4f,%.4f,%.4f,%.4f,"
                             + "%.4f,%.4f,%.2f",
                     scenario, load, deadlineClass, algorithm, arrivalScale,
                     tightness, runs, total / runs, accepted / runs,
@@ -554,6 +562,8 @@ public class CBMWSimulation {
                     estimatedRawCost / runs, offeredPrice / runs,
                     brokerRevenue / runs, brokerProfit / runs,
                     reservedCost / runs, totalCost / runs, makespan / runs,
+                    simulationStartTime / runs, simulationDuration / runs,
+                    simulationDurationHours / runs,
                     reservedUtil / runs, onDemandUsageRatio / runs,
                     spotUsageRatio / runs, provisionedOnDemandVms / runs,
                     onDemandVmUtilization / runs, deadlineRiskTasks / runs);

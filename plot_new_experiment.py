@@ -9,6 +9,7 @@ tight/medium/loose deadlines for:
   - overall deadline success rate (met deadline / total submitted)
   - reserved utilization
   - on-demand usage ratio
+  - simulated workload duration
 """
 
 import csv
@@ -33,6 +34,7 @@ METRICS = [
     ("overallSuccessRate", "Deadline Success Rate", "Success (%)", "percent_ratio"),
     ("reservedUtil", "Reserved Utilization", "Utilization (%)", "percent_ratio"),
     ("onDemandUsageRatio", "On-Demand Usage Ratio", "Usage (%)", "percent_ratio"),
+    ("simulationDurationHours", "Simulation Duration", "Simulated Hours", "hours"),
 ]
 COLORS = {
     "CBMW": "#2563EB",
@@ -53,6 +55,7 @@ AGGREGATE_KEYS = {
     "overallSuccessRate": "avgOverallSuccessRate",
     "reservedUtil": "avgReservedUtil",
     "onDemandUsageRatio": "avgOnDemandUsageRatio",
+    "simulationDurationHours": "avgSimulationDurationHours",
 }
 
 
@@ -86,7 +89,7 @@ def value_for(rows, load, deadline, algorithm, metric):
 
 
 def plot_load(rows, load):
-    fig, axes = plt.subplots(2, 2, figsize=(15, 9))
+    fig, axes = plt.subplots(3, 2, figsize=(15, 12))
     fig.suptitle(f"New Experiment - {load.title()} Load", fontsize=16, fontweight="bold")
 
     x = np.arange(len(DEADLINES))
@@ -114,9 +117,15 @@ def plot_load(rows, load):
         if fmt == "percent_ratio":
             ax.set_ylim(0, max(min(max_value * 1.18, 110), 5))
             ax.yaxis.set_major_formatter(lambda v, _: f"{v:.0f}%")
-        else:
+        elif fmt == "dollar":
             ax.set_ylim(0, max(max_value * 1.18, 1))
             ax.yaxis.set_major_formatter(lambda v, _: f"${v:,.0f}")
+        else:
+            ax.set_ylim(0, max(max_value * 1.18, 1))
+            ax.yaxis.set_major_formatter(lambda v, _: f"{v:.1f} h")
+
+    for ax in axes.flat[len(METRICS):]:
+        ax.set_visible(False)
 
     handles, labels = axes[0, 0].get_legend_handles_labels()
     fig.legend(handles, labels, loc="lower center", ncol=len(ALGORITHMS), fontsize=9)
