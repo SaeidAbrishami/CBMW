@@ -96,6 +96,17 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                 continue;
             }
 
+            // Algorithm 3 commits to o0 once the provisioner is invoked.
+            CondorVM committedOnDemand = provisioner.getProvisionedVm(taskId);
+            if (committedOnDemand != null) {
+                assign(job, committedOnDemand);
+                toSchedule.add(job);
+                CBMWLogger.log("DISPATCH",
+                        String.format("wf=%d task=%d -> committed on-demand vm=%d",
+                                wfId, taskId, committedOnDemand.getId()));
+                continue;
+            }
+
             if (plannedVm == CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL) {
                 // arij = o0: Provisioner(tji, o0) always succeeds — provision on-demand directly.
                 CondorVM vm = provisioner.getOrProvision(job);
@@ -132,6 +143,8 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                     } else {
                         // CheckReserved = ∅: arij ← o0, fall back to on-demand.
                         pool.releaseSlot(taskId);
+                        wfr.setAssignedVm(taskId,
+                                CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL);
                         CondorVM vm = provisioner.getOrProvision(job);
                         assign(job, vm);
                         toSchedule.add(job);
@@ -160,6 +173,11 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                 CBMWLogger.log("DISPATCH-SKIP",
                         String.format("wf=%d task=%d missing planning duration",
                                 wfId, taskId));
+                continue;
+            }
+
+            // Do not advance tasks whose on-demand container is already ordered.
+            if (provisioner.getProvisionedVm(taskId) != null) {
                 continue;
             }
 
