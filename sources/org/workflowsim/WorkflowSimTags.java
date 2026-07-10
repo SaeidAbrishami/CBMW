@@ -62,6 +62,8 @@ public class WorkflowSimTags {
     public static final int STATIC_GREEDY_SCHEDULE_WAKE = BASE + 16;
     /** CEWB ready task reaching its exact on-demand safe-start threshold. */
     public static final int CEWB_SST_REACHED = BASE + 17;
+    /** CBMW's pre-planned order time for a dedicated on-demand container. */
+    public static final int CBMW_ON_DEMAND_ORDER = BASE + 18;
 
     /**
      * Private Constructor

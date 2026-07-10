@@ -2,9 +2,11 @@ package org.workflowsim.cbmw;
 
 import java.util.List;
 import org.cloudbus.cloudsim.Cloudlet;
+import org.cloudbus.cloudsim.core.CloudSim;
 import org.cloudbus.cloudsim.Log;
 import org.cloudbus.cloudsim.core.SimEvent;
 import org.workflowsim.Task;
+import org.workflowsim.WorkflowSimTags;
 
 /**
  * CBMW broker: four-module algorithm (Negotiate → Static Plan → Dynamic
@@ -50,7 +52,25 @@ public class CBMWBroker extends AbstractWorkflowBroker {
             wfr.setAccepted(false);
             return false;
         }
+        schedulePlannedOnDemandOrders(wfr, tasks);
         return true;
+    }
+
+    private void schedulePlannedOnDemandOrders(WorkflowRecord wfr, List<Task> tasks) {
+        double now = CloudSim.clock();
+        for (Task task : tasks) {
+            int taskId = task.getCloudletId();
+            if (wfr.getAssignedVm(taskId)
+                    != CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL) {
+                continue;
+            }
+            double orderTime = wfr.getScheduledStart(taskId);
+            schedule(getId(), Math.max(0.0, orderTime - now),
+                    WorkflowSimTags.CBMW_ON_DEMAND_ORDER, taskId);
+            CBMWLogger.logf("CBMW-ONDEMAND-ORDER-SCHEDULED",
+                    "wf=%d task=%d orderAt=%.4f now=%.4f",
+                    wfr.getWorkflowId(), taskId, orderTime, now);
+        }
     }
 
     @Override
@@ -82,6 +102,17 @@ public class CBMWBroker extends AbstractWorkflowBroker {
     // -----------------------------------------------------------------------
     // Module 4 — Release booking slot on reserved-VM completion
     // -----------------------------------------------------------------------
+
+    @Override
+    public void processEvent(SimEvent ev) {
+        if (ev.getTag() == WorkflowSimTags.CBMW_ON_DEMAND_ORDER) {
+            int taskId = (Integer) ev.getData();
+            orderLogicalOnDemandContainer(taskId);
+            sendNow(getId(), WorkflowSimTags.CLOUDLET_UPDATE);
+            return;
+        }
+        super.processEvent(ev);
+    }
 
     @Override
     protected void onTaskComplete(Cloudlet cl) {
