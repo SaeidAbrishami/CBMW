@@ -265,8 +265,10 @@ public class CBMWSimulation {
         CBMWLogger.close();
 
         CBMWResultCollector collector = new CBMWResultCollector(
-                broker.getAllWorkflows(), broker.getAccounting());
-        collector.printReport(label);
+                broker.getAllWorkflows(),
+                broker.getAccounting(),
+                broker.getVmPool().getReservedVms().size());
+        collector.printReport(label, algorithm);
         CBMWResultCollector.ScenarioMetrics metrics = collector.toScenarioMetrics(
                 scenario, load.name, deadline.name,
                 algorithm, load.arrivalScale, deadline.tightness, 0,

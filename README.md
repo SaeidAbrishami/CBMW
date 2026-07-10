@@ -265,6 +265,19 @@ every algorithm. Use JVM properties such as
 
 ## Output
 
+Simulation artifacts are separated by algorithm. A normal run writes per-algorithm
+files under `Output/algorithms/<algorithm>/` and only combined comparison files
+under `Output/comparison/`.
+
+Main files:
+
+- `Output/algorithms/<algorithm>/results.csv`
+- `Output/algorithms/<algorithm>/results_aggregate.csv`
+- `Output/algorithms/<algorithm>/task_execution.csv`
+- `Output/comparison/results.csv`
+- `Output/comparison/results_aggregate.csv`
+- `Output/comparison/new_experiment_<load>.png`
+
 ### Console
 
 ```
@@ -290,7 +303,8 @@ not full operational expenditure including prepaid reservations.
 
 ### CSV
 
-Appended to stdout after the console report. Columns:
+Scenario rows are written to both the current algorithm's own `results.csv`
+and the combined comparison `results.csv`. Columns:
 ```
 scenario,load,deadlineClass,algorithm,arrivalScale,tightness,run,total,
 accepted,rejected,metDeadline,rejectedNegotiation,rejectedPlanning,

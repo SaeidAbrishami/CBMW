@@ -14,7 +14,17 @@ try {
         throw "CEWB invariant tests failed with exit code $LASTEXITCODE"
     }
 
-    $output = 'Output/validation_cewb_noncore_fix'
+    $output = 'Output/smoke_tests/CEWB'
+    $outputPath = Join-Path $projectRoot $output
+    $resolvedRoot = (Resolve-Path -LiteralPath $projectRoot).Path
+    $resolvedRootWithSeparator = $resolvedRoot.TrimEnd('\') + '\'
+    $resolvedOutput = [System.IO.Path]::GetFullPath($outputPath)
+    if (-not $resolvedOutput.StartsWith($resolvedRootWithSeparator, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to clean smoke output outside project root: $outputPath"
+    }
+    if (Test-Path -LiteralPath $outputPath) {
+        Remove-Item -LiteralPath $outputPath -Recurse -Force
+    }
     & java `
         '-Dcbmw.algorithms=CEWB' `
         '-Dcbmw.max.workflows=2' `

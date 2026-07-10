@@ -1,9 +1,10 @@
 """
 New experiment comparison plots.
 
-Reads Output/results_aggregate.csv from CBMWSimulation and writes one figure
-per load scenario. If the aggregate file is not available, it falls back to
-Output/results.csv. Each figure compares all experiment algorithms across
+Reads Output/comparison/results_aggregate.csv from CBMWSimulation and writes
+one figure per load scenario. If the aggregate file is not available, it falls
+back to Output/comparison/results.csv. Each figure compares all experiment
+algorithms across
 tight/medium/loose deadlines for:
   - total cost
   - overall deadline success rate (met deadline / total submitted)
@@ -22,10 +23,10 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-DEFAULT_CSV = "Output/results_aggregate.csv"
-FALLBACK_CSV = "Output/results.csv"
+DEFAULT_CSV = "Output/comparison/results_aggregate.csv"
+FALLBACK_CSV = "Output/comparison/results.csv"
 CSV_FILE = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_CSV
-OUT_DIR = sys.argv[2] if len(sys.argv) > 2 else "Output"
+OUT_DIR = sys.argv[2] if len(sys.argv) > 2 else "Output/comparison"
 
 ALGORITHMS = ["CBMW", "NOSF", "CEWB", "StaticGreedy", "DynamicGreedy"]
 DEADLINES = ["tight", "medium", "loose"]

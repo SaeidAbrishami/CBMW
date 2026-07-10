@@ -9,9 +9,16 @@ try {
     & java -ea -cp "bin;lib/*" org.workflowsim.cbmw.baselines.NOSFValidationTest
     if ($LASTEXITCODE -ne 0) { throw "NOSF invariant tests failed with exit code $LASTEXITCODE" }
 
-    $output = 'Output/validation_nosf_reference'
-    if (Test-Path -LiteralPath $output) {
-        Remove-Item -LiteralPath $output -Recurse -Force
+    $output = 'Output/smoke_tests/NOSF'
+    $outputPath = Join-Path $projectRoot $output
+    $resolvedRoot = (Resolve-Path -LiteralPath $projectRoot).Path
+    $resolvedRootWithSeparator = $resolvedRoot.TrimEnd('\') + '\'
+    $resolvedOutput = [System.IO.Path]::GetFullPath($outputPath)
+    if (-not $resolvedOutput.StartsWith($resolvedRootWithSeparator, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to clean smoke output outside project root: $outputPath"
+    }
+    if (Test-Path -LiteralPath $outputPath) {
+        Remove-Item -LiteralPath $outputPath -Recurse -Force
     }
     & java `
         '-Dcbmw.algorithms=NOSF' `

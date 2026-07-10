@@ -1,7 +1,7 @@
 """
 CBMW Algorithm Comparison Charts
 ---------------------------------
-Reads results.csv and produces a 2x3 bar-chart figure comparing
+Reads the combined comparison results CSV and produces a 2x3 bar-chart figure comparing
 CBMW, StaticGreedy, and DynamicGreedy on five metrics:
   - Overall deadline satisfaction rate (met deadline / total submitted)
   - On-demand cost ($)
@@ -10,7 +10,7 @@ CBMW, StaticGreedy, and DynamicGreedy on five metrics:
   - Reserved VM utilization (%)
 
 Usage:
-    python plot_comparison.py                        # uses Output/results.csv
+    python plot_comparison.py                        # uses Output/comparison/results.csv
     python plot_comparison.py results.csv out.png    # custom input / output
 """
 
@@ -21,8 +21,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-CSV_FILE = sys.argv[1] if len(sys.argv) > 1 else "Output/results.csv"
-OUT_FILE = sys.argv[2] if len(sys.argv) > 2 else "Output/comparison.png"
+CSV_FILE = sys.argv[1] if len(sys.argv) > 1 else "Output/comparison/results.csv"
+OUT_FILE = sys.argv[2] if len(sys.argv) > 2 else "Output/comparison/comparison.png"
 
 # ── load CSV ─────────────────────────────────────────────────────────────────
 rows = []

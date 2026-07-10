@@ -32,7 +32,7 @@ java -cp "bin;lib/*" org.workflowsim.examples.cbmw.CBMWSimulation
 Fast CBMW-only smoke run:
 
 ```powershell
-java '-Dcbmw.algorithms=CBMW' '-Dcbmw.max.workflows=5' '-Dcbmw.export.details=false' '-Dcbmw.detail.log=false' '-Dcbmw.quiet=true' -cp "bin;lib/*" org.workflowsim.examples.cbmw.CBMWSimulation
+java '-Dcbmw.algorithms=CBMW' '-Dcbmw.max.workflows=5' '-Dcbmw.output.dir=Output/smoke_tests/CBMW' '-Dcbmw.export.details=false' '-Dcbmw.detail.log=false' '-Dcbmw.quiet=true' -cp "bin;lib/*" org.workflowsim.examples.cbmw.CBMWSimulation
 ```
 
 Entry point:
@@ -92,17 +92,14 @@ scripts/run_algorithm.sh DynamicGreedy
 
 Current Ferdowsi VM inventory:
 
-| VM | Algorithm | IP | SSH user | Local key path |
-|----|-----------|----|----------|----------------|
-| VM1 | `CBMW` | `193.93.169.129` | `ubuntu` | `.secrets/CBMW-simulation-privateKey.pem` |
-| VM2 | `NOSF` | `193.93.169.137` | `ubuntu` | `.secrets/vm2.pem` |
-| VM3 | `CEWB` | `193.93.169.106` | `ubuntu` | `.secrets/vm3.pem` |
-| VM4 | `StaticGreedy` | `193.93.169.86` | `ubuntu` | `.secrets/vm4.pem` |
-| VM5 | `DynamicGreedy` | `193.93.169.53` | `ubuntu` | `.secrets/vm5.pem` |
+| VM | vCPUs | IP | SSH user | Local key path |
+|----|-------|----|----------|----------------|
+| CBMW simulation VM | 6 | `193.93.169.129` | `ubuntu` | `.secrets/CBMW-simulation-privateKey.pem` |
 
-All current VMs have been verified with SSH as `ubuntu` and passwordless
-`sudo`. The previous VM4 IP `193.93.169.114` was replaced because SSH timed out
-during banner exchange.
+This VM was verified over SSH as `ubuntu` on 2026-07-10 and reports 6 CPUs.
+The old per-algorithm Ferdowsi keys (`vm2.pem` through `vm5.pem`) were removed
+from `.secrets/` because only the CBMW simulation key authenticates to the
+current VM.
 
 After collecting `Output/algorithms/<algorithm>/` folders from separate VMs
 onto one machine, rebuild combined comparison CSVs and charts:
@@ -159,9 +156,9 @@ execution fields.
 
 `Output/` is ignored by git.
 
-`plot_new_experiment.py` reads `Output/results_aggregate.csv` by default and
-falls back to `Output/results.csv` if the aggregate file is missing. It uses
-line charts for the 5-algorithm comparison.
+`plot_new_experiment.py` reads `Output/comparison/results_aggregate.csv` by
+default and falls back to `Output/comparison/results.csv` if the aggregate file
+is missing. It uses line charts for the 5-algorithm comparison.
 
 ---
 
@@ -322,13 +319,13 @@ All five algorithms completed all 9 scenarios (10 `results.csv` lines including
 the header), and VM1 through VM5 were shut down after completion. This run was
 performed before the alpha-quantile runtime correction and the latest
 paper-alignment changes, so it is historical performance data, not validation
-of the current implementation. A new full five-VM run is required before
-drawing final comparative conclusions.
+of the current implementation. A new full distributed run requires provisioning
+additional Ferdowsi VMs; the current inventory has only one 6-core VM.
 
 Validation smoke run:
 
 ```powershell
-java '-Dcbmw.algorithms=CBMW' '-Dcbmw.max.workflows=2' '-Dcbmw.max.scenarios=1' '-Dcbmw.output.dir=Output/validation_reference_env_smoke' '-Dcbmw.export.details=true' '-Dcbmw.detail.log=false' '-Dcbmw.quiet=true' '-Dcbmw.generate.gantt=false' '-Dcbmw.generate.comparison=false' -cp "bin;lib/*" org.workflowsim.examples.cbmw.CBMWSimulation
+java '-Dcbmw.algorithms=CBMW' '-Dcbmw.max.workflows=2' '-Dcbmw.max.scenarios=1' '-Dcbmw.output.dir=Output/smoke_tests/CBMW_reference_env' '-Dcbmw.export.details=true' '-Dcbmw.detail.log=false' '-Dcbmw.quiet=true' '-Dcbmw.generate.gantt=false' '-Dcbmw.generate.comparison=false' -cp "bin;lib/*" org.workflowsim.examples.cbmw.CBMWSimulation
 ```
 
 The run compiled and completed, producing the `.rar-style` detailed folder.

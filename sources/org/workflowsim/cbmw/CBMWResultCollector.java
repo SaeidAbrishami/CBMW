@@ -8,6 +8,7 @@ public class CBMWResultCollector {
 
     private final List<WorkflowRecord> allWorkflows;
     private final CBMWAccounting accounting;
+    private final int reservedVmCount;
 
     public CBMWResultCollector(List<WorkflowRecord> allWorkflows) {
         this(allWorkflows, new CBMWAccounting());
@@ -15,11 +16,22 @@ public class CBMWResultCollector {
 
     public CBMWResultCollector(List<WorkflowRecord> allWorkflows,
                                CBMWAccounting accounting) {
+        this(allWorkflows, accounting, HybridVmPool.NUM_RESERVED);
+    }
+
+    public CBMWResultCollector(List<WorkflowRecord> allWorkflows,
+                               CBMWAccounting accounting,
+                               int reservedVmCount) {
         this.allWorkflows = allWorkflows;
         this.accounting = accounting;
+        this.reservedVmCount = reservedVmCount;
     }
 
     public void printReport(String scenario) {
+        printReport(scenario, "");
+    }
+
+    public void printReport(String scenario, String algorithm) {
         long total = allWorkflows.size();
         long accepted = allWorkflows.stream().filter(WorkflowRecord::isAccepted).count();
         long rejected = total - accepted;
@@ -39,7 +51,8 @@ public class CBMWResultCollector {
         double deadlineRate = accepted == 0 ? 0.0 : (double) met / accepted;
         double acceptanceRate = total == 0 ? 0.0 : (double) accepted / total;
         double overallSuccessRate = total == 0 ? 0.0 : (double) met / total;
-        double reservedCost = reservedCost();
+        double reservedCost = reservedCost(algorithm);
+        double totalCost = odCost + spotCost + reservedCost;
         double reservedUtil = reservedUtilization();
 
         Log.printLine("\n========== RESULTS: " + scenario + " ==========");
@@ -60,9 +73,11 @@ public class CBMWResultCollector {
         Log.printLine(String.format("Offered price ($)        : %.4f", offeredPrice));
         Log.printLine(String.format("Broker revenue ($)       : %.4f", brokerRevenue));
         Log.printLine(String.format("Broker profit ($)        : %.4f", brokerProfit));
-        Log.printLine(String.format("Reserved prepaid cost ($): %.2f (excluded)", reservedCost));
+        Log.printLine(String.format("Reserved lease cost ($)  : %.4f%s",
+                reservedCost,
+                includesReservedLeaseCost(algorithm) ? "" : " (excluded)"));
         Log.printLine(String.format("Total cost ($)           : %.4f",
-                odCost + spotCost));
+                totalCost));
         Log.printLine(String.format("Makespan (sim s)         : %.2f", makespan));
         Log.printLine(String.format("Simulation start (sim s) : %.2f", simulationStartTime));
         Log.printLine(String.format("Simulation duration      : %.2f s (%.2f h)",
@@ -112,8 +127,8 @@ public class CBMWResultCollector {
         double offeredPrice = totalOfferedPrice();
         double brokerRevenue = totalBrokerRevenue();
         double brokerProfit = totalBrokerProfit();
-        double reservedCost = reservedCost();
-        double totalCost = odCost + spotCost;
+        double reservedCost = reservedCost(algorithm);
+        double totalCost = odCost + spotCost + reservedCost;
 
         return new ScenarioMetrics(scenario, load, deadlineClass, algorithm,
                 arrivalScale, tightness, run, total, accepted, rejected, met,
@@ -184,10 +199,25 @@ public class CBMWResultCollector {
                 .filter(w -> reason.equals(w.getRejectionReason())).count();
     }
 
-    private double reservedCost() {
-        // Paper Section 3.3 treats reserved resources as prepaid: their lease
-        // cost cannot be changed by the scheduler and is excluded from Eq. (1).
-        return 0.0;
+    private double reservedCost(String algorithm) {
+        return reservedLeaseCost(algorithm, reservedVmCount, simulationDuration());
+    }
+
+    public static double reservedLeaseCost(String algorithm,
+                                           int reservedVmCount,
+                                           double uptimeSeconds) {
+        if (!includesReservedLeaseCost(algorithm) || uptimeSeconds <= 0.0) {
+            return 0.0;
+        }
+        return Math.max(0, reservedVmCount)
+                * (uptimeSeconds / 3600.0)
+                * HybridVmPool.RESERVED_HOURLY_COST;
+    }
+
+    public static boolean includesReservedLeaseCost(String algorithm) {
+        return "CBMW".equals(algorithm)
+                || "StaticGreedy".equals(algorithm)
+                || "DynamicGreedy".equals(algorithm);
     }
 
     private double makespan() {

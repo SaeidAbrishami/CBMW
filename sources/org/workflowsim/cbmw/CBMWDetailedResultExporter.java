@@ -102,9 +102,6 @@ public class CBMWDetailedResultExporter {
                                 task.getTaskCores(), task.getTaskRamMb());
             }
         }
-        // Reserved instances are prepaid and excluded from the paper's
-        // scheduler cost objective (Section 3.3, Equation 1).
-        double reservedCost = 0.0;
         double spotCost = workflows.stream()
                 .mapToDouble(WorkflowRecord::getTotalSpotCost).sum();
         double estimatedRawCost = workflows.stream()
@@ -113,8 +110,6 @@ public class CBMWDetailedResultExporter {
                 .mapToDouble(WorkflowRecord::getOfferedPrice).sum();
         long autoAcceptedQuotes = workflows.stream()
                 .filter(WorkflowRecord::isPriceAccepted).count();
-        double reservedCoresWithTime = HybridVmPool.NUM_RESERVED
-                * HybridVmPool.RESERVED_CORES * simDuration;
         double onDemandCoresWithTime = 0.0;
         for (OnDemandInstanceRecord instance : onDemand) {
             TaskExecutionRecord task = onDemandTasks.get(instance.getVmId());
@@ -126,6 +121,15 @@ public class CBMWDetailedResultExporter {
                 .mapToDouble(WorkflowRecord::getCompletionTime)
                 .filter(t -> t < Double.MAX_VALUE)
                 .max().orElse(0.0);
+        double simulationStart = workflows.stream()
+                .mapToDouble(WorkflowRecord::getArrivalTime)
+                .min().orElse(0.0);
+        double workloadDuration = Math.max(0.0, makespan - simulationStart);
+        int reservedVmCount = vmPool.getReservedVms().size();
+        double reservedCost = CBMWResultCollector.reservedLeaseCost(
+                algorithm, reservedVmCount, workloadDuration);
+        double reservedCoresWithTime = reservedVmCount
+                * HybridVmPool.RESERVED_CORES * workloadDuration;
         double meanDelay = workflows.stream()
                 .filter(w -> w.getCompletionTime() < Double.MAX_VALUE)
                 .mapToDouble(w -> Math.max(0.0, w.getCompletionTime() - w.getDeadline()))
@@ -164,17 +168,17 @@ public class CBMWDetailedResultExporter {
 
             writer.write("========== INSTANCE SPECIFICATIONS ==========\n");
             writer.write("Reserved Instances:\n");
-            writer.write(String.format(Locale.US, "  Total Count: %d%n", HybridVmPool.NUM_RESERVED));
+            writer.write(String.format(Locale.US, "  Total Count: %d%n", reservedVmCount));
             writer.write(String.format(Locale.US,
                     "  Cores per Instance: %d%n", HybridVmPool.RESERVED_CORES));
             writer.write(String.format(Locale.US,
                     "  RAM per Instance: %d MB%n", HybridVmPool.RESERVED_RAM_MB));
             writer.write(String.format(Locale.US,
                     "  Total Reserved Cores: %d%n",
-                    HybridVmPool.NUM_RESERVED * HybridVmPool.RESERVED_CORES));
+                    reservedVmCount * HybridVmPool.RESERVED_CORES));
             writer.write(String.format(Locale.US,
                     "  Total Reserved RAM: %d MB%n%n",
-                    HybridVmPool.NUM_RESERVED * HybridVmPool.RESERVED_RAM_MB));
+                    reservedVmCount * HybridVmPool.RESERVED_RAM_MB));
             writer.write(String.format(Locale.US,
                     "  Total Reserved Cores With Time: %.6E%n%n",
                     reservedCoresWithTime));
@@ -254,10 +258,15 @@ public class CBMWDetailedResultExporter {
             writer.write(String.format(Locale.US,
                     "Automatically accepted price quotes: %d%n", autoAcceptedQuotes));
             writer.write(String.format(Locale.US,
-                    "Paper scheduling cost: on-demand %.4f + spot %.4f = %.4f%n",
-                    onDemandCost, spotCost, onDemandCost + spotCost));
+                    "Scheduling cost: on-demand %.4f + spot %.4f"
+                            + " + reserved %.4f = %.4f%n",
+                    onDemandCost, spotCost, reservedCost,
+                    onDemandCost + spotCost + reservedCost));
             writer.write(String.format(Locale.US,
-                    "Reserved prepaid cost (excluded): %.4f%n", reservedCost));
+                    "Reserved lease cost: %.4f%s%n",
+                    reservedCost,
+                    CBMWResultCollector.includesReservedLeaseCost(algorithm)
+                            ? "" : " (excluded)"));
         }
     }
 

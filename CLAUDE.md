@@ -86,7 +86,10 @@ All three brokers extend `AbstractWorkflowBroker`, which provides:
 ### Current experiment
 Single scenario: `TIGHTNESS = 2.0`, all three algorithms, one run.
 Sim duration = `max(arrivalTime from JSON) + 5000s`.
-Output per algorithm: `Output/<algo>_t2.0_detail.log`, `_gantt.png`, row in `results.csv`.
+Output per algorithm: `Output/algorithms/<algorithm>/results.csv`,
+`results_aggregate.csv`, `task_execution.csv`, scenario detail logs, optional
+Gantt charts, and optional detail folders. Combined comparison files go under
+`Output/comparison/`.
 
 ---
 
