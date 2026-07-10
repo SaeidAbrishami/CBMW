@@ -243,7 +243,7 @@ Current configurable defaults in `HybridVmPool`:
 | `cbmw.ondemand.per.sec` | 0.000340 |
 | `cbmw.ondemand.cpu.per.core.sec` | Value of `cbmw.ondemand.per.sec` |
 | `cbmw.ondemand.memory.per.gb.sec` | 0.0 |
-| `cbmw.ondemand.delay.sec` | 120.0 |
+| `cbmw.ondemand.delay.sec` | 90.0 |
 | `cbmw.scheduling.period.sec` | 5.0 |
 | `cbmw.ondemand.min.billing.sec` | 60.0 |
 

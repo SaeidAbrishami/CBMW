@@ -258,7 +258,7 @@ every algorithm. Use JVM properties such as
 | `cbmw.reserved.hourly.cost` | `3.26` | Prepaid reference price; excluded from scheduling cost |
 | `cbmw.ondemand.per.sec` | `0.000340` | Default CPU price per core-second |
 | `cbmw.ondemand.memory.per.gb.sec` | `0.0` | Default memory price per GB-second |
-| `cbmw.ondemand.delay.sec` | `120.0` | On-demand provisioning delay (`opd`) |
+| `cbmw.ondemand.delay.sec` | `90.0` | On-demand provisioning delay (`opd`) |
 | `cbmw.ondemand.min.billing.sec` | `60.0` | Minimum on-demand billing duration |
 
 ---
