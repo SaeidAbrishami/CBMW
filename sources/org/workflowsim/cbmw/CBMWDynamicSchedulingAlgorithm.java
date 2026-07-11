@@ -2,6 +2,7 @@ package org.workflowsim.cbmw;
 
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.cloudbus.cloudsim.Cloudlet;
@@ -17,7 +18,8 @@ import org.workflowsim.scheduling.BaseSchedulingAlgorithm;
  *
  * Two loops per tick:
  *   1. First loop  (sstji ≤ CT): dispatch each task on its allocated resource;
- *      if reserved VM is busy call CheckReserved for another; if none, on-demand.
+ *      if reserved VM is busy call CheckReserved for another; if none, the
+ *      broker applies its current-cycle reserved-task replacement policy.
  *   2. Second loop (sstji > CT): advance future tasks to idle reserved VMs;
  *      break on the first task that CheckReserved cannot serve.
  *
@@ -53,6 +55,8 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
         if (pool == null) return;
 
         double now = CloudSim.clock();
+        Map<Integer, Integer> pendingCores = new HashMap<>();
+        Map<Integer, Integer> pendingRamMb = new HashMap<>();
 
         // Paper §4.3: sorted by sstji ascending.
         List<Cloudlet> readyJobs = new ArrayList<>((List<Cloudlet>) getCloudletList());
@@ -119,38 +123,42 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
             } else {
                 // arij = reserved VM. Try Provisioner(tji, arij).
                 CondorVM planned = pool.getVmById(plannedVm);
-                if (planned != null && pool.hasRuntimeCapacity(plannedVm, taskId)) {
+                if (planned != null && hasRuntimeCapacity(
+                        plannedVm, taskId, pendingCores, pendingRamMb)) {
                     // Provisioner returns true — dispatch to planned reserved VM.
                     pool.rebookSlot(taskId, plannedVm,
                             now, now + planningDuration);
                     assign(job, planned);
                     toSchedule.add(job);
+                    reservePending(plannedVm, taskId,
+                            pendingCores, pendingRamMb);
                     CBMWLogger.log("DISPATCH",
                             String.format("wf=%d task=%d -> vm=%d (planned reserved)",
                                     wfId, taskId, plannedVm));
                 } else {
                     // Provisioner returns false — CheckReserved(tji, CT): find another idle reserved VM.
-                    CondorVM other = pool.getIdleReservedVmForAdvance(
-                            now, now + planningDuration, taskId);
+                    CondorVM other = findReserved(
+                            now, now + planningDuration, taskId,
+                            pendingCores, pendingRamMb);
                     if (other != null) {
                         pool.rebookSlot(taskId, other.getId(),
                                 now, now + planningDuration);
                         assign(job, other);
                         toSchedule.add(job);
+                        reservePending(other.getId(), taskId,
+                                pendingCores, pendingRamMb);
                         CBMWLogger.log("DISPATCH",
                                 String.format("wf=%d task=%d planned=vm%d BUSY -> reserved vm=%d (CheckReserved)",
                                         wfId, taskId, plannedVm, other.getId()));
                     } else {
-                        // CheckReserved = ∅: arij ← o0, fall back to on-demand.
-                        pool.releaseSlot(taskId);
-                        wfr.setAssignedVm(taskId,
-                                CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL);
-                        CondorVM vm = provisioner.getOrProvision(job);
-                        assign(job, vm);
-                        toSchedule.add(job);
-                        CBMWLogger.log("DISPATCH",
-                                String.format("wf=%d task=%d planned=vm%d BUSY no-reserved -> on-demand vm=%d",
-                                        wfId, taskId, plannedVm, vm.getId()));
+                        // The broker's current-cycle replacement policy will
+                        // preempt the running reserved task with the greatest
+                        // workflow deadline slack that can free enough CPU and
+                        // RAM. If no such victim exists, retain the task in the
+                        // ready queue; do not convert a reserved plan to o0.
+                        CBMWLogger.log("DISPATCH-STUCK",
+                                String.format("wf=%d task=%d planned=vm%d BUSY no-reserved no-on-demand-fallback",
+                                        wfId, taskId, plannedVm));
                     }
                 }
             }
@@ -181,13 +189,16 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                 continue;
             }
 
-            CondorVM res = pool.getIdleReservedVmForAdvance(
-                    now, now + planningDuration, taskId);
+            CondorVM res = findReserved(
+                    now, now + planningDuration, taskId,
+                    pendingCores, pendingRamMb);
             if (res != null) {
                 pool.rebookSlot(taskId, res.getId(),
                         now, now + planningDuration);
                 assign(job, res);
                 toSchedule.add(job);
+                reservePending(res.getId(), taskId,
+                        pendingCores, pendingRamMb);
                 CBMWLogger.log("DISPATCH-ADVANCE",
                         String.format("wf=%d task=%d sst=%.1f now=%.1f -> advanced to vm=%d",
                                 wfId, taskId, sst, now, res.getId()));
@@ -200,6 +211,42 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
         }
 
         getScheduledList().addAll(toSchedule);
+    }
+
+    private boolean hasRuntimeCapacity(int vmId, int taskId,
+                                       Map<Integer, Integer> pendingCores,
+                                       Map<Integer, Integer> pendingRamMb) {
+        CondorVM vm = pool.getVmById(vmId);
+        if (vm == null) return false;
+        int cores = pool.getRunningCores(vmId)
+                + pendingCores.getOrDefault(vmId, 0)
+                + pool.getTaskCores(taskId);
+        int ramMb = pool.getRunningRamMb(vmId)
+                + pendingRamMb.getOrDefault(vmId, 0)
+                + pool.getTaskRamMb(taskId);
+        return cores <= vm.getNumberOfPes() && ramMb <= vm.getRam();
+    }
+
+    private CondorVM findReserved(double now, double end, int taskId,
+                                  Map<Integer, Integer> pendingCores,
+                                  Map<Integer, Integer> pendingRamMb) {
+        int cores = pool.getTaskCores(taskId);
+        int ramMb = pool.getTaskRamMb(taskId);
+        for (CondorVM vm : pool.getReservedVms()) {
+            if (!hasRuntimeCapacity(vm.getId(), taskId,
+                    pendingCores, pendingRamMb)) continue;
+            if (pool.hasBookedCapacity(vm.getId(), now, end, cores, ramMb)) {
+                return vm;
+            }
+        }
+        return null;
+    }
+
+    private void reservePending(int vmId, int taskId,
+                                Map<Integer, Integer> pendingCores,
+                                Map<Integer, Integer> pendingRamMb) {
+        pendingCores.merge(vmId, pool.getTaskCores(taskId), Integer::sum);
+        pendingRamMb.merge(vmId, pool.getTaskRamMb(taskId), Integer::sum);
     }
 
     private void assign(Job job, CondorVM vm) {

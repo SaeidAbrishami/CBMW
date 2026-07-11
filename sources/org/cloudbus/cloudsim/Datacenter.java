@@ -849,6 +849,13 @@ public class Datacenter extends SimEntity {
 	 * @post $none
 	 */
 	protected void processCloudletCancel(int cloudletId, int userId, int vmId) {
+		// Bring every scheduler up to the cancellation instant so a preempted
+		// cloudlet reports exactly how much work it completed before it is
+		// returned to its broker.
+		updateCloudletProcessing();
+		// If it completed exactly at this timestamp, return it normally instead
+		// of misclassifying it as a canceled cloudlet with no remaining work.
+		checkCloudletCompletion();
 		Cloudlet cl = getVmAllocationPolicy().getHost(vmId, userId).getVm(vmId,userId)
 				.getCloudletScheduler().cloudletCancel(cloudletId);
 		sendNow(userId, CloudSimTags.CLOUDLET_CANCEL, cl);

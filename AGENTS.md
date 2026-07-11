@@ -217,6 +217,19 @@ test_workflows/
   `gamma`, and automatically accepts the quote because no user is simulated.
 - Dynamic capacity checks and reserved-slot rebooking use the stored planning
   estimate (`cet` for CBMW), never the sampled actual runtime.
+- A due task that was statically planned on reserved capacity is handled in the
+  current scheduling cycle. Capacity assigned earlier in the same scheduler
+  pass is included immediately, so later tasks do not wait for the next
+  five-second period because of stale runtime-capacity bookkeeping.
+- If no reserved VM can start such a task, CBMW does not dynamically fall back
+  to on-demand. It selects the running reserved task with the greatest workflow
+  deadline slack that can individually release enough CPU and RAM, preserves
+  that victim's completed work, returns it to the ready queue, and dispatches
+  the waiting task after a same-timestamp cancellation acknowledgement. A task
+  can be selected as a victim only once to prevent ping-pong preemption. If no
+  eligible victim exists, the waiting task remains ready.
+- Static-planner assignments to dummy resource `o0` are unaffected and still
+  use dedicated on-demand containers.
 - Following Algorithm 1 literally, a task that cannot be placed on reserved
   capacity is assigned to dummy resource `o0` at `SST = LST - OPD`. This value
   is not clamped to workflow arrival and does not trigger a second static
@@ -281,7 +294,7 @@ All brokers extend `AbstractWorkflowBroker`.
 
 | Broker | planWorkflow | processCloudletUpdate |
 |--------|--------------|-----------------------|
-| CBMW | Paper-style EST/EFT/LFT backward sweep-line using estimated durations | Periodic LST-aware dynamic dispatch with on-demand fallback |
+| CBMW | Paper-style EST/EFT/LFT backward sweep-line using estimated durations | Periodic LST-aware dispatch with current-cycle reserved-task replacement; only static `o0` assignments use on-demand |
 | NOSF | Uncertainty-aware EST/EFT and proportional sub-deadline preprocessing | EDF, minimum incremental-cost reusable on-demand VM selection, deadline-risk fallback, and completion feedback |
 | CEWB | HEFT-style ranks and proportional sub-deadlines | Dynamic slack classification, shared spot-VM containers, reliability escalation, and on-demand fallback |
 | StaticGreedy | Static round-robin reserved planning | Assigned VM, any reserved, then on-demand |
@@ -372,6 +385,12 @@ NOSF invariant and smoke validation:
   bookings as if they overlapped.
 - `CBMWSimulation` saves `results.csv` and `results_aggregate.csv` after each
   completed scenario.
+- CBMW accounts for reserved CPU/RAM selected earlier in the same scheduling
+  pass before considering later ready tasks. Due reserved-planned tasks that no
+  longer fit trigger same-timestamp replacement rather than waiting for the
+  next scheduling period or dynamically falling back to on-demand. Victims are
+  chosen by maximum workflow deadline slack subject to CPU/RAM fit, preserve
+  partial progress, return to the ready queue, and are victimized at most once.
 
 Historical paper-container validation: all five algorithms completed a
 detailed-output five-workflow smoke run. The former dedicated-container NOSF
@@ -384,7 +403,7 @@ scenario also completed.
 ## Known Remaining Issues
 
 - Full 200-workflow scenarios should be rebenchmarked after the latest planner
-  and runtime-quantile changes.
+  and runtime-quantile changes and the current-cycle replacement policy.
 - The paper does not state a precise experimental beta value; the default is
   the minimum valid value `1.0` and must be reported with each experiment.
 - The paper does not state a precise experimental gamma value; the price-markup

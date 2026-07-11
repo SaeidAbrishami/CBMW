@@ -130,6 +130,14 @@ public class CBMWAccounting {
         runningSpotTasks.remove(taskId);
     }
 
+    /** Records a reserved-task preemption and returns it to ready state. */
+    public void markReservedTaskPreempted(Cloudlet cl) {
+        int taskId = primaryTaskId(cl);
+        TaskExecutionRecord record = taskRecords.get(taskId);
+        if (record != null) record.markInterrupted();
+        runningReservedTasks.remove(taskId);
+    }
+
     public void markDeadlineRisk(int taskId) {
         deadlineRiskTasks.add(taskId);
     }

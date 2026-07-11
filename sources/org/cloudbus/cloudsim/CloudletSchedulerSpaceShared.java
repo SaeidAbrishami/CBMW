@@ -173,6 +173,8 @@ public class CloudletSchedulerSpaceShared extends CloudletScheduler {
 					cloudletFinish(rcl);
 				} else {
 					rcl.setCloudletStatus(Cloudlet.CANCELED);
+					rcl.finalizeCloudlet();
+					usedPes -= rcl.getNumberOfPes();
 				}
 				return rcl.getCloudlet();
 			}

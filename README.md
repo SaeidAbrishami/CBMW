@@ -32,7 +32,7 @@ CBMW processes each workflow arrival through four sequential modules:
 |--------|-------|------|
 | 1. Negotiation | `NegotiationModule` | Checks deadline feasibility, invokes the completed static plan to estimate raw execution cost, applies markup `gamma`, and automatically accepts the quote |
 | 2. Static Planning | `CBMWStaticPlanningAlgorithm` | Backward sweep assigns each task a reserved VM slot at its Latest Start Time (LST = deadline − remainingCP) |
-| 3. Dynamic Scheduling | `CBMWDynamicSchedulingAlgorithm` | Dispatches ready tasks to their planned VM; advances to any idle reserved VM if the planned VM is busy; falls back to on-demand if no reserved VM is available |
+| 3. Dynamic Scheduling | `CBMWDynamicSchedulingAlgorithm` | Dispatches ready tasks to reserved capacity and applies current-cycle task replacement when a due reserved-planned task cannot start |
 | 4. Provisioning | `ProvisioningModule` | Spins up and terminates on-demand VMs; tracks per-task costs |
 
 The backward sweep in Module 2 deliberately defers reservations to the latest feasible slot, keeping earlier capacity free for workflows that have not yet arrived.
@@ -43,6 +43,21 @@ the task is assigned to dummy on-demand resource `o0` with
 second on-demand feasibility rejection or clamp SST to workflow arrival. If SST
 is already in the past when the workflow arrives, Algorithm 3 orders the
 container immediately; such a task can still miss its deadline.
+
+For a task that was planned on a reserved VM and has reached its SST, runtime
+capacity exhaustion is handled in the current scheduling cycle. The scheduler
+first checks other reserved VMs. If none can run the task, the broker examines
+all running reserved tasks and selects the eligible victim whose workflow has
+the greatest deadline slack. The victim must release enough CPU and RAM for
+the waiting task by itself. Its completed work is preserved, it is canceled
+and returned to the ready queue, and the waiting task takes its reserved VM at
+the same simulation timestamp after the cancellation acknowledgement.
+
+This runtime replacement path does not convert a reserved-planned task to
+on-demand. If no eligible victim exists, the task remains ready until reserved
+capacity changes. Each task may be selected as a replacement victim at most
+once, preventing immediate ping-pong preemption. Tasks assigned to `o0` by the
+static planner still use the normal on-demand provisioning path.
 
 ### CBMW Price Negotiation
 
@@ -191,7 +206,7 @@ sources/org/workflowsim/cbmw/
     CBMWBroker.java                     — Central event handler; wires all four modules
     NegotiationModule.java              — Module 1: admission control
     CBMWStaticPlanningAlgorithm.java    — Module 2: backward sweep slot booking
-    CBMWDynamicSchedulingAlgorithm.java — Module 3: dispatch and on-demand fallback
+    CBMWDynamicSchedulingAlgorithm.java — Module 3: current-cycle reserved dispatch
     ProvisioningModule.java             — Module 4: on-demand VM lifecycle
     HybridVmPool.java                   — Manages reserved + on-demand VM pools and slot bookings
     WorkflowRecord.java                 — Per-workflow state (LST map, VM assignments, results)
