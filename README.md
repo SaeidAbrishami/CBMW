@@ -46,18 +46,17 @@ container immediately; such a task can still miss its deadline.
 
 For a task that was planned on a reserved VM and has reached its SST, runtime
 capacity exhaustion is handled in the current scheduling cycle. The scheduler
-first checks other reserved VMs. If none can run the task, the broker examines
-all running reserved tasks and selects the eligible victim whose workflow has
-the greatest deadline slack. The victim must release enough CPU and RAM for
-the waiting task by itself. Its completed work is preserved, it is canceled
-and returned to the ready queue, and the waiting task takes its reserved VM at
-the same simulation timestamp after the cancellation acknowledgement.
-
-This runtime replacement path does not convert a reserved-planned task to
-on-demand. If no eligible victim exists, the task remains ready until reserved
-capacity changes. Each task may be selected as a replacement victim at most
-once, preventing immediate ping-pong preemption. Tasks assigned to `o0` by the
-static planner still use the normal on-demand provisioning path.
+first checks other reserved VMs. If none can run the task, the broker considers
+only reserved tasks that are currently executing before their planned SST. It
+selects the candidate with the greatest task-level slack (`LFT - current time -
+remaining planning duration`) that can individually release enough CPU and RAM.
+Completed work is preserved, the victim returns to the ready queue, and the
+waiting task takes its VM after the same-timestamp cancellation acknowledgement.
+Preemption history does not affect eligibility, so a task may be preempted more
+than once while it is still pre-running. Once current time reaches its SST, it
+is protected. If no eligible pre-running victim exists, the waiting task is
+committed to a dedicated on-demand container. Static `o0` assignments retain
+their normal on-demand provisioning path.
 
 ### CBMW Price Negotiation
 

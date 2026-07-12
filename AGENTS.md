@@ -221,13 +221,15 @@ test_workflows/
   current scheduling cycle. Capacity assigned earlier in the same scheduler
   pass is included immediately, so later tasks do not wait for the next
   five-second period because of stale runtime-capacity bookkeeping.
-- If no reserved VM can start such a task, CBMW does not dynamically fall back
-  to on-demand. It selects the running reserved task with the greatest workflow
-  deadline slack that can individually release enough CPU and RAM, preserves
-  that victim's completed work, returns it to the ready queue, and dispatches
-  the waiting task after a same-timestamp cancellation acknowledgement. A task
-  can be selected as a victim only once to prevent ping-pong preemption. If no
-  eligible victim exists, the waiting task remains ready.
+- If no reserved VM can start such a task, CBMW considers only reserved tasks
+  that are still executing before their planned SST. Among candidates that can
+  individually release enough CPU and RAM, it selects the task with greatest
+  task-level slack (`LFT - current time - remaining planning duration`),
+  preserves completed work, returns the victim to the ready queue, and
+  dispatches the waiting task after a same-timestamp cancellation
+  acknowledgement. Preemption history does not restrict eligibility. Once a
+  task reaches its SST it is protected; if no eligible pre-running victim
+  exists, the waiting task falls back to a dedicated on-demand container.
 - Static-planner assignments to dummy resource `o0` are unaffected and still
   use dedicated on-demand containers.
 - Following Algorithm 1 literally, a task that cannot be placed on reserved
@@ -387,10 +389,11 @@ NOSF invariant and smoke validation:
   completed scenario.
 - CBMW accounts for reserved CPU/RAM selected earlier in the same scheduling
   pass before considering later ready tasks. Due reserved-planned tasks that no
-  longer fit trigger same-timestamp replacement rather than waiting for the
-  next scheduling period or dynamically falling back to on-demand. Victims are
-  chosen by maximum workflow deadline slack subject to CPU/RAM fit, preserve
-  partial progress, return to the ready queue, and are victimized at most once.
+  longer fit trigger same-timestamp replacement of an eligible pre-running task.
+  Victims are chosen by maximum task-level deadline slack subject to CPU/RAM
+  fit, preserve partial progress, and may be preempted repeatedly while still
+  before SST. If no eligible victim exists, the waiting task falls back to
+  on-demand.
 
 Historical paper-container validation: all five algorithms completed a
 detailed-output five-workflow smoke run. The former dedicated-container NOSF

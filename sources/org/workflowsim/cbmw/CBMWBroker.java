@@ -2,10 +2,8 @@ package org.workflowsim.cbmw;
 
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.cloudbus.cloudsim.Cloudlet;
 import org.cloudbus.cloudsim.core.CloudSimTags;
 import org.cloudbus.cloudsim.core.CloudSim;
@@ -31,7 +29,8 @@ public class CBMWBroker extends AbstractWorkflowBroker {
     private final CBMWDynamicSchedulingAlgorithm dynamicScheduler;
     private final Map<Integer, ReservedPreemption> pendingPreemptions =
             new HashMap<>();
-    private final Set<Integer> preemptedTaskIds = new HashSet<>();
+    private final Map<Integer, Double> remainingPlanningDurations =
+            new HashMap<>();
 
     private static final class ReservedPreemption {
         private final Job victim;
@@ -135,11 +134,11 @@ public class CBMWBroker extends AbstractWorkflowBroker {
     }
 
     /**
-     * When a due, reserved-planned task has no reserved capacity, replace the
-     * running reserved task whose workflow has the greatest remaining time to
-     * its deadline. A victim must release enough CPU and RAM by itself.
-     * Previously preempted tasks remain eligible for normal dispatch but do
-     * not initiate another preemption, preventing immediate swap oscillation.
+     * When a due, reserved-planned task has no reserved capacity, replace only
+     * a task that is still executing before its planned SST. Among candidates
+     * that can individually release enough CPU and RAM, choose the task with
+     * the greatest task-level deadline slack. If no such pre-running task
+     * exists, commit the waiting task to a dedicated on-demand container.
      */
     @SuppressWarnings("unchecked")
     private boolean requestReservedPreemption() {
@@ -159,21 +158,27 @@ public class CBMWBroker extends AbstractWorkflowBroker {
         WorkflowRecord waitingWorkflow = activeWorkflows.get(
                 workflowIdForJob(waiting));
         if (waitingWorkflow == null
-                || preemptedTaskIds.contains(waitingTaskId)
                 || waitingWorkflow.getScheduledStart(waitingTaskId) > now
                 || waitingWorkflow.getAssignedVm(waitingTaskId)
-                        == CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL) {
+                        == CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL
+                || provisioner.getProvisionedVm(waitingTaskId) != null) {
             return false;
         }
 
-        int assignedVmId = waiting.getVmId() >= 0
-                ? waiting.getVmId() : waitingWorkflow.getAssignedVm(waitingTaskId);
-        if (vmPool.hasRuntimeCapacity(assignedVmId, waitingTaskId)) {
+        if (hasFeasibleReservedPlacement(
+                waiting, waitingWorkflow, waitingTaskId, now)) {
             return false;
         }
 
-        Job victim = selectVictim(waitingTaskId);
-        if (victim == null) return false;
+        Job victim = selectVictim(waitingTaskId, now);
+        if (victim == null) {
+            CondorVM fallback = orderLogicalOnDemandContainer(waitingTaskId);
+            CBMWLogger.logf("FALLBACK-ON-DEMAND-NO-PRERUN-VICTIM",
+                    "waitingWf=%d waitingTask=%d vm=%d now=%.4f",
+                    waitingWorkflow.getWorkflowId(), waitingTaskId,
+                    fallback.getId(), now);
+            return false;
+        }
 
         int victimVmId = victim.getVmId();
         Integer datacenterId = getVmsToDatacentersMap().get(victimVmId);
@@ -184,15 +189,43 @@ public class CBMWBroker extends AbstractWorkflowBroker {
                 new ReservedPreemption(victim, waitingTaskId, victimVmId));
         int[] request = {victim.getCloudletId(), getId(), victimVmId};
         sendNow(datacenterId, CloudSimTags.CLOUDLET_CANCEL, request);
+        double victimSst = scheduledStart(victim);
+        double victimSlack = taskDeadlineSlack(victim, now);
         CBMWLogger.logf("RESERVED-PREEMPT-REQUEST",
-                "waitingWf=%d waitingTask=%d victimWf=%d victimTask=%d vm=%d now=%.4f",
+                "waitingWf=%d waitingTask=%d victimWf=%d victimTask=%d"
+                        + " vm=%d now=%.4f victimSst=%.4f victimSlack=%.4f",
                 waitingWorkflow.getWorkflowId(), waitingTaskId,
                 workflowIdForJob(victim), primaryTaskId(victim),
-                victimVmId, now);
+                victimVmId, now, victimSst, victimSlack);
         return true;
     }
 
-    private Job selectVictim(int waitingTaskId) {
+    private boolean hasFeasibleReservedPlacement(Job waiting,
+                                                  WorkflowRecord workflow,
+                                                  int taskId, double now) {
+        int attemptedVmId = waiting.getVmId() >= 0
+                ? waiting.getVmId() : workflow.getAssignedVm(taskId);
+        if (vmPool.isReserved(attemptedVmId)
+                && vmPool.hasRuntimeCapacity(attemptedVmId, taskId)) {
+            return true;
+        }
+
+        double duration = workflow.getEstimatedExecTime(taskId);
+        if (!Double.isFinite(duration) || duration <= 0.0) return false;
+        int cores = vmPool.getTaskCores(taskId);
+        int ramMb = vmPool.getTaskRamMb(taskId);
+        for (CondorVM vm : vmPool.getReservedVms()) {
+            if (vm.getId() == attemptedVmId) continue;
+            if (vmPool.hasRuntimeCapacity(vm.getId(), taskId)
+                    && vmPool.hasBookedCapacity(vm.getId(), now,
+                            now + duration, cores, ramMb)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private Job selectVictim(int waitingTaskId, double now) {
         int requiredCores = vmPool.getTaskCores(waitingTaskId);
         int requiredRam = vmPool.getTaskRamMb(waitingTaskId);
 
@@ -200,12 +233,70 @@ public class CBMWBroker extends AbstractWorkflowBroker {
                 .filter(cl -> cl instanceof Job)
                 .map(cl -> (Job) cl)
                 .filter(job -> vmPool.isReserved(job.getVmId()))
-                .filter(job -> !preemptedTaskIds.contains(primaryTaskId(job)))
+                .filter(job -> isCurrentlyPreRunning(
+                        now, scheduledStart(job)))
+                .filter(job -> getVmsToDatacentersMap().containsKey(job.getVmId()))
                 .filter(job -> vmPool.getTaskCores(primaryTaskId(job)) >= requiredCores)
                 .filter(job -> vmPool.getTaskRamMb(primaryTaskId(job)) >= requiredRam)
                 .filter(job -> capacityAfterRemoving(job, waitingTaskId))
-                .max(Comparator.comparingDouble(this::deadline))
+                .max((left, right) -> compareVictimPriority(left, right, now))
                 .orElse(null);
+    }
+
+    private int compareVictimPriority(Job left, Job right, double now) {
+        return compareVictimPriorityValues(
+                taskDeadlineSlack(left, now), taskSubDeadline(left),
+                primaryTaskId(left), taskDeadlineSlack(right, now),
+                taskSubDeadline(right), primaryTaskId(right));
+    }
+
+    private double taskDeadlineSlack(Job job, double now) {
+        return calculateTaskDeadlineSlack(taskSubDeadline(job), now,
+                estimatedRemainingPlanningDuration(job, now));
+    }
+
+    static boolean isCurrentlyPreRunning(double now, double scheduledStart) {
+        return Double.isFinite(now) && Double.isFinite(scheduledStart)
+                && scheduledStart > now;
+    }
+
+    static double calculateTaskDeadlineSlack(double subDeadline, double now,
+                                             double remainingDuration) {
+        return subDeadline - now - Math.max(0.0, remainingDuration);
+    }
+
+    static int compareVictimPriorityValues(
+            double leftSlack, double leftSubDeadline, int leftTaskId,
+            double rightSlack, double rightSubDeadline, int rightTaskId) {
+        int bySlack = Double.compare(leftSlack, rightSlack);
+        if (bySlack != 0) return bySlack;
+
+        int bySubDeadline = Double.compare(leftSubDeadline, rightSubDeadline);
+        if (bySubDeadline != 0) return bySubDeadline;
+
+        // A smaller task ID wins the final tie while still using Stream.max.
+        return Integer.compare(rightTaskId, leftTaskId);
+    }
+
+    private double taskSubDeadline(Job job) {
+        WorkflowRecord workflow = activeWorkflows.get(workflowIdForJob(job));
+        return workflow != null
+                ? workflow.getLFT(primaryTaskId(job))
+                : Double.NEGATIVE_INFINITY;
+    }
+
+    private double estimatedRemainingPlanningDuration(Job job, double now) {
+        int taskId = primaryTaskId(job);
+        WorkflowRecord workflow = activeWorkflows.get(workflowIdForJob(job));
+        if (workflow == null) return Double.POSITIVE_INFINITY;
+
+        double remainingAtLatestStart = remainingPlanningDurations.getOrDefault(
+                taskId, workflow.getEstimatedExecTime(taskId));
+        double execStart = job.getExecStartTime();
+        double elapsedThisAttempt = Double.isFinite(execStart)
+                && execStart >= 0.0 && execStart <= now
+                ? now - execStart : 0.0;
+        return Math.max(0.0, remainingAtLatestStart - elapsedThisAttempt);
     }
 
     private boolean capacityAfterRemoving(Job victim, int waitingTaskId) {
@@ -219,11 +310,6 @@ public class CBMWBroker extends AbstractWorkflowBroker {
                 - vmPool.getTaskRamMb(victimTaskId)
                 + vmPool.getTaskRamMb(waitingTaskId);
         return coresAfter <= vm.getNumberOfPes() && ramAfter <= vm.getRam();
-    }
-
-    private double deadline(Job job) {
-        WorkflowRecord workflow = activeWorkflows.get(workflowIdForJob(job));
-        return workflow != null ? workflow.getDeadline() : Double.NEGATIVE_INFINITY;
     }
 
     private double scheduledStart(Cloudlet cloudlet) {
@@ -267,7 +353,11 @@ public class CBMWBroker extends AbstractWorkflowBroker {
             return;
         }
 
-        int victimTaskId = primaryTaskId(preemption.victim);
+        Job canceledJob = (Job) canceled;
+        int victimTaskId = primaryTaskId(canceledJob);
+        remainingPlanningDurations.put(victimTaskId,
+                estimatedRemainingPlanningDuration(
+                        canceledJob, CloudSim.clock()));
         long remainingLength = Math.max(1L,
                 canceled.getCloudletLength() - canceled.getCloudletFinishedSoFar());
         canceled.setCloudletLength(remainingLength);
@@ -277,7 +367,6 @@ public class CBMWBroker extends AbstractWorkflowBroker {
         vmPool.taskFinished(preemption.vmId, victimTaskId);
         vmPool.releaseSlot(victimTaskId);
         accounting.markReservedTaskPreempted(canceled);
-        preemptedTaskIds.add(victimTaskId);
         getCloudletList().add(canceled);
 
         CBMWLogger.logf("RESERVED-PREEMPTED",
@@ -290,5 +379,10 @@ public class CBMWBroker extends AbstractWorkflowBroker {
     @Override
     protected void onTaskComplete(Cloudlet cl) {
         vmPool.releaseSlot(cl.getCloudletId());
+    }
+
+    @Override
+    protected void onTaskReturned(Cloudlet cl, boolean onDemand) {
+        remainingPlanningDurations.remove(primaryTaskId((Job) cl));
     }
 }

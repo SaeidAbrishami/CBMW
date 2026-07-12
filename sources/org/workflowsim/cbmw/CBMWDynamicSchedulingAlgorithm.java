@@ -152,12 +152,12 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                                         wfId, taskId, plannedVm, other.getId()));
                     } else {
                         // The broker's current-cycle replacement policy will
-                        // preempt the running reserved task with the greatest
-                        // workflow deadline slack that can free enough CPU and
-                        // RAM. If no such victim exists, retain the task in the
-                        // ready queue; do not convert a reserved plan to o0.
+                        // consider only reserved tasks that are still running
+                        // before their SST, selecting the eligible task with
+                        // the greatest task-level deadline slack. If none
+                        // exists, the broker commits this task to on-demand.
                         CBMWLogger.log("DISPATCH-STUCK",
-                                String.format("wf=%d task=%d planned=vm%d BUSY no-reserved no-on-demand-fallback",
+                                String.format("wf=%d task=%d planned=vm%d BUSY awaiting-prerun-replacement-or-fallback",
                                         wfId, taskId, plannedVm));
                     }
                 }
