@@ -70,6 +70,7 @@ Useful JVM switches:
 | `-Dcbmw.runtime.stddev.ratio=0.10` | Paper runtime uncertainty, sigma divided by mean runtime. |
 | `-Dcbmw.negotiation.beta=1.0` | Workflow-level safety factor applied to the conservative critical path. |
 | `-Dcbmw.negotiation.gamma=1.0` | Markup applied to CBMW's post-planning raw execution-cost quote. |
+| `-Dcbmw.preemption.safety.sec=0` | Minimum post-preemption slack required before a running reserved task can be interrupted. |
 | `-Dnosf.provisioning.delay.sec=0` | NOSF-only provisioning delay; zero is the faithful reference default. |
 | `-Dnosf.billing.quantum.sec=60` | NOSF VM billing quantum in seconds. |
 | `-Dnosf.vm.type.count=1` | Number of NOSF VM types; configure `nosf.vm.type.<i>.{name,cores,ram.mb,mips,price.per.sec}`. |
@@ -223,13 +224,17 @@ test_workflows/
   five-second period because of stale runtime-capacity bookkeeping.
 - If no reserved VM can start such a task, CBMW considers only reserved tasks
   that are still executing before their planned SST. Among candidates that can
-  individually release enough CPU and RAM, it selects the task with greatest
-  task-level slack (`LFT - current time - remaining planning duration`),
-  preserves completed work, returns the victim to the ready queue, and
-  dispatches the waiting task after a same-timestamp cancellation
-  acknowledgement. Preemption history does not restrict eligibility. Once a
-  task reaches its SST it is protected; if no eligible pre-running victim
-  exists, the waiting task falls back to a dedicated on-demand container.
+  individually release enough CPU and RAM, it rejects candidates whose
+  post-preemption slack (`LFT - current time - remaining planning duration -`
+  `waiting task planning duration`) is below
+  `cbmw.preemption.safety.sec`, then selects the eligible task with greatest
+  post-preemption slack. It preserves completed work, returns the victim to the
+  ready queue, and dispatches the waiting task after a same-timestamp
+  cancellation acknowledgement. Preemption history does not restrict
+  eligibility. Once a task reaches its SST it is protected; if no deadline-safe
+  pre-running victim exists, the waiting task stays queued for its originally
+  planned reserved VM and is reconsidered immediately when reserved capacity
+  is released instead of falling back to on-demand.
 - Static-planner assignments to dummy resource `o0` are unaffected and still
   use dedicated on-demand containers.
 - Following Algorithm 1 literally, a task that cannot be placed on reserved
@@ -390,10 +395,10 @@ NOSF invariant and smoke validation:
 - CBMW accounts for reserved CPU/RAM selected earlier in the same scheduling
   pass before considering later ready tasks. Due reserved-planned tasks that no
   longer fit trigger same-timestamp replacement of an eligible pre-running task.
-  Victims are chosen by maximum task-level deadline slack subject to CPU/RAM
-  fit, preserve partial progress, and may be preempted repeatedly while still
-  before SST. If no eligible victim exists, the waiting task falls back to
-  on-demand.
+  Victims are chosen by maximum post-preemption deadline slack subject to
+  CPU/RAM fit and the configured safety margin, preserve partial progress, and
+  may be preempted repeatedly while still before SST. If no deadline-safe
+  victim exists, the waiting task waits for its planned reserved VM.
 
 Historical paper-container validation: all five algorithms completed a
 detailed-output five-workflow smoke run. The former dedicated-container NOSF

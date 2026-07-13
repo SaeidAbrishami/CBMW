@@ -1,10 +1,12 @@
 package org.workflowsim.cbmw;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.cloudbus.cloudsim.Cloudlet;
 import org.cloudbus.cloudsim.core.CloudSim;
 import org.workflowsim.CondorVM;
@@ -30,15 +32,24 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
     private HybridVmPool pool;
     private Map<Integer, WorkflowRecord> activeWorkflows;
     private ProvisioningModule provisioner;
+    private Set<Integer> waitingForPlannedReservedVm = Collections.emptySet();
 
     public CBMWDynamicSchedulingAlgorithm() {}
 
     public CBMWDynamicSchedulingAlgorithm(HybridVmPool pool,
                                            Map<Integer, WorkflowRecord> activeWorkflows,
                                            ProvisioningModule provisioner) {
+        this(pool, activeWorkflows, provisioner, Collections.emptySet());
+    }
+
+    public CBMWDynamicSchedulingAlgorithm(HybridVmPool pool,
+                                           Map<Integer, WorkflowRecord> activeWorkflows,
+                                           ProvisioningModule provisioner,
+                                           Set<Integer> waitingForPlannedReservedVm) {
         this.pool            = pool;
         this.activeWorkflows = activeWorkflows;
         this.provisioner     = provisioner;
+        this.waitingForPlannedReservedVm = waitingForPlannedReservedVm;
     }
 
     public void init(HybridVmPool pool,
@@ -126,6 +137,9 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                 if (planned != null && hasRuntimeCapacity(
                         plannedVm, taskId, pendingCores, pendingRamMb)) {
                     // Provisioner returns true — dispatch to planned reserved VM.
+                    if (waitingForPlannedReservedVm.contains(taskId)) {
+                        waitingForPlannedReservedVm.remove(taskId);
+                    }
                     pool.rebookSlot(taskId, plannedVm,
                             now, now + planningDuration);
                     assign(job, planned);
@@ -137,6 +151,12 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                                     wfId, taskId, plannedVm));
                 } else {
                     // Provisioner returns false — CheckReserved(tji, CT): find another idle reserved VM.
+                    if (waitingForPlannedReservedVm.contains(taskId)) {
+                        CBMWLogger.log("DISPATCH-WAIT-PLANNED",
+                                String.format("wf=%d task=%d planned=vm%d BUSY waiting-for-planned-capacity",
+                                        wfId, taskId, plannedVm));
+                        continue;
+                    }
                     CondorVM other = findReserved(
                             now, now + planningDuration, taskId,
                             pendingCores, pendingRamMb);
@@ -154,10 +174,11 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                         // The broker's current-cycle replacement policy will
                         // consider only reserved tasks that are still running
                         // before their SST, selecting the eligible task with
-                        // the greatest task-level deadline slack. If none
-                        // exists, the broker commits this task to on-demand.
+                        // the greatest safe post-preemption slack. If none
+                        // exists, the broker keeps this task queued for its
+                        // planned reserved VM.
                         CBMWLogger.log("DISPATCH-STUCK",
-                                String.format("wf=%d task=%d planned=vm%d BUSY awaiting-prerun-replacement-or-fallback",
+                                String.format("wf=%d task=%d planned=vm%d BUSY awaiting-prerun-replacement-or-wait",
                                         wfId, taskId, plannedVm));
                     }
                 }

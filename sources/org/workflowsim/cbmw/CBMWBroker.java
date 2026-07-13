@@ -2,8 +2,10 @@ package org.workflowsim.cbmw;
 
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.cloudbus.cloudsim.Cloudlet;
 import org.cloudbus.cloudsim.core.CloudSimTags;
 import org.cloudbus.cloudsim.core.CloudSim;
@@ -26,11 +28,17 @@ import org.workflowsim.WorkflowSimTags;
  */
 public class CBMWBroker extends AbstractWorkflowBroker {
 
+    private static final double PREEMPTION_SAFETY_SECONDS =
+            readNonNegativeDouble("cbmw.preemption.safety.sec", 0.0);
+
     private final CBMWDynamicSchedulingAlgorithm dynamicScheduler;
     private final Map<Integer, ReservedPreemption> pendingPreemptions =
             new HashMap<>();
     private final Map<Integer, Double> remainingPlanningDurations =
             new HashMap<>();
+    private final Set<Integer> waitingForPlannedReservedVm =
+            new HashSet<>();
+    private boolean immediateReservedCapacityWake;
 
     private static final class ReservedPreemption {
         private final Job victim;
@@ -49,7 +57,8 @@ public class CBMWBroker extends AbstractWorkflowBroker {
         negotiation.setBeta(PaperRuntimeModel.NEGOTIATION_BETA);
         negotiation.setGamma(PaperRuntimeModel.NEGOTIATION_GAMMA);
         this.dynamicScheduler = new CBMWDynamicSchedulingAlgorithm(
-                vmPool, activeWorkflows, provisioner);
+                vmPool, activeWorkflows, provisioner,
+                waitingForPlannedReservedVm);
     }
 
     @Override
@@ -107,6 +116,7 @@ public class CBMWBroker extends AbstractWorkflowBroker {
     @Override
     @SuppressWarnings("unchecked")
     protected void processCloudletUpdate(SimEvent ev) {
+        immediateReservedCapacityWake = false;
         recordReadyQueue((List<Cloudlet>) getCloudletList());
 
         // A replacement cannot be submitted until the datacenter confirms
@@ -137,8 +147,9 @@ public class CBMWBroker extends AbstractWorkflowBroker {
      * When a due, reserved-planned task has no reserved capacity, replace only
      * a task that is still executing before its planned SST. Among candidates
      * that can individually release enough CPU and RAM, choose the task with
-     * the greatest task-level deadline slack. If no such pre-running task
-     * exists, commit the waiting task to a dedicated on-demand container.
+     * the greatest safe post-preemption deadline slack. If no such pre-running
+     * task exists, leave the task queued until its planned reserved VM
+     * releases enough runtime capacity.
      */
     @SuppressWarnings("unchecked")
     private boolean requestReservedPreemption() {
@@ -161,7 +172,8 @@ public class CBMWBroker extends AbstractWorkflowBroker {
                 || waitingWorkflow.getScheduledStart(waitingTaskId) > now
                 || waitingWorkflow.getAssignedVm(waitingTaskId)
                         == CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL
-                || provisioner.getProvisionedVm(waitingTaskId) != null) {
+                || provisioner.getProvisionedVm(waitingTaskId) != null
+                || waitingForPlannedReservedVm.contains(waitingTaskId)) {
             return false;
         }
 
@@ -170,13 +182,19 @@ public class CBMWBroker extends AbstractWorkflowBroker {
             return false;
         }
 
-        Job victim = selectVictim(waitingTaskId, now);
+        double expectedInterruption = remainingPlanningDurations.getOrDefault(
+                waitingTaskId,
+                waitingWorkflow.getEstimatedExecTime(waitingTaskId));
+        Job victim = selectVictim(waitingTaskId, now, expectedInterruption);
         if (victim == null) {
-            CondorVM fallback = orderLogicalOnDemandContainer(waitingTaskId);
-            CBMWLogger.logf("FALLBACK-ON-DEMAND-NO-PRERUN-VICTIM",
-                    "waitingWf=%d waitingTask=%d vm=%d now=%.4f",
+            waitingForPlannedReservedVm.add(waitingTaskId);
+            CBMWLogger.logf("WAIT-PLANNED-RESERVED-NO-SAFE-VICTIM",
+                    "waitingWf=%d waitingTask=%d plannedVm=%d now=%.4f"
+                            + " expectedInterruption=%.4f safetyMargin=%.4f",
                     waitingWorkflow.getWorkflowId(), waitingTaskId,
-                    fallback.getId(), now);
+                    waitingWorkflow.getAssignedVm(waitingTaskId), now,
+                    expectedInterruption,
+                    PREEMPTION_SAFETY_SECONDS);
             return false;
         }
 
@@ -191,12 +209,20 @@ public class CBMWBroker extends AbstractWorkflowBroker {
         sendNow(datacenterId, CloudSimTags.CLOUDLET_CANCEL, request);
         double victimSst = scheduledStart(victim);
         double victimSlack = taskDeadlineSlack(victim, now);
+        double postPreemptionSlack = calculatePostPreemptionSlack(
+                taskSubDeadline(victim), now,
+                estimatedRemainingPlanningDuration(victim, now),
+                expectedInterruption);
         CBMWLogger.logf("RESERVED-PREEMPT-REQUEST",
                 "waitingWf=%d waitingTask=%d victimWf=%d victimTask=%d"
-                        + " vm=%d now=%.4f victimSst=%.4f victimSlack=%.4f",
+                        + " vm=%d now=%.4f victimSst=%.4f victimSlack=%.4f"
+                        + " expectedInterruption=%.4f postPreemptionSlack=%.4f"
+                        + " safetyMargin=%.4f",
                 waitingWorkflow.getWorkflowId(), waitingTaskId,
                 workflowIdForJob(victim), primaryTaskId(victim),
-                victimVmId, now, victimSst, victimSlack);
+                victimVmId, now, victimSst, victimSlack,
+                expectedInterruption, postPreemptionSlack,
+                PREEMPTION_SAFETY_SECONDS);
         return true;
     }
 
@@ -225,7 +251,12 @@ public class CBMWBroker extends AbstractWorkflowBroker {
         return false;
     }
 
-    private Job selectVictim(int waitingTaskId, double now) {
+    private Job selectVictim(int waitingTaskId, double now,
+                             double expectedInterruption) {
+        if (!Double.isFinite(expectedInterruption)
+                || expectedInterruption < 0.0) {
+            return null;
+        }
         int requiredCores = vmPool.getTaskCores(waitingTaskId);
         int requiredRam = vmPool.getTaskRamMb(waitingTaskId);
 
@@ -239,15 +270,37 @@ public class CBMWBroker extends AbstractWorkflowBroker {
                 .filter(job -> vmPool.getTaskCores(primaryTaskId(job)) >= requiredCores)
                 .filter(job -> vmPool.getTaskRamMb(primaryTaskId(job)) >= requiredRam)
                 .filter(job -> capacityAfterRemoving(job, waitingTaskId))
-                .max((left, right) -> compareVictimPriority(left, right, now))
+                .filter(job -> isDeadlineSafeVictim(
+                        job, now, expectedInterruption))
+                .max((left, right) -> compareVictimPriority(
+                        left, right, now, expectedInterruption))
                 .orElse(null);
     }
 
-    private int compareVictimPriority(Job left, Job right, double now) {
+    private boolean isDeadlineSafeVictim(Job job, double now,
+                                         double expectedInterruption) {
+        double postPreemptionSlack = calculatePostPreemptionSlack(
+                taskSubDeadline(job), now,
+                estimatedRemainingPlanningDuration(job, now),
+                expectedInterruption);
+        return hasSafePostPreemptionSlack(
+                postPreemptionSlack, PREEMPTION_SAFETY_SECONDS);
+    }
+
+    private int compareVictimPriority(Job left, Job right, double now,
+                                      double expectedInterruption) {
         return compareVictimPriorityValues(
-                taskDeadlineSlack(left, now), taskSubDeadline(left),
-                primaryTaskId(left), taskDeadlineSlack(right, now),
+                postPreemptionSlack(left, now, expectedInterruption),
+                taskSubDeadline(left), primaryTaskId(left),
+                postPreemptionSlack(right, now, expectedInterruption),
                 taskSubDeadline(right), primaryTaskId(right));
+    }
+
+    private double postPreemptionSlack(Job job, double now,
+                                       double expectedInterruption) {
+        return calculatePostPreemptionSlack(taskSubDeadline(job), now,
+                estimatedRemainingPlanningDuration(job, now),
+                expectedInterruption);
     }
 
     private double taskDeadlineSlack(Job job, double now) {
@@ -263,6 +316,21 @@ public class CBMWBroker extends AbstractWorkflowBroker {
     static double calculateTaskDeadlineSlack(double subDeadline, double now,
                                              double remainingDuration) {
         return subDeadline - now - Math.max(0.0, remainingDuration);
+    }
+
+    static double calculatePostPreemptionSlack(
+            double subDeadline, double now, double remainingDuration,
+            double expectedInterruption) {
+        return calculateTaskDeadlineSlack(subDeadline, now, remainingDuration)
+                - Math.max(0.0, expectedInterruption);
+    }
+
+    static boolean hasSafePostPreemptionSlack(
+            double postPreemptionSlack, double safetyMargin) {
+        return Double.isFinite(postPreemptionSlack)
+                && Double.isFinite(safetyMargin)
+                && safetyMargin >= 0.0
+                && postPreemptionSlack >= safetyMargin;
     }
 
     static int compareVictimPriorityValues(
@@ -319,9 +387,24 @@ public class CBMWBroker extends AbstractWorkflowBroker {
                 ? workflow.getScheduledStart(primaryTaskId(job)) : 0.0;
     }
 
+    private static double readNonNegativeDouble(String property,
+                                                double defaultValue) {
+        double value = Double.parseDouble(System.getProperty(
+                property, Double.toString(defaultValue)));
+        if (!Double.isFinite(value) || value < 0.0) {
+            throw new IllegalArgumentException(property + " must be >= 0");
+        }
+        return value;
+    }
+
     // -----------------------------------------------------------------------
     // Module 4 — Release booking slot on reserved-VM completion
     // -----------------------------------------------------------------------
+
+    @Override
+    protected boolean usesPeriodicScheduling() {
+        return !immediateReservedCapacityWake;
+    }
 
     @Override
     public void processEvent(SimEvent ev) {
@@ -379,10 +462,15 @@ public class CBMWBroker extends AbstractWorkflowBroker {
     @Override
     protected void onTaskComplete(Cloudlet cl) {
         vmPool.releaseSlot(cl.getCloudletId());
+        if (!waitingForPlannedReservedVm.isEmpty()) {
+            immediateReservedCapacityWake = true;
+        }
     }
 
     @Override
     protected void onTaskReturned(Cloudlet cl, boolean onDemand) {
-        remainingPlanningDurations.remove(primaryTaskId((Job) cl));
+        int taskId = primaryTaskId((Job) cl);
+        remainingPlanningDurations.remove(taskId);
+        waitingForPlannedReservedVm.remove(taskId);
     }
 }

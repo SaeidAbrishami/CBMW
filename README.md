@@ -48,15 +48,18 @@ For a task that was planned on a reserved VM and has reached its SST, runtime
 capacity exhaustion is handled in the current scheduling cycle. The scheduler
 first checks other reserved VMs. If none can run the task, the broker considers
 only reserved tasks that are currently executing before their planned SST. It
-selects the candidate with the greatest task-level slack (`LFT - current time -
-remaining planning duration`) that can individually release enough CPU and RAM.
+selects the candidate with the greatest post-preemption slack (`LFT - current
+time - remaining planning duration - waiting task planning duration`) that can
+individually release enough CPU and RAM. The candidate is eligible only when
+this slack is at least `cbmw.preemption.safety.sec` (zero by default).
 Completed work is preserved, the victim returns to the ready queue, and the
 waiting task takes its VM after the same-timestamp cancellation acknowledgement.
 Preemption history does not affect eligibility, so a task may be preempted more
 than once while it is still pre-running. Once current time reaches its SST, it
-is protected. If no eligible pre-running victim exists, the waiting task is
-committed to a dedicated on-demand container. Static `o0` assignments retain
-their normal on-demand provisioning path.
+is protected. If no deadline-safe pre-running victim exists, the waiting task
+stays queued for its originally planned reserved VM and is reconsidered as soon
+as reserved capacity is released; it does not fall back to on-demand. Static
+`o0` assignments retain their normal on-demand provisioning path.
 
 ### CBMW Price Negotiation
 
