@@ -15,7 +15,9 @@ import org.workflowsim.planning.BasePlanningAlgorithm;
  *
  * Computes EST/EFT/LFT/LST for each task and assigns tasks to reserved VM slots
  * by searching backward from LFT. Tasks that cannot fit on reserved capacity are
- * assigned to the paper's dummy on-demand resource at LST - OPD.
+ * assigned to the paper's dummy on-demand resource at LST - OPD. An entry task
+ * is rejected when provisioning it at workflow arrival would make its
+ * downstream path miss the workflow deadline.
  */
 public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
 
@@ -47,8 +49,13 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
                 String.format("wf=%d tasks=%d deadline=%.4f",
                         wfr.getWorkflowId(), tasks.size(), deadline));
 
-        for (Task task : sorted) {
-            planTask(task);
+        try {
+            for (Task task : sorted) {
+                planTask(task);
+            }
+        } catch (Exception e) {
+            releaseWorkflowBookings(tasks);
+            throw e;
         }
 
         CBMWLogger.log("PLAN-DONE",
@@ -76,7 +83,7 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
         }
     }
 
-    private void planTask(Task task) {
+    private void planTask(Task task) throws Exception {
         int taskId = task.getCloudletId();
         double est = wfr.getEST(taskId);
         double lft = wfr.getLFT(taskId);
@@ -118,17 +125,48 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
         }
 
         // Algorithm 1, lines 8-10: a failed reserved TaskPlanner result is
-        // assigned to dummy on-demand resource o0 at LST - OPD. The paper does
-        // not add a second feasibility rejection or clamp this time to arrival.
+        // assigned to dummy on-demand resource o0 at LST - OPD.
         double sst = lst - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY;
 
         task.setVmId(ON_DEMAND_SENTINEL);
         wfr.setAssignedVm(taskId, ON_DEMAND_SENTINEL);
         wfr.setScheduledStart(taskId, sst);
+
+        if (task.getParentList().isEmpty()) {
+            double earliestOrder = Math.max(wfr.getArrivalTime(), CloudSim.clock());
+            double earliestFinish = earliestOrder
+                    + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY + dur;
+            if (earliestFinish > lft + 1e-9) {
+                CBMWLogger.log("PLAN-REJECT-ENTRY-ONDEMAND",
+                        String.format("wf=%d task=%d arrival=%.4f opd=%.4f"
+                                        + " dur=%.4f earliestFinish=%.4f"
+                                        + " lft=%.4f workflowDeadline=%.4f",
+                                wfr.getWorkflowId(), taskId, earliestOrder,
+                                HybridVmPool.ON_DEMAND_PROVISIONING_DELAY,
+                                dur, earliestFinish, lft, wfr.getDeadline()));
+                throw new Exception(String.format(
+                        "entry task %d needs on-demand provisioning and would"
+                                + " make workflow %d miss its deadline"
+                                + " (earliest finish %.4f > LFT %.4f)",
+                        taskId, wfr.getWorkflowId(), earliestFinish, lft));
+            }
+        }
+
         CBMWLogger.log("PLAN-ASSIGN-ONDEMAND",
                 String.format("wf=%d task=%d est=%.4f lft=%.4f sst=%.4f"
                                 + " rule=LST-OPD dur=%.4f",
                         wfr.getWorkflowId(), taskId, est, lft, sst, dur));
+    }
+
+    /** Frees reservations made before a later task makes planning fail. */
+    private void releaseWorkflowBookings(List<Task> tasks) {
+        for (Task task : tasks) {
+            int taskId = task.getCloudletId();
+            if (wfr.hasAssignedVm(taskId)
+                    && wfr.getAssignedVm(taskId) != ON_DEMAND_SENTINEL) {
+                pool.releaseSlot(taskId);
+            }
+        }
     }
 
     /**

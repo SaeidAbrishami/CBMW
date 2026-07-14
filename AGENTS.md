@@ -239,8 +239,11 @@ test_workflows/
   use dedicated on-demand containers.
 - Following Algorithm 1 literally, a task that cannot be placed on reserved
   capacity is assigned to dummy resource `o0` at `SST = LST - OPD`. This value
-  is not clamped to workflow arrival and does not trigger a second static
-  feasibility rejection; Algorithm 3 provisions immediately when SST is past.
+  is not clamped to workflow arrival; Algorithm 3 provisions immediately when
+  SST is past. For an entry task assigned to `o0`, planning includes the
+  on-demand provisioning delay from workflow arrival. The workflow is rejected
+  if that entry task would finish after its derived LFT, because its downstream
+  path would then miss the workflow deadline.
 - `applyPerturbedRuntimes()` replaces each task runtime from the matching
   `.txt` file.
 - `cloudletLength = runtime_seconds * 1000`.
