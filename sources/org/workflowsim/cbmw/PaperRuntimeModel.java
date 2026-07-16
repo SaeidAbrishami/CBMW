@@ -8,7 +8,7 @@ public final class PaperRuntimeModel {
     public static final double QUANTILE = readDouble(
             "cbmw.runtime.quantile", 0.99);
     public static final double STDDEV_RATIO = readDouble(
-            "cbmw.runtime.stddev.ratio", 0.10);
+            "cbmw.runtime.stddev.ratio", 0.05);
     public static final double NEGOTIATION_BETA = readDouble(
             "cbmw.negotiation.beta", 1.0);
     public static final double NEGOTIATION_GAMMA = readDouble(

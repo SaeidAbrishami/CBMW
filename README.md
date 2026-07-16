@@ -97,7 +97,7 @@ online scheduler:
 
 The reconstruction uses the same conservative runtime model as the paper-style
 experiments: `cet = mu + z(alpha) * sigma`, where the default uncertainty is
-`sigma = 0.1 * mu` and `alpha = 0.99`.
+`sigma = 0.05 * mu` and `alpha = 0.99`.
 
 The original NOSF article is not available in this repository, so this is not
 claimed as a line-for-line reproduction of its unpublished pseudocode. The
