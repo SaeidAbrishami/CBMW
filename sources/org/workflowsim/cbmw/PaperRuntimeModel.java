@@ -6,7 +6,7 @@ import org.apache.commons.math3.distribution.NormalDistribution;
 public final class PaperRuntimeModel {
 
     public static final double QUANTILE = readDouble(
-            "cbmw.runtime.quantile", 0.90);
+            "cbmw.runtime.quantile", 0.99);
     public static final double STDDEV_RATIO = readDouble(
             "cbmw.runtime.stddev.ratio", 0.10);
     public static final double NEGOTIATION_BETA = readDouble(
