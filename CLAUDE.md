@@ -61,7 +61,9 @@ test_workflows/                   ← real scientific workflow DAX files
 ## Simulation design
 
 ### Workflow input
-- `WorkflowLoader` reads `test_workflows/poisson_distribution.json` for arrival timestamps.
+- `WorkflowLoader` reads `P:\University\2\workflows\1\poisson_distribution.json`
+  by default for arrival timestamps. The `cbmw.workflow.dir` and
+  `cbmw.workflow.manifest` JVM properties can override the source.
 - For each entry it parses the matching `.xml` (Pegasus DAX 2.1 format) to compute the critical path, then sets `deadline = arrivalTime + CP × TIGHTNESS`.
 - After `WorkflowParser` creates task objects, `applyPerturbedRuntimes()` replaces each task's `cloudletLength` with the value from the matching `.txt` file (Normal(nominal, nominal/10) distribution), making the 25 variants genuinely distinct.
 

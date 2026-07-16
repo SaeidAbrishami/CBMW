@@ -257,7 +257,8 @@ java -cp "bin;lib/*" org.workflowsim.examples.cbmw.CBMWSimulation
 
 By default this runs the full 45-scenario matrix: three load classes, three
 deadline classes, and five algorithms, using 50 workflows per scenario for
-every algorithm. Use JVM properties such as
+every algorithm. Workflow inputs are read from
+`P:\University\2\workflows\1` by default. Use JVM properties such as
 `-Dcbmw.algorithms=CBMW`, `-Dcbmw.max.workflows=5`, and
 `-Dcbmw.max.scenarios=1` to restrict smoke or diagnostic runs.
 
@@ -269,6 +270,8 @@ every algorithm. Use JVM properties such as
 |---------------------|---------|-------------|
 | Load classes | low `2.0`, moderate `1.0`, heavy `0.5` | Multipliers applied to arrival times |
 | Deadline classes | tight `1.2`, medium `2.0`, loose `4.0` | Deadline = arrival + CP × tightness |
+| `cbmw.workflow.dir` | `P:\University\2\workflows\1` | Directory containing the workflow XML/TXT datasets and arrival manifest |
+| `cbmw.workflow.manifest` | `poisson_distribution.json` | Arrival manifest filename within `cbmw.workflow.dir` |
 | `cbmw.reserved.instances` | `5` | Reserved VM count |
 | `cbmw.reserved.cores` | `192` | Cores per reserved VM |
 | `cbmw.reserved.ram.mb` | `384000` | RAM per reserved VM |

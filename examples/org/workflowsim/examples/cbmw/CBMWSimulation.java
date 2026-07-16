@@ -51,7 +51,7 @@ import org.workflowsim.utils.ReplicaCatalog;
  * Runs the new experiment matrix: CBMW plus paper and greedy baselines across
  * low/moderate/heavy load and tight/medium/loose
  * deadlines against the same first 50 workflow arrivals selected from the
- * 200-arrival source trace in test_workflows/.
+ * configured 200-arrival source trace.
  * Arrival times come from poisson_distribution.json; deadlines are
  * arrivalTime + criticalPath * tightness; task runtimes use the perturbed
  * values from the matching .txt files.
@@ -72,8 +72,10 @@ public class CBMWSimulation {
     };
     private static final List<String> ALGORITHMS = configuredAlgorithms();
 
-    private static final String WORKFLOW_DIR    = "test_workflows";
-    private static final String POISSON_FILE    = "poisson_distribution.json";
+    private static final String WORKFLOW_DIR = System.getProperty(
+            "cbmw.workflow.dir", "P:\\University\\2\\workflows\\1");
+    private static final String POISSON_FILE = System.getProperty(
+            "cbmw.workflow.manifest", "poisson_distribution.json");
     private static final double SIM_BUFFER_SECS = 5000.0;
     private static final boolean GENERATE_GANTT = Boolean.parseBoolean(
             System.getProperty("cbmw.generate.gantt", "false"));
@@ -123,6 +125,9 @@ public class CBMWSimulation {
                 + new File(ALGORITHM_OUTPUT_ROOT).getAbsolutePath());
         System.out.println("[run] Comparison outputs: "
                 + new File(COMPARISON_OUTPUT_DIR).getAbsolutePath());
+        System.out.println("[run] Workflow source: "
+                + new File(WORKFLOW_DIR).getAbsolutePath());
+        System.out.println("[run] Workflow manifest: " + POISSON_FILE);
         if (ALGORITHMS.contains("CBMW")) {
             double multiplier = PaperRuntimeModel.conservativeEstimate(1.0);
             System.out.println(String.format(Locale.US,
