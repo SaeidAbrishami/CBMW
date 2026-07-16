@@ -22,6 +22,59 @@ separate from task runtime. Reserved-container startup is currently not added
 separately; it is represented only when it is already included in the supplied
 DAX/runtime measurement.
 
+### Generating Reproducible Perturbed Runtimes
+
+`test_workflows/duplicate_and_process.py` creates a separate, self-contained
+workflow dataset from every entry in an arrival manifest. It copies the
+referenced XML files and manifest, generates one normally distributed runtime
+sample per task, and writes `runtime_generation_metadata.json` with the seed,
+configuration, empirical standard deviation, and CET exceedance rate. The
+source dataset is never modified, and the destination must be new or empty.
+
+Generate the paper-aligned dataset with `sigma/mu = 0.05`, `alpha = 0.99`, and
+a fixed seed:
+
+```powershell
+python test_workflows/duplicate_and_process.py `
+  --source-dir test_workflows `
+  --manifest poisson_distribution.json `
+  --output-dir Output/generated_datasets/test_workflows_sigma005_seed20260716 `
+  --stddev-ratio 0.05 `
+  --quantile 0.99 `
+  --seed 20260716
+```
+
+The generator processes all 200 manifest workflows rather than only a subset
+of filename variants. It validates that every XML exists, every job has a
+finite runtime, and every generated runtime is positive. For the current
+109,125-task manifest, a 99th-percentile CET should be exceeded by about 1,091
+tasks; the approximate 95% binomial count interval is 1,027-1,156. Sampling
+variation means the result is not required to equal exactly 1%.
+
+The generated directory is the experiment driver's default workflow source.
+The explicit workflow property below is optional, but shown to make the input
+dataset unambiguous in recorded experiment commands:
+
+```powershell
+java `
+  '-Dcbmw.workflow.dir=Output/generated_datasets/test_workflows_sigma005_seed20260716' `
+  '-Dcbmw.workflow.manifest=poisson_distribution.json' `
+  '-Dcbmw.runtime.quantile=0.99' `
+  '-Dcbmw.runtime.stddev.ratio=0.05' `
+  '-Dcbmw.algorithms=CBMW' `
+  '-Dcbmw.output.dir=Output/validation_sigma005_seed20260716' `
+  '-Dcbmw.export.details=false' `
+  '-Dcbmw.detail.log=false' `
+  '-Dcbmw.quiet=true' `
+  -cp 'bin;lib/*' `
+  org.workflowsim.examples.cbmw.CBMWSimulation
+```
+
+Existing `.txt` files are intentionally not updated in place. Changing the
+generator does not alter an old dataset; a new output directory must be
+generated before running the default configuration. A different dataset can be
+selected with `cbmw.workflow.dir`.
+
 ---
 
 ## Algorithm Overview
@@ -219,6 +272,8 @@ examples/org/workflowsim/examples/cbmw/
     CBMWSimulation.java                 — Main simulation driver (single or batch scenarios)
 
 test_workflows/
+    duplicate_and_process.py            — Reproducible manifest-driven runtime dataset generator
+    poisson_distribution.json           — Arrival manifest for the 200-workflow experiment
     manifest.csv                        — Index of generated DAX files with CP and deadline info
     workflow_NNN_TOPOLOGY_Xtasks.xml    — Pegasus DAX files (CHAIN, FORK_JOIN, RANDOM topologies)
 ```
@@ -258,7 +313,8 @@ java -cp "bin;lib/*" org.workflowsim.examples.cbmw.CBMWSimulation
 By default this runs the full 45-scenario matrix: three load classes, three
 deadline classes, and five algorithms, using 50 workflows per scenario for
 every algorithm. Workflow inputs are read from
-`P:\University\2\workflows\1` by default. Use JVM properties such as
+`Output/generated_datasets/test_workflows_sigma005_seed20260716` by default.
+Use JVM properties such as
 `-Dcbmw.algorithms=CBMW`, `-Dcbmw.max.workflows=5`, and
 `-Dcbmw.max.scenarios=1` to restrict smoke or diagnostic runs.
 
@@ -270,7 +326,7 @@ every algorithm. Workflow inputs are read from
 |---------------------|---------|-------------|
 | Load classes | low `2.0`, moderate `1.0`, heavy `0.5` | Multipliers applied to arrival times |
 | Deadline classes | tight `1.2`, medium `2.0`, loose `4.0` | Deadline = arrival + CP × tightness |
-| `cbmw.workflow.dir` | `P:\University\2\workflows\1` | Directory containing the workflow XML/TXT datasets and arrival manifest |
+| `cbmw.workflow.dir` | `Output/generated_datasets/test_workflows_sigma005_seed20260716` | Directory containing the workflow XML/TXT datasets and arrival manifest |
 | `cbmw.workflow.manifest` | `poisson_distribution.json` | Arrival manifest filename within `cbmw.workflow.dir` |
 | `cbmw.reserved.instances` | `5` | Reserved VM count |
 | `cbmw.reserved.cores` | `192` | Cores per reserved VM |

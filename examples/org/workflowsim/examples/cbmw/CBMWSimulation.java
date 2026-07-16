@@ -73,7 +73,8 @@ public class CBMWSimulation {
     private static final List<String> ALGORITHMS = configuredAlgorithms();
 
     private static final String WORKFLOW_DIR = System.getProperty(
-            "cbmw.workflow.dir", "P:\\University\\2\\workflows\\1");
+            "cbmw.workflow.dir",
+            "Output/generated_datasets/test_workflows_sigma005_seed20260716");
     private static final String POISSON_FILE = System.getProperty(
             "cbmw.workflow.manifest", "poisson_distribution.json");
     private static final double SIM_BUFFER_SECS = 5000.0;

@@ -61,7 +61,7 @@ test_workflows/                   ← real scientific workflow DAX files
 ## Simulation design
 
 ### Workflow input
-- `WorkflowLoader` reads `P:\University\2\workflows\1\poisson_distribution.json`
+- `WorkflowLoader` reads `Output/generated_datasets/test_workflows_sigma005_seed20260716/poisson_distribution.json`
   by default for arrival timestamps. The `cbmw.workflow.dir` and
   `cbmw.workflow.manifest` JVM properties can override the source.
 - For each entry it parses the matching `.xml` (Pegasus DAX 2.1 format) to compute the critical path, then sets `deadline = arrivalTime + CP × TIGHTNESS`.

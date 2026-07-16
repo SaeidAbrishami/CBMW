@@ -48,7 +48,7 @@ Entry point:
 - Deadline classes: `tight=1.2`, `medium=2.0`, `loose=4.0`
 - Load classes: `low=2.0`, `moderate=1.0`, `heavy=0.5`
 - Algorithms: `CBMW`, `NOSF`, `CEWB`, `StaticGreedy`, `DynamicGreedy`
-- Default workflow source: `P:\University\2\workflows\1\poisson_distribution.json`
+- Default workflow source: `Output/generated_datasets/test_workflows_sigma005_seed20260716/poisson_distribution.json`
 - Default workflow count per scenario: 50 (selected from the 200-arrival source trace)
 - Full default run size: 3 deadlines x 3 loads x 5 algorithms = 45 scenarios
 
@@ -56,7 +56,7 @@ Useful JVM switches:
 
 | Switch | Purpose |
 |--------|---------|
-| `-Dcbmw.workflow.dir=P:\University\2\workflows\1` | Directory containing the workflow XML/TXT datasets and manifest. |
+| `-Dcbmw.workflow.dir=Output/generated_datasets/test_workflows_sigma005_seed20260716` | Directory containing the workflow XML/TXT datasets and manifest. |
 | `-Dcbmw.workflow.manifest=poisson_distribution.json` | Arrival manifest filename within the workflow directory. |
 | `-Dcbmw.algorithms=CBMW` | Run only selected algorithms, comma-separated. |
 | `-Dcbmw.output.dir=Output` | Root output folder; algorithm and comparison subfolders are created inside it. |
@@ -210,7 +210,7 @@ test_workflows/
 
 ### Workflow Input
 
-- `WorkflowLoader` reads `P:\University\2\workflows\1\poisson_distribution.json`
+- `WorkflowLoader` reads `Output/generated_datasets/test_workflows_sigma005_seed20260716/poisson_distribution.json`
   by default; `cbmw.workflow.dir` and `cbmw.workflow.manifest` can override it.
 - Each entry parses the matching DAX XML and computes critical path.
 - Deadline is `arrivalTime + criticalPath * tightness`.
