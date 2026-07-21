@@ -161,17 +161,27 @@ priority, uncertainty, cost, and feedback rules are still applied.
 
 ### CEWB Spot Baseline
 
-`CEWBBroker` now has two explicit modes. `CEWB` uses the paper-aligned
-WorkflowSim reconstruction; `CEWB-Reconstructed` preserves the earlier
-safe-start/attempt-limit policy. Paper-aligned CEWB:
+`CEWBBroker` now has explicit paper-oriented and historical modes. `CEWB`
+uses PCP sub-deadlines, paper interruption-penalty slack classes, reusable
+physical VM pools, and checkpoint recovery. `CEWB-Reconstructed` preserves
+the earlier safe-start/attempt-limit policy. Paper-oriented CEWB:
 
-1. assigns proportional sub-deadlines and recomputes ready-task slack;
-2. maps normalized criticality to on-demand/high/medium/low reliability;
+1. assigns PCP sub-deadlines and recomputes ready-task slack;
+2. maps absolute slack to on-demand/high/medium/low reliability using the
+   paper's 400.4-second interruption-penalty boundary;
 3. filters spot classes by task cores/RAM, current capacity, bid price,
    predicted sub-deadline finish, and interruption success probability;
 4. executes task containers in reusable logical spot VMs with CPU/RAM slots;
-5. revokes all containers on an interrupted VM and escalates each task to a
-   more reliable class, eventually falling back to on-demand.
+5. provisions reusable 32-core on-demand VMs periodically and best-fit packs
+   0.4-second task containers onto their idle CPU/RAM;
+6. retains completed work across spot interruption, applies snapshot/restore
+   delay, and reclassifies the remaining task work.
+
+The experiment matrix deliberately keeps a `tight=1.2` stress case, below the
+paper's lowest tested deadline factor of 1.4. CEWB runs that case by default so
+its behavior remains observable. Set
+`-Dcbmw.cewb.admission.min.cp.multiplier=1.4` to enable the paper-bound
+admission guard and reject infeasible deadline spans before capacity is spent.
 
 Default spot classes are explicit simulation assumptions:
 
@@ -187,6 +197,14 @@ Important properties include `cbmw.cewb.spot.startup.sec`,
 `cbmw.cewb.spot.total.cores`, and per-class properties under
 `cbmw.cewb.spot.<class>.*`. Results report `spotCost`,
 `spotUsageRatio`, actual VM type `Spot`, and per-task interruption counts.
+Paper-style on-demand pool properties include
+`cbmw.cewb.ondemand.vm.{cores,ram.mb,provisioning.sec,price.per.sec}`,
+`cbmw.cewb.container.delay.sec`, `cbmw.cewb.provisioning.interval.sec`,
+`cbmw.cewb.ondemand.{initial.ready.instances,min.ready.instances,max.instances}`,
+`cbmw.cewb.snapshot.delay.sec`, `cbmw.cewb.resume.progress`, and
+`cbmw.cewb.admission.min.cp.multiplier`.
+The default physical-VM provisioning delay is 90 seconds; the independent
+Algorithm 2 capacity-adjustment interval remains 100 seconds.
 Results also include `brokerRevenue` and `brokerProfit`. The reconstructed
 pricing families are selected by `cbmw.cewb.pricing.policy` with values
 `CONSTANT_PROFIT`, `CONSTANT_DISCOUNT`, or `PREDICTION_BASED`.
@@ -202,14 +220,17 @@ Per-class `capacity` properties override the derived defaults. CEWB keeps its
 own spot/on-demand selection, bidding, reliability, and retry policy.
 
 CEWB scheduling is event-driven. Paper-aligned ready tasks are ordered by
-slack, upward rank, workflow deadline, and task ID. The older
+slack, upward rank, workflow deadline, and task ID. On-demand physical capacity
+is adjusted at 100-second provisioning intervals; a fully idle VM survives one
+additional interval before termination. The older
 `CEWB-Reconstructed` mode retains exact safe-start wake events. Scenario logs contain
 `CEWB-CONFIG` and `CEWB-SUMMARY` records with configured/peak cores,
 saturation, no-offer, fallback, predicted-miss, and wake counters.
 
-The external CEWB paper's complete pseudocode and experimental spot constants
-are not available in this repository. These defaults must therefore be cited as
-the simulator's configurable market model, not as values claimed by the paper.
+The repository implements the paper's published scheduling/provisioning
+pseudocode and delay defaults. Its generated spot market and capacity-matched
+class inventory remain configurable simulation assumptions rather than the
+paper's historical AWS price trace.
 
 ### Baseline Certification Status
 
@@ -219,9 +240,9 @@ all experimental constants are not available in this repository.
 
 - **NOSF** is a paper-informed reconstruction of preprocessing, sub-deadlines,
   EST-priority allocation, uncertainty handling, and completion feedback.
-- **CEWB** additionally implements proportional sub-deadlines, dynamic
-  slack/criticality classification, shared spot-VM containers, class escalation,
-  and reconstructed broker pricing policies.
+- **CEWB** implements PCP sub-deadlines, absolute interruption-penalty slack
+  classes, shared spot and on-demand physical VM containers, periodic
+  provisioning, progress-preserving recovery, and reconstructed pricing.
 
 Results should label both algorithms as **paper-informed reconstructed
 baselines**, not exact reference implementations. Exact certification requires

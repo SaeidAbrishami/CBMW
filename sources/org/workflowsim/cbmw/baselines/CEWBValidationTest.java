@@ -15,6 +15,7 @@ public final class CEWBValidationTest {
     public static void main(String[] args) {
         configureDeterministicMarket();
         testCapacityMatchedMarket();
+        testSharedOnDemandPool();
         testTimingPolicy();
         testCriticalityPolicy();
         CEWBReferencePolicyValidationTest.runAll();
@@ -77,6 +78,55 @@ public final class CEWBValidationTest {
         System.setProperty("cbmw.cewb.spot.price.factor.max", "1.0");
         System.setProperty("cbmw.cewb.spot.min.success.prob", "0.0");
         System.setProperty("cbmw.cewb.spot.mtbi.sec", "1000000000");
+        System.setProperty("cbmw.cewb.ondemand.vm.cores", "32");
+        System.setProperty("cbmw.cewb.ondemand.vm.ram.mb", "65536");
+        System.setProperty("cbmw.cewb.ondemand.vm.provisioning.sec", "90");
+        System.setProperty("cbmw.cewb.container.delay.sec", "0.4");
+        System.setProperty("cbmw.cewb.provisioning.interval.sec", "100");
+        System.setProperty("cbmw.cewb.ondemand.initial.ready.instances", "1");
+        System.setProperty("cbmw.cewb.ondemand.min.ready.instances", "1");
+    }
+
+    private static void testSharedOnDemandPool() {
+        CEWBOnDemandPool pool = new CEWBOnDemandPool();
+        List<CEWBOnDemandPool.Instance> initial = pool.initialize(0.0);
+        check(initial.size() == 1 && initial.get(0).isLaunched(),
+                "CEWB must start with one configured warm physical VM");
+
+        List<CEWBOnDemandPool.Offer> offers = new ArrayList<>();
+        for (int i = 0; i < 32; i++) {
+            CEWBOnDemandPool.Offer offer = pool.acquire(i, 1, 1, 0.0);
+            check(offer != null, "warm physical VM must host container " + i);
+            check(offer.getInstanceId() == initial.get(0).getId(),
+                    "containers must share the same physical VM");
+            checkClose(0.4, offer.getContainerDelaySeconds(),
+                    "paper container deployment delay");
+            offers.add(offer);
+        }
+        check(pool.acquire(33, 1, 1, 0.0) == null,
+                "physical core capacity must be enforced");
+        for (CEWBOnDemandPool.Offer offer : offers) pool.release(offer, 10.0);
+
+        List<CEWBOnDemandPool.Instance> ordered = pool.provisionFor(
+                64, 64, 100.0);
+        check(ordered.size() == 1 && !ordered.get(0).isLaunched(),
+                "Algorithm 2 must provision only the core deficit");
+        check(pool.activateReady(189.9).isEmpty(),
+                "cold physical VM must respect VM provisioning delay");
+        check(pool.activateReady(190.0).size() == 1,
+                "cold physical VM must activate at its exact ready time");
+
+        check(pool.maintainIdle(200.0, false).isEmpty(),
+                "idle VM must survive its first idle interval");
+        List<CEWBOnDemandPool.Instance> terminated = pool.maintainIdle(
+                300.0, false);
+        check(terminated.size() == 1,
+                "one surplus VM must terminate after a second idle interval");
+        pool.terminateAll(400.0);
+        check(!pool.settleCosts().isEmpty(),
+                "physical rental cost must be allocated to using workflows");
+        check(pool.getSettledPhysicalCost() > 0.0,
+                "shared physical VM rental cost must be positive");
     }
 
     private static void testCapacityMatchedMarket() {

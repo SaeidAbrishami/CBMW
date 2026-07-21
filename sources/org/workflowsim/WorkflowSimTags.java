@@ -64,6 +64,14 @@ public class WorkflowSimTags {
     public static final int CEWB_SST_REACHED = BASE + 17;
     /** CBMW's pre-planned order time for a dedicated on-demand container. */
     public static final int CBMW_ON_DEMAND_ORDER = BASE + 18;
+    /** Paper CEWB provisioning-controller interval. */
+    public static final int CEWB_PROVISIONING_TICK = BASE + 19;
+    /** A paper CEWB physical on-demand VM has completed its cold start. */
+    public static final int CEWB_ON_DEMAND_POOL_READY = BASE + 20;
+    /** Completion of a container on a shared CEWB on-demand VM. */
+    public static final int CEWB_ON_DEMAND_TASK_COMPLETE = BASE + 21;
+    /** A checkpointed CEWB spot task is ready for reclassification. */
+    public static final int CEWB_SPOT_RETRY_READY = BASE + 22;
 
     /**
      * Private Constructor

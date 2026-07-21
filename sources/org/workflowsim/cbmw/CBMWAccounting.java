@@ -23,6 +23,7 @@ public class CBMWAccounting {
     private final Set<Integer> runningSpotTasks = new HashSet<>();
     private final Set<Integer> deadlineRiskTasks = new HashSet<>();
     private final Map<Integer, List<Integer>> childrenByParentTask = new HashMap<>();
+    private double onDemandCapacityCoreSecondsOverride = Double.NaN;
 
     public void registerWorkflowTasks(WorkflowRecord wfr, List<Task> tasks,
                                       double deadlineTightness,
@@ -156,8 +157,14 @@ public class CBMWAccounting {
         for (TaskExecutionRecord record : taskRecords.values()) {
             if ("On-Demand".equals(record.getVmType())
                     && Double.isFinite(record.getExecutionTime())) {
-                busy += record.getExecutionTime();
+                busy += record.getExecutionTime()
+                        * (Double.isFinite(onDemandCapacityCoreSecondsOverride)
+                                ? record.getTaskCores() : 1);
             }
+        }
+        if (Double.isFinite(onDemandCapacityCoreSecondsOverride)) {
+            return onDemandCapacityCoreSecondsOverride > 0.0
+                    ? busy / onDemandCapacityCoreSecondsOverride : 0.0;
         }
         double active = 0.0;
         for (OnDemandInstanceRecord record : onDemandRecords.values()) {
@@ -165,6 +172,15 @@ public class CBMWAccounting {
             if (Double.isFinite(uptime)) active += uptime;
         }
         return active > 0.0 ? busy / active : 0.0;
+    }
+
+    /** Supplies the physical capacity denominator for shared multi-core pools. */
+    public void setOnDemandCapacityCoreSeconds(double capacityCoreSeconds) {
+        if (!Double.isFinite(capacityCoreSeconds) || capacityCoreSeconds < 0.0) {
+            throw new IllegalArgumentException(
+                    "On-demand capacity core-seconds must be finite and non-negative");
+        }
+        this.onDemandCapacityCoreSecondsOverride = capacityCoreSeconds;
     }
 
     public void markTaskProvisioningOrdered(Cloudlet cl, double orderTime,

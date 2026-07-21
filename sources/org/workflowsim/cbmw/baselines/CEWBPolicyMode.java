@@ -2,7 +2,7 @@ package org.workflowsim.cbmw.baselines;
 
 /** Selects the broker policy while keeping the CEWB spot market unchanged. */
 public enum CEWBPolicyMode {
-    /** Existing paper-aligned policy: HEFT timing and normalized criticality. */
+    /** Paper-oriented PCP policy, shared VM pools, and checkpoint recovery. */
     CURRENT,
 
     /** Reference PCP timing and absolute slack classes with current recovery. */

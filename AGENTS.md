@@ -49,9 +49,11 @@ Entry point:
 - Load classes: `low=2.0`, `moderate=1.0`, `heavy=0.5`
 - Algorithms: `CBMW`, `NOSF`, `CEWB`, `StaticGreedy`, `DynamicGreedy`
 - Optional common-market CEWB comparisons: `CEWB-ReferencePolicy` uses the
-  external implementation's PCP/absolute-slack task policy with current
-  recovery; `CEWB-ReferenceAdapted` additionally preserves partial work across
-  spot interruptions. Neither is part of the default 45-scenario matrix.
+  PCP/absolute-slack policy with full-restart escalation;
+  `CEWB-ReferenceAdapted` preserves partial work. Default `CEWB` now combines
+  PCP/absolute-slack classification, the paper-style shared on-demand pool,
+  and progress-preserving recovery. The reference variants are not part of the
+  default 45-scenario matrix.
 - Default workflow source: `Output/generated_datasets/test_workflows_sigma005_seed20260716/poisson_distribution.json`
 - Default workflow count per scenario: 50 (selected from the 200-arrival source trace)
 - Full default run size: 3 deadlines x 3 loads x 5 algorithms = 45 scenarios
@@ -85,9 +87,19 @@ Useful JVM switches:
 | `-Dcbmw.cewb.spot.min.success.prob=0.80` | Minimum predicted probability that a spot attempt survives. |
 | `-Dcbmw.cewb.spot.total.cores=960` | Capacity-matched physical spot-core envelope; divided equally across the three fixed classes unless per-class capacities override it. |
 | `-Dcbmw.cewb.pricing.policy=CONSTANT_PROFIT` | CEWB reconstructed pricing family; alternatives are `CONSTANT_DISCOUNT` and `PREDICTION_BASED`. |
-| `-Dcbmw.cewb.criticality.ondemand=0.75` | Normalized criticality threshold for the most reliable on-demand class. |
+| `-Dcbmw.cewb.criticality.ondemand=0.75` | Legacy normalized-criticality threshold used only by the historical reconstructed task policy. |
 | `-Dcbmw.cewb.reference.slack.base.sec=400.4` | Base absolute-slack boundary for the common-market reference policy; the other boundaries are 2x and 4x this value. |
 | `-Dcbmw.cewb.reference.resume.progress=true` | Enable partial-progress recovery in `CEWB-ReferenceAdapted`; false retains its reference timing/classification but uses current escalation recovery. |
+| `-Dcbmw.cewb.ondemand.vm.cores=32` | Cores in each reusable physical CEWB on-demand VM. |
+| `-Dcbmw.cewb.ondemand.vm.ram.mb=65536` | RAM in each reusable physical CEWB on-demand VM. |
+| `-Dcbmw.cewb.ondemand.vm.provisioning.sec=90` | Physical VM cold-start delay, paid once per physical VM. |
+| `-Dcbmw.cewb.container.delay.sec=0.4` | Paper container deployment delay for a task placed on a running VM. |
+| `-Dcbmw.cewb.provisioning.interval.sec=100` | Period for paper Algorithm 2 capacity adjustment and idle-VM lifecycle. |
+| `-Dcbmw.cewb.ondemand.initial.ready.instances=1` | Warm physical on-demand VMs available at simulation start. |
+| `-Dcbmw.cewb.ondemand.min.ready.instances=1` | Warm on-demand floor retained between provisioning cycles. |
+| `-Dcbmw.cewb.snapshot.delay.sec=90` | Snapshot or restore delay; a retained interruption pays twice this value. |
+| `-Dcbmw.cewb.resume.progress=true` | Preserve partial work after spot interruption in default CEWB. |
+| `-Dcbmw.cewb.admission.min.cp.multiplier=1.0` | Minimum deadline-span/critical-path ratio for CEWB admission; set 1.4 for the paper's experimental lower bound. |
 
 Linux VM helper for one algorithm:
 
@@ -193,6 +205,7 @@ sources/org/workflowsim/cbmw/
     NOSFBroker.java
     NOSFWorkflowPlanner.java
     CEWBBroker.java
+    CEWBOnDemandPool.java
     CEWBSpotMarket.java
     StaticGreedyBroker.java
     DynamicGreedyBroker.java
@@ -315,7 +328,7 @@ All brokers extend `AbstractWorkflowBroker`.
 |--------|--------------|-----------------------|
 | CBMW | Paper-style EST/EFT/LFT backward sweep-line using estimated durations | Periodic LST-aware dispatch with current-cycle reserved-task replacement; only static `o0` assignments use on-demand |
 | NOSF | Uncertainty-aware EST/EFT and proportional sub-deadline preprocessing | EDF, minimum incremental-cost reusable on-demand VM selection, deadline-risk fallback, and completion feedback |
-| CEWB | HEFT-style ranks and proportional sub-deadlines | Dynamic slack classification, shared spot-VM containers, reliability escalation, and on-demand fallback |
+| CEWB | PCP sub-deadlines and 400.4-second interruption-penalty slack classes | Shared spot/on-demand physical VM containers, periodic best-fit provisioning, progress-preserving recovery, and reclassification |
 | CEWB-ReferencePolicy | PCP sub-deadlines adapted from the external implementation | Absolute 400.4/800.8/1601.6-second slack classes and deterministic arrival/workflow/task ordering; current interruption escalation |
 | CEWB-ReferenceAdapted | Same PCP sub-deadlines | Same absolute slack classes, with completed work retained and remaining work reclassified after interruption |
 | StaticGreedy | Static round-robin reserved planning | Assigned VM, any reserved, then on-demand |
@@ -326,15 +339,26 @@ and performance classes. Each class has independent cores, RAM, MIPS, base
 price, capacity, and mean time between interruptions. Paper-aligned CEWB keeps
 logical VMs alive and multiplexes task containers within CPU/RAM capacity.
 Prices vary per instance; interruptions follow an exponential reliability
-model, revoke every container on that VM, restart tasks, and escalate them.
+model and revoke every container on that VM. Default CEWB retains partial work,
+applies snapshot/restore delay, then reclassifies remaining work.
 The two `CEWB-Reference*` variants deliberately use this same spot market,
 resource inventory, prices, capacities, startup delay, and interruption model.
 They do not import the external implementation's AWS price histories or spot
 instance definitions. `CEWB-ReferenceAdapted` is the exception to full-restart
 recovery: it reduces the logical cloudlet to its remaining work after a
 revocation, then retries or falls back after reclassification.
-CEWB is charged no reserved-pool fixed cost, and spot cost/usage are exported
-separately from on-demand cost/usage.
+CEWB also owns a paper-style physical on-demand pool. By default it uses
+reusable 32-core VMs, a 90-second physical cold start, 0.4-second containers,
+and 100-second provisioning cycles. Algorithm 2 provisions aggregate core/RAM
+deficits; best-fit placement multiplexes containers, and fully idle VMs survive
+one cycle before termination. Physical rental cost is allocated to workflows
+by core-time share. CEWB is charged no reserved-pool fixed cost, and spot
+cost/usage are exported separately from on-demand cost/usage.
+The default `tight=1.2` scenario is intentionally stricter than the paper's
+lowest experimental deadline factor of 1.4. The admission multiplier remains
+`1.0` so that stress scenario still executes; set
+`-Dcbmw.cewb.admission.min.cp.multiplier=1.4` to reject deadline spans below
+the paper's experimental lower bound before provisioning resources.
 The default capacities are 320 economy, 160 standard, and 80 performance
 instances: 320 physical cores per class and 960 in total. This is an explicitly
 reported capacity-matched experimental environment, not a claimed CEWB paper
