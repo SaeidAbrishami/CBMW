@@ -1,6 +1,64 @@
 $ErrorActionPreference = 'Stop'
 
 $projectRoot = Split-Path -Parent $PSScriptRoot
+
+function Invoke-ReferenceCewbSmoke {
+    param(
+        [Parameter(Mandatory = $true)][string]$Algorithm,
+        [Parameter(Mandatory = $true)][string]$ExpectedMode,
+        [Parameter(Mandatory = $true)][string]$Output
+    )
+
+    $outputPath = Join-Path $projectRoot $Output
+    $resolvedRoot = (Resolve-Path -LiteralPath $projectRoot).Path
+    $resolvedRootWithSeparator = $resolvedRoot.TrimEnd('\') + '\'
+    $resolvedOutput = [System.IO.Path]::GetFullPath($outputPath)
+    if (-not $resolvedOutput.StartsWith($resolvedRootWithSeparator, [System.StringComparison]::OrdinalIgnoreCase)) {
+        throw "Refusing to clean smoke output outside project root: $outputPath"
+    }
+    if (Test-Path -LiteralPath $outputPath) {
+        Remove-Item -LiteralPath $outputPath -Recurse -Force
+    }
+
+    & java `
+        "-Dcbmw.algorithms=$Algorithm" `
+        '-Dcbmw.max.workflows=2' `
+        '-Dcbmw.max.scenarios=1' `
+        "-Dcbmw.output.dir=$Output" `
+        '-Dcbmw.export.details=false' `
+        '-Dcbmw.detail.log=true' `
+        '-Dcbmw.quiet=true' `
+        '-Dcbmw.generate.gantt=false' `
+        '-Dcbmw.generate.comparison=false' `
+        -cp "bin;lib/*" `
+        org.workflowsim.examples.cbmw.CBMWSimulation
+    if ($LASTEXITCODE -ne 0) {
+        throw "$Algorithm smoke simulation failed with exit code $LASTEXITCODE"
+    }
+
+    $resultPath = Join-Path $outputPath "algorithms/$Algorithm/results.csv"
+    $results = @(Import-Csv $resultPath)
+    if ($results.Count -ne 1 -or [int]$results[0].total -ne 2) {
+        throw "$Algorithm smoke output did not contain one two-workflow scenario"
+    }
+    $detailLog = Get-ChildItem -Path $outputPath -Recurse -Filter '*_detail.log' |
+        Select-Object -First 1
+    if ($null -eq $detailLog) {
+        throw "$Algorithm smoke detail log was not created"
+    }
+    $logText = Get-Content -Raw $detailLog.FullName
+    if ($logText -notmatch "mode=$ExpectedMode") {
+        throw "$Algorithm detail log did not report mode=$ExpectedMode"
+    }
+    if ($logText -notmatch 'taskPolicy=reference-pcp-absolute-slack') {
+        throw "$Algorithm did not use the reference PCP/slack policy"
+    }
+    if ($ExpectedMode -eq 'REFERENCE_ADAPTED' -and
+            $logText -notmatch 'progressRetained=true') {
+        throw 'Reference-adapted smoke did not exercise partial-progress recovery'
+    }
+}
+
 Push-Location $projectRoot
 try {
     & (Join-Path $PSScriptRoot 'build.ps1')
@@ -86,7 +144,15 @@ try {
             throw "CEWB detail log is missing $tag"
         }
     }
-    Write-Host 'CEWB build, invariant tests, smoke simulation, outputs, and diagnostics: PASS'
+    Invoke-ReferenceCewbSmoke `
+        -Algorithm 'CEWB-ReferencePolicy' `
+        -ExpectedMode 'REFERENCE_POLICY' `
+        -Output 'Output/smoke_tests/CEWB-ReferencePolicy'
+    Invoke-ReferenceCewbSmoke `
+        -Algorithm 'CEWB-ReferenceAdapted' `
+        -ExpectedMode 'REFERENCE_ADAPTED' `
+        -Output 'Output/smoke_tests/CEWB-ReferenceAdapted'
+    Write-Host 'CEWB current/common-market reference modes, outputs, recovery, and diagnostics: PASS'
 } finally {
     Pop-Location
 }

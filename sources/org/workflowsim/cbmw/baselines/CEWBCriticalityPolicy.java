@@ -14,28 +14,12 @@ import org.workflowsim.cbmw.WorkflowRecord;
  * reliability classes. Thresholds remain configurable because the original
  * paper's exact values are not available in this repository.
  */
-final class CEWBCriticalityPolicy {
+final class CEWBCriticalityPolicy implements CEWBTaskPolicy {
 
     static final int ON_DEMAND = 0;
     static final int HIGH_RELIABILITY_SPOT = 1;
     static final int MEDIUM_RELIABILITY_SPOT = 2;
     static final int LOW_RELIABILITY_SPOT = 3;
-
-    static final class Decision {
-        private final double slack;
-        private final double criticality;
-        private final int resourceClass;
-
-        Decision(double slack, double criticality, int resourceClass) {
-            this.slack = slack;
-            this.criticality = criticality;
-            this.resourceClass = resourceClass;
-        }
-
-        double getSlack() { return slack; }
-        double getCriticality() { return criticality; }
-        int getResourceClass() { return resourceClass; }
-    }
 
     private final double onDemandThreshold = property(
             "cbmw.cewb.criticality.ondemand", 0.75);
@@ -56,7 +40,8 @@ final class CEWBCriticalityPolicy {
         }
     }
 
-    void preprocess(WorkflowRecord workflow, List<Task> tasks) {
+    @Override
+    public void preprocess(WorkflowRecord workflow, List<Task> tasks) {
         for (Task task : tasks) upwardRank(task, workflow);
         for (Task task : tasks) downwardRank(task, workflow);
 
@@ -87,9 +72,10 @@ final class CEWBCriticalityPolicy {
         }
     }
 
-    Map<Integer, Decision> classify(List<Task> readyTasks,
-                                    WorkflowRecord workflow,
-                                    double now) {
+    @Override
+    public Map<Integer, CEWBTaskDecision> classify(List<Task> readyTasks,
+                                                   WorkflowRecord workflow,
+                                                   double now) {
         Map<Integer, Double> slacks = new HashMap<>();
         double maxPositiveSlack = 0.0;
         for (Task task : readyTasks) {
@@ -100,7 +86,7 @@ final class CEWBCriticalityPolicy {
             maxPositiveSlack = Math.max(maxPositiveSlack, slack);
         }
 
-        Map<Integer, Decision> decisions = new HashMap<>();
+        Map<Integer, CEWBTaskDecision> decisions = new HashMap<>();
         for (Task task : readyTasks) {
             int id = task.getCloudletId();
             double slack = slacks.get(id);
@@ -108,13 +94,29 @@ final class CEWBCriticalityPolicy {
                     ? Math.max(0.0, slack) / maxPositiveSlack : 0.0;
             double criticality = slack <= 0.0 ? 1.0 : 1.0 - normalized;
             int resourceClass = classify(slack, criticality);
-            decisions.put(id, new Decision(slack, criticality, resourceClass));
+            decisions.put(id, new CEWBTaskDecision(slack, criticality,
+                    resourceClass, reasonFor(resourceClass)));
         }
         return decisions;
     }
 
-    double getUpwardRank(int taskId) {
+    @Override
+    public double getUpwardRank(int taskId) {
         return upwardRanks.getOrDefault(taskId, 0.0);
+    }
+
+    @Override
+    public String getName() {
+        return "heft-normalized-criticality";
+    }
+
+    private static String reasonFor(int resourceClass) {
+        switch (resourceClass) {
+            case ON_DEMAND: return "CRITICALITY_ON_DEMAND";
+            case HIGH_RELIABILITY_SPOT: return "CRITICALITY_HIGH_SPOT";
+            case MEDIUM_RELIABILITY_SPOT: return "CRITICALITY_MEDIUM_SPOT";
+            default: return "CRITICALITY_LOW_SPOT";
+        }
     }
 
     private int classify(double slack, double criticality) {

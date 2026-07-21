@@ -17,6 +17,7 @@ public final class CEWBValidationTest {
         testCapacityMatchedMarket();
         testTimingPolicy();
         testCriticalityPolicy();
+        CEWBReferencePolicyValidationTest.runAll();
         testPricingPolicy();
         testInvalidRequests();
         System.out.println("CEWBValidationTest: PASS");
@@ -40,7 +41,7 @@ public final class CEWBValidationTest {
 
         workflow.setLFT(1, 5.0);
         workflow.setLFT(2, 40.0);
-        Map<Integer, CEWBCriticalityPolicy.Decision> decisions = policy.classify(
+        Map<Integer, CEWBTaskDecision> decisions = policy.classify(
                 workflow.getTaskList(), workflow, 0.0);
         check(decisions.get(1).getResourceClass()
                         == CEWBCriticalityPolicy.ON_DEMAND,

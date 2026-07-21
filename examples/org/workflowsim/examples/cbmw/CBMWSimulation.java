@@ -37,6 +37,7 @@ import org.workflowsim.cbmw.PaperRuntimeModel;
 import org.workflowsim.cbmw.WorkflowArrivalData;
 import org.workflowsim.cbmw.WorkflowLoader;
 import org.workflowsim.cbmw.baselines.CEWBBroker;
+import org.workflowsim.cbmw.baselines.CEWBPolicyMode;
 import org.workflowsim.cbmw.baselines.DynamicGreedyBroker;
 import org.workflowsim.cbmw.baselines.NOSFBroker;
 import org.workflowsim.cbmw.baselines.StaticGreedyBroker;
@@ -315,9 +316,18 @@ public class CBMWSimulation {
         switch (algorithm) {
             case "CBMW":          return new CBMWBroker("CBMWBroker_0", tightness);
             case "NOSF":          return new NOSFBroker("NOSFBroker_0", tightness);
-            case "CEWB":          return new CEWBBroker("CEWBBroker_0", tightness, true);
+            case "CEWB":
+                return new CEWBBroker("CEWBBroker_0", tightness,
+                        CEWBPolicyMode.CURRENT);
+            case "CEWB-ReferencePolicy":
+                return new CEWBBroker("CEWBReferencePolicyBroker_0", tightness,
+                        CEWBPolicyMode.REFERENCE_POLICY);
+            case "CEWB-ReferenceAdapted":
+                return new CEWBBroker("CEWBReferenceAdaptedBroker_0", tightness,
+                        CEWBPolicyMode.REFERENCE_ADAPTED);
             case "CEWB-Reconstructed":
-                return new CEWBBroker("CEWBReconstructedBroker_0", tightness, false);
+                return new CEWBBroker("CEWBReconstructedBroker_0", tightness,
+                        CEWBPolicyMode.RECONSTRUCTED);
             case "StaticGreedy":  return new StaticGreedyBroker("StaticGreedyBroker_0", tightness);
             case "DynamicGreedy": return new DynamicGreedyBroker("DynamicGreedyBroker_0", tightness);
             default: throw new IllegalArgumentException("Unknown algorithm: " + algorithm);
