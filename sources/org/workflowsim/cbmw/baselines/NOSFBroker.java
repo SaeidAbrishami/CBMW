@@ -4,6 +4,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -18,18 +19,17 @@ import org.workflowsim.WorkflowSimTags;
 import org.workflowsim.cbmw.AbstractWorkflowBroker;
 import org.workflowsim.cbmw.CBMWLogger;
 import org.workflowsim.cbmw.HybridVmPool;
-import org.workflowsim.cbmw.PaperRuntimeModel;
 import org.workflowsim.cbmw.WorkflowRecord;
 import org.workflowsim.utils.Parameters;
 
-/**
- * Reference NOSF baseline: online EDF scheduling, reusable on-demand VMs,
- * minimum incremental billing cost, and completion feedback.
- */
+/** Paper-faithful NOSF Algorithms 1-3 in the project's common market. */
 public class NOSFBroker extends AbstractWorkflowBroker {
 
-    static final double PROVISIONING_DELAY = readNonNegative(
-            "nosf.provisioning.delay.sec", 0.0);
+    private static final double EPS = 1e-9;
+
+    /** One source of truth: NOSF uses the same provisioning delay as CBMW. */
+    static final double PROVISIONING_DELAY =
+            HybridVmPool.ON_DEMAND_PROVISIONING_DELAY;
     static final double BILLING_QUANTUM = readPositive(
             "nosf.billing.quantum.sec", 60.0);
 
@@ -44,31 +44,44 @@ public class NOSFBroker extends AbstractWorkflowBroker {
     public NOSFBroker(String name, double tightness) throws Exception {
         super(name, tightness);
         CBMWLogger.logf("NOSF-CONFIG",
-                "types=%d provisioningDelay=%.1f billingQuantum=%.1f",
-                vmTypes.size(), PROVISIONING_DELAY, BILLING_QUANTUM);
+                "profile=COMMON_MARKET types=%d provisioningDelay=%.1f"
+                        + " billingQuantum=%.1f sigmaRatio=%.4f priority=%s"
+                        + " transferMode=%s bandwidthMbps=%.1f",
+                vmTypes.size(), PROVISIONING_DELAY, BILLING_QUANTUM,
+                NOSFRuntimeModel.STDDEV_RATIO,
+                workflowPlanner.getPriorityPolicy().name(),
+                workflowPlanner.getTransferModel().getMode().name(),
+                workflowPlanner.getTransferModel().getBandwidthMbps());
     }
 
     @Override
     protected double estimatePlanningRuntime(double meanExecutionTime) {
-        return PaperRuntimeModel.conservativeEstimate(meanExecutionTime);
+        return NOSFRuntimeModel.weight(meanExecutionTime);
     }
 
     /** NOSF has no CBMW admission negotiation. */
     @Override
-    protected boolean negotiateWorkflow(WorkflowRecord wfr) {
-        wfr.setCriticalPathLength(negotiation.computeCriticalPath(wfr));
-        wfr.setAccepted(true);
+    protected boolean negotiateWorkflow(WorkflowRecord workflow) {
+        workflow.setCriticalPathLength(negotiation.computeCriticalPath(workflow));
+        workflow.setAccepted(true);
         return true;
     }
 
     @Override
-    protected boolean planWorkflow(WorkflowRecord wfr, List<Task> tasks) {
-        workflowPlanner.preprocess(wfr, tasks);
-        for (Task task : tasks) wfr.setPlannedVmType(task.getCloudletId(), "On-Demand");
+    protected boolean planWorkflow(WorkflowRecord workflow, List<Task> tasks) {
+        workflowPlanner.preprocess(workflow, tasks, vmTypes);
+        for (Task task : tasks) {
+            workflow.setPlannedVmType(task.getCloudletId(), "On-Demand");
+        }
         CBMWLogger.logf("NOSF-PREPROCESS",
-                "wf=%d tasks=%d deadline=%.2f alpha=%.3f",
-                wfr.getWorkflowId(), tasks.size(), wfr.getDeadline(),
-                PaperRuntimeModel.QUANTILE);
+                "wf=%d tasks=%d deadline=%.2f estimator=MU_PLUS_SIGMA"
+                        + " sigmaRatio=%.4f priority=%s provisioningDelay=%.1f"
+                        + " billingQuantum=%.1f transferMode=%s",
+                workflow.getWorkflowId(), tasks.size(), workflow.getDeadline(),
+                NOSFRuntimeModel.STDDEV_RATIO,
+                workflowPlanner.getPriorityPolicy().name(), PROVISIONING_DELAY,
+                BILLING_QUANTUM,
+                workflowPlanner.getTransferModel().getMode().name());
         return true;
     }
 
@@ -80,7 +93,7 @@ public class NOSFBroker extends AbstractWorkflowBroker {
 
     @Override
     @SuppressWarnings("unchecked")
-    protected void processCloudletUpdate(SimEvent ev) {
+    protected void processCloudletUpdate(SimEvent event) {
         double now = CloudSim.clock();
         launchAndStartReadyVms(now);
 
@@ -88,40 +101,51 @@ public class NOSFBroker extends AbstractWorkflowBroker {
         recordReadyQueue(brokerReadyList);
         List<Cloudlet> readyJobs = new ArrayList<>(brokerReadyList);
         readyJobs.sort(Comparator
-                .comparingDouble((Cloudlet cl) -> getSubDeadline((Job) cl))
-                .thenComparingDouble(cl -> getEst((Job) cl))
-                .thenComparingInt(cl -> workflowIdForJob((Job) cl))
+                .comparingDouble((Cloudlet cloudlet) ->
+                        getPriority((Job) cloudlet))
+                .thenComparingInt(cloudlet -> workflowIdForJob((Job) cloudlet))
                 .thenComparingInt(Cloudlet::getCloudletId));
 
-        List<Cloudlet> assigned = new ArrayList<>();
-        for (Cloudlet cl : readyJobs) {
-            Job job = (Job) cl;
+        for (Cloudlet cloudlet : readyJobs) {
+            Job job = (Job) cloudlet;
             if (allocatedJobs.contains(job.getCloudletId())) continue;
-            WorkflowRecord wfr = activeWorkflows.get(workflowIdForJob(job));
-            if (wfr == null) continue;
+            WorkflowRecord workflow = activeWorkflows.get(workflowIdForJob(job));
+            if (workflow == null) continue;
             int taskId = primaryTaskId(job);
-            double baseRuntime = wfr.getEstimatedExecTime(taskId);
-            NOSFResourceSelector.Choice choice = selector.choose(now, baseRuntime,
-                    wfr.getTaskCores(taskId), wfr.getTaskRamMb(taskId),
-                    wfr.getLFT(taskId), vmStates, vmTypes);
+
+            Map<Integer, Double> dataReadyByVm = new HashMap<>();
+            for (NOSFVmState state : vmStates) {
+                if (!state.released) {
+                    dataReadyByVm.put(state.vm.getId(),
+                            workflowPlanner.dataReadyTime(workflow, taskId,
+                                    state.vm.getId(), now));
+                }
+            }
+            double newVmDataReady = workflowPlanner.dataReadyTime(
+                    workflow, taskId, Integer.MIN_VALUE, now);
+            NOSFResourceSelector.Choice choice = selector.choose(now,
+                    workflow.getEstimatedExecTime(taskId),
+                    workflow.getTaskCores(taskId),
+                    workflow.getTaskRamMb(taskId),
+                    workflowPlanner.subDeadline(workflow, taskId),
+                    vmStates, vmTypes, dataReadyByVm, newVmDataReady);
             if (choice == null) {
-                throw new IllegalStateException("No NOSF VM type can run task " + taskId
-                        + "; configure nosf.vm.type.* capacity");
+                throw new IllegalStateException("No NOSF VM type can run task "
+                        + taskId + "; configure nosf.vm.type.* capacity");
             }
 
             NOSFVmState state = choice.vm != null ? choice.vm
                     : createVm(choice.newType, taskId, now);
-            assign(job, wfr, state, choice);
-            assigned.add(cl);
+            assign(job, workflow, state, choice);
             allocatedJobs.add(job.getCloudletId());
+            brokerReadyList.remove(cloudlet);
+            getCloudletSubmittedList().add(cloudlet);
+            cloudletsSubmitted++;
+            startWaitingIfReady(state, now);
         }
 
-        if (!assigned.isEmpty()) {
-            brokerReadyList.removeAll(assigned);
-            getCloudletSubmittedList().addAll(assigned);
-            cloudletsSubmitted += assigned.size();
-        }
         launchAndStartReadyVms(now);
+        releaseExpiredVms(now);
     }
 
     private NOSFVmState createVm(NOSFVmType type, int taskId, double now) {
@@ -134,64 +158,96 @@ public class NOSFBroker extends AbstractWorkflowBroker {
         accounting.markOnDemandOrdered(vm.getId(), now, ready);
         accounting.markTaskProvisioningOrdered(taskId, now, ready);
         if (PROVISIONING_DELAY > 0.0) {
-            schedule(getId(), PROVISIONING_DELAY, WorkflowSimTags.CLOUDLET_UPDATE);
+            schedule(getId(), PROVISIONING_DELAY,
+                    WorkflowSimTags.CLOUDLET_UPDATE);
         }
         return state;
     }
 
-    private void assign(Job job, WorkflowRecord wfr, NOSFVmState state,
+    private void assign(Job job, WorkflowRecord workflow, NOSFVmState state,
                         NOSFResourceSelector.Choice choice) {
+        if (!state.canAcceptWaitingTask()) {
+            throw new IllegalStateException("NOSF VM " + state.vm.getId()
+                    + " already has a waiting task");
+        }
         int taskId = primaryTaskId(job);
         job.setVmId(state.vm.getId());
-        if (!job.getTaskList().isEmpty()) job.getTaskList().get(0).setVmId(state.vm.getId());
-        state.queue.add(job);
+        if (!job.getTaskList().isEmpty()) {
+            job.getTaskList().get(0).setVmId(state.vm.getId());
+        }
+        state.waiting = job;
+        state.waitingDataReadyTime = choice.dataReadyTime;
         state.plannedAvailableTime = choice.finish;
-        state.plannedShutdownTime = Math.max(state.plannedShutdownTime, choice.finish);
-        wfr.setAssignedVm(taskId, state.vm.getId());
-        wfr.setScheduledStart(taskId, choice.start);
+        state.releaseAt = Double.POSITIVE_INFINITY;
+        workflow.setAssignedVm(taskId, state.vm.getId());
+        workflow.setScheduledStart(taskId, choice.start);
         if (!choice.feasible) accounting.markDeadlineRisk(taskId);
         CBMWLogger.logf("NOSF-ALLOCATE",
-                "wf=%d task=%d subDeadline=%.2f start=%.2f finish=%.2f"
-                        + " feasible=%s incrementalCost=$%.6f vm=%d reused=%s",
-                wfr.getWorkflowId(), taskId, wfr.getLFT(taskId), choice.start,
+                "wf=%d task=%d priority=%.2f subDeadline=%.2f start=%.2f"
+                        + " finish=%.2f feasible=%s selectionCost=$%.6f"
+                        + " incrementalRentalCost=$%.6f idle=%.2f vm=%d reused=%s",
+                workflow.getWorkflowId(), taskId,
+                workflowPlanner.priority(workflow, taskId),
+                workflowPlanner.subDeadline(workflow, taskId), choice.start,
                 choice.finish, choice.feasible ? "yes" : "no",
-                choice.incrementalCost, state.vm.getId(),
+                choice.selectionCost, choice.incrementalRentalCost,
+                choice.idleTime, state.vm.getId(),
                 choice.vm != null ? "yes" : "no");
     }
 
     private void launchAndStartReadyVms(double now) {
         for (NOSFVmState state : vmStates) {
-            if (!state.launched && now + 1e-9 >= state.readyTime) {
+            if (state.released) continue;
+            if (!state.launched && now + EPS >= state.readyTime) {
                 state.launched = true;
                 state.vm.setState(WorkflowSimTags.VM_STATUS_IDLE);
                 vmPool.activateOnDemandContainer(state.vm.getId());
                 accounting.markOnDemandLaunched(state.vm.getId(), now);
             }
-            if (state.launched && state.running == null && !state.queue.isEmpty()) {
-                startNext(state, now);
-            }
+            startWaitingIfReady(state, now);
         }
     }
 
+    private void startWaitingIfReady(NOSFVmState state, double now) {
+        if (!state.launched || state.running != null || state.waiting == null) return;
+        WorkflowRecord workflow = activeWorkflows.get(
+                workflowIdForJob(state.waiting));
+        if (workflow == null) return;
+        double readyTime = Math.max(state.readyTime,
+                state.waitingDataReadyTime);
+        if (now + EPS < readyTime) {
+            schedule(getId(), readyTime - now,
+                    WorkflowSimTags.CLOUDLET_UPDATE);
+            return;
+        }
+        startNext(state, now);
+    }
+
     private void startNext(NOSFVmState state, double now) {
-        Job job = state.queue.remove();
+        Job job = state.waiting;
+        state.waiting = null;
+        state.waitingDataReadyTime = Double.NaN;
         int taskId = primaryTaskId(job);
-        WorkflowRecord wfr = activeWorkflows.get(workflowIdForJob(job));
-        if (wfr == null) return;
+        WorkflowRecord workflow = activeWorkflows.get(workflowIdForJob(job));
+        if (workflow == null) return;
         double queueDelay = Parameters.getOverheadParams().getQueueDelay() != null
                 ? Parameters.getOverheadParams().getQueueDelay(job) : 0.0;
         double actualRuntime = HybridVmPool.executionTimeSeconds(
-                job.getCloudletLength(), wfr.getTaskCores(taskId),
+                job.getCloudletLength(), workflow.getTaskCores(taskId),
                 state.type.mipsPerCore);
         try {
             job.setResourceParameter(getId(), state.type.pricePerSecond);
             job.setSubmissionTime(now);
             job.setExecStartTime(now + queueDelay);
             job.setCloudletStatus(Cloudlet.INEXEC);
-        } catch (Exception e) {
-            throw new IllegalStateException("Could not start NOSF task " + taskId, e);
+        } catch (Exception exception) {
+            throw new IllegalStateException(
+                    "Could not start NOSF task " + taskId, exception);
         }
         state.running = job;
+        state.releaseAt = Double.POSITIVE_INFINITY;
+        state.plannedAvailableTime = now + queueDelay
+                + state.type.runtime(workflow.getEstimatedExecTime(taskId));
         state.vm.setState(WorkflowSimTags.VM_STATUS_BUSY);
         vmPool.taskStarted(state.vm.getId(), taskId);
         accounting.markTaskSubmitted(job, "On-Demand");
@@ -201,74 +257,94 @@ public class NOSFBroker extends AbstractWorkflowBroker {
     }
 
     @Override
-    protected void onTaskReturned(Cloudlet cl, boolean onDemand) {
-        NOSFVmState state = stateByVmId.get(cl.getVmId());
+    protected void onTaskReturned(Cloudlet cloudlet, boolean onDemand) {
+        NOSFVmState state = stateByVmId.get(cloudlet.getVmId());
         if (state == null) return;
         state.running = null;
         state.vm.setState(WorkflowSimTags.VM_STATUS_IDLE);
-        state.busyTime += cl.getActualCPUTime();
+        state.busyTime += cloudlet.getActualCPUTime();
         state.completedTasks++;
         double now = CloudSim.clock();
+
         double actualCost = state.billedCost(now, BILLING_QUANTUM);
         double delta = Math.max(0.0, actualCost - state.chargedCost);
         state.chargedCost = actualCost;
-        WorkflowRecord wfr = activeWorkflows.get(workflowIdForJob((Job) cl));
-        if (wfr != null) wfr.addOnDemandCost(delta);
-        accounting.markOnDemandDestroyed(state.vm.getId(), now);
-        rebaseQueuedPlan(state, now);
+        WorkflowRecord workflow = activeWorkflows.get(
+                workflowIdForJob((Job) cloudlet));
+        if (workflow != null) workflow.addOnDemandCost(delta);
+
+        state.plannedAvailableTime = now;
+        if (state.waiting != null) {
+            startWaitingIfReady(state, now);
+        } else {
+            scheduleRelease(state, now);
+        }
         CBMWLogger.logf("TASK-COMPLETE",
                 "task=%d wf=%d vm=%d(NOSF reusable) actualCPU=%.4fs"
-                        + " incrementalActualCost=$%.6f",
-                cl.getCloudletId(), workflowIdForJob((Job) cl), cl.getVmId(),
-                cl.getActualCPUTime(), delta);
+                        + " incrementalActualCost=$%.6f releaseAt=%.2f",
+                cloudlet.getCloudletId(), workflowIdForJob((Job) cloudlet),
+                cloudlet.getVmId(), cloudlet.getActualCPUTime(), delta,
+                state.releaseAt);
     }
 
-    private void rebaseQueuedPlan(NOSFVmState state, double now) {
-        double available = now;
-        for (Job queued : state.queue) {
-            WorkflowRecord wfr = activeWorkflows.get(workflowIdForJob(queued));
-            if (wfr == null) continue;
-            int taskId = primaryTaskId(queued);
-            wfr.setScheduledStart(taskId, available);
-            available += state.type.runtime(wfr.getEstimatedExecTime(taskId));
+    private void scheduleRelease(NOSFVmState state, double now) {
+        state.releaseAt = state.currentBillingBoundary(now, BILLING_QUANTUM);
+        schedule(getId(), Math.max(0.0, state.releaseAt - now),
+                WorkflowSimTags.CLOUDLET_UPDATE);
+    }
+
+    private void releaseExpiredVms(double now) {
+        for (Iterator<NOSFVmState> iterator = vmStates.iterator();
+             iterator.hasNext();) {
+            NOSFVmState state = iterator.next();
+            if (state.released || state.running != null || state.waiting != null
+                    || now + EPS < state.releaseAt) continue;
+            state.released = true;
+            accounting.markOnDemandDestroyed(state.vm.getId(), state.releaseAt);
+            vmPool.terminateOnDemandVm(state.vm.getId());
+            stateByVmId.remove(state.vm.getId());
+            iterator.remove();
+            CBMWLogger.logf("NOSF-RELEASE",
+                    "vm=%d order=%.2f release=%.2f billed=$%.6f",
+                    state.vm.getId(), state.orderTime, state.releaseAt,
+                    state.chargedCost);
         }
-        state.plannedAvailableTime = available;
-        state.plannedShutdownTime = Math.max(now, available);
     }
 
     @Override
-    protected void onWorkflowTaskComplete(WorkflowRecord wfr, int taskId,
+    protected void onWorkflowTaskComplete(WorkflowRecord workflow, int taskId,
                                           double finishTime) {
-        double previousEft = wfr.getEFT(taskId);
-        workflowPlanner.feedback(wfr, taskId, finishTime);
+        double previousEft = workflow.getEFT(taskId);
+        workflowPlanner.feedback(workflow, taskId, finishTime);
         CBMWLogger.log("NOSF-FEEDBACK", String.format(Locale.US,
                 "wf=%d task=%d predictedFinish=%.2f actualFinish=%.2f deviation=%.2f",
-                wfr.getWorkflowId(), taskId, previousEft, finishTime,
+                workflow.getWorkflowId(), taskId, previousEft, finishTime,
                 finishTime - previousEft));
+        if (workflow.isComplete()) workflowPlanner.forget(workflow.getWorkflowId());
     }
 
-    private double getEst(Job job) {
-        WorkflowRecord wfr = activeWorkflows.get(workflowIdForJob(job));
-        return wfr != null ? wfr.getEST(primaryTaskId(job)) : 0.0;
-    }
-
-    private double getSubDeadline(Job job) {
-        WorkflowRecord wfr = activeWorkflows.get(workflowIdForJob(job));
-        return wfr != null ? wfr.getLFT(primaryTaskId(job)) : Double.MAX_VALUE;
+    private double getPriority(Job job) {
+        WorkflowRecord workflow = activeWorkflows.get(workflowIdForJob(job));
+        return workflow != null
+                ? workflowPlanner.priority(workflow, primaryTaskId(job))
+                : Double.MAX_VALUE;
     }
 
     private static double readNonNegative(String property, double defaultValue) {
-        double value = Double.parseDouble(System.getProperty(property,
-                Double.toString(defaultValue)));
+        double value = Double.parseDouble(System.getProperty(
+                property, Double.toString(defaultValue)));
         if (!Double.isFinite(value) || value < 0.0) {
-            throw new IllegalArgumentException(property + " must be finite and non-negative");
+            throw new IllegalArgumentException(
+                    property + " must be finite and non-negative");
         }
         return value;
     }
 
     private static double readPositive(String property, double defaultValue) {
         double value = readNonNegative(property, defaultValue);
-        if (value <= 0.0) throw new IllegalArgumentException(property + " must be positive");
+        if (value <= 0.0) {
+            throw new IllegalArgumentException(property + " must be positive");
+        }
         return value;
     }
 }

@@ -49,7 +49,10 @@ try {
     $detailLog = Get-ChildItem -Path $output -Recurse -Filter '*_detail.log' | Select-Object -First 1
     $logText = Get-Content -Raw $detailLog.FullName
     if ($logText -notmatch 'reused=yes') { throw 'NOSF smoke did not demonstrate VM reuse' }
-    Write-Host 'NOSF build, invariants, smoke, reuse, accounting, and diagnostics: PASS'
+    if ($logText -notmatch 'estimator=MU_PLUS_SIGMA') { throw 'NOSF did not log the paper runtime estimator' }
+    if ($logText -notmatch 'priority=EST') { throw 'NOSF did not use the documented paper priority policy' }
+    if ($logText -notmatch 'provisioningDelay=90\.0') { throw 'NOSF did not inherit the default CBMW provisioning delay' }
+    Write-Host 'NOSF paper equations, PCP, feedback, one-waiting invariant, shared delay, smoke, reuse, accounting, and diagnostics: PASS'
 } finally {
     Pop-Location
 }

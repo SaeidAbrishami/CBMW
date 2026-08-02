@@ -79,9 +79,12 @@ Useful JVM switches:
 | `-Dcbmw.negotiation.beta=1.0` | Workflow-level safety factor applied to the conservative critical path. |
 | `-Dcbmw.negotiation.gamma=1.0` | Markup applied to CBMW's post-planning raw execution-cost quote. |
 | `-Dcbmw.preemption.safety.sec=0` | Minimum post-preemption slack required before a running reserved task can be interrupted. |
-| `-Dnosf.provisioning.delay.sec=0` | NOSF-only provisioning delay; zero is the faithful reference default. |
+| `-Dcbmw.ondemand.delay.sec=90` | Shared CBMW/NOSF on-demand provisioning delay. NOSF deliberately uses this common-market value instead of the paper's 97-second experiment value. |
 | `-Dnosf.billing.quantum.sec=60` | NOSF VM billing quantum in seconds. |
 | `-Dnosf.vm.type.count=1` | Number of NOSF VM types; configure `nosf.vm.type.<i>.{name,cores,ram.mb,mips,price.per.sec}`. |
+| `-Dnosf.runtime.stddev.ratio=0.05` | NOSF sigma/mu used by the paper estimator `w=lambda=mu+sigma`; defaults to `cbmw.runtime.stddev.ratio`. |
+| `-Dnosf.priority.policy=EST` | Resolve the paper's priority ambiguity; `EST` follows Algorithm 3's operational description and `EFT` enables sensitivity analysis. |
+| `-Dnosf.transfer.mode=COMMON_SHARED_STORAGE` | Use the common project storage model; `PAPER_NETWORK` enables same-VM-zero edge transfers at `nosf.network.bandwidth.mbps` (100 by default). |
 | `-Dcbmw.cewb.spot.mtbi.sec=3600` | Override mean time between spot interruptions for every CEWB class. |
 | `-Dcbmw.cewb.spot.max.attempts=3` | Spot attempts before CEWB forces on-demand fallback. |
 | `-Dcbmw.cewb.spot.min.success.prob=0.80` | Minimum predicted probability that a spot attempt survives. |
@@ -327,7 +330,7 @@ All brokers extend `AbstractWorkflowBroker`.
 | Broker | planWorkflow | processCloudletUpdate |
 |--------|--------------|-----------------------|
 | CBMW | Paper-style EST/EFT/LFT backward sweep-line using estimated durations | Periodic LST-aware dispatch with current-cycle reserved-task replacement; only static `o0` assignments use on-demand |
-| NOSF | Uncertainty-aware EST/EFT and proportional sub-deadline preprocessing | EDF, minimum incremental-cost reusable on-demand VM selection, deadline-risk fallback, and completion feedback |
+| NOSF | Paper Eqs. 1 and 8-12: `mu+sigma`, EST/EFT/LCT, PCP sub-deadlines, and per-task delta | Algorithm 3 priority order, paper execution-cost/minimum-idle VM selection, one waiting task per VM, fastest-new-VM risk fallback, and Eqs. 16-18 immediate-successor feedback |
 | CEWB | PCP sub-deadlines and 400.4-second interruption-penalty slack classes | Shared spot/on-demand physical VM containers, periodic best-fit provisioning, progress-preserving recovery, and reclassification |
 | CEWB-ReferencePolicy | PCP sub-deadlines adapted from the external implementation | Absolute 400.4/800.8/1601.6-second slack classes and deterministic arrival/workflow/task ordering; current interruption escalation |
 | CEWB-ReferenceAdapted | Same PCP sub-deadlines | Same absolute slack classes, with completed work retained and remaining work reclassified after interruption |
@@ -461,10 +464,13 @@ scenario also completed.
 - The paper does not state a precise experimental gamma value; the price-markup
   default is `1.0` and must be reported with each experiment.
 - `NegotiationModule.remainingCP()` still needs cycle detection.
-- NOSF is a paper-informed reconstruction because its source article is not
-  included and its full pseudocode could not be verified. The reusable VM
-  scheduler supports configurable heterogeneous types, but the default
-  experiment still provides one homogeneous type.
+- NOSF Algorithms 1-3 are implemented from the original article. The paper is
+  internally inconsistent about whether a newly arrived task's original
+  priority is EST or EFT; the documented default is EST and the EFT
+  interpretation is available as a sensitivity switch. The default experiment
+  deliberately retains the common CBMW market, including the shared 90-second
+  provisioning delay and one homogeneous configurable VM type, rather than
+  claiming to reproduce the paper's seven-type EC2 environment.
 - CEWB's resource behavior is now explicit rather than borrowing reserved VMs,
   but its configurable spot-market defaults remain simulation assumptions: the
   external paper's full pseudocode and experimental market constants are not

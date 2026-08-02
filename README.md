@@ -137,27 +137,31 @@ scenario CSV columns `estimatedRawCost` and `offeredPrice`.
 
 ### NOSF Baseline
 
-`NOSFBroker` implements a paper-informed reconstruction of NOSF's three-stage
-online scheduler:
+`NOSFBroker` implements the original NOSF article's three-stage online
+scheduler:
 
-1. **Workflow preprocessing:** compute uncertainty-aware task durations, EST/EFT
-   values, and proportional critical-path sub-deadlines.
-2. **Resource allocation:** order ready tasks by earliest EST (then
-   sub-deadline), predict whether each task can finish before its sub-deadline,
-   and select the lowest incremental-cost on-demand resource.
-3. **Feedback:** after each actual task completion, update successor timing and
-   redistribute the remaining sub-deadlines using the observed finish time.
+1. **Workflow preprocessing (Algorithm 1):** use the normal-runtime paper
+   weight `w(lambda)=mu+sigma`, calculate EST/EFT/LCT with Eqs. 8-10, find PCP
+   paths, assign Eq. 11 sub-deadlines, and retain each task's delta from Eq. 12.
+2. **Resource allocation (Algorithm 3):** order ready tasks by paper priority,
+   allow at most one waiting task per VM, select a sub-deadline-feasible active
+   VM by minimum `price * predicted execution` and then minimum idle time, or
+   provision a suitable new type. If none is feasible, provision the
+   highest-ranking compatible type and mark the task deadline-risk.
+3. **Feedback (Algorithm 2):** update only immediate successors that have become
+   ready and apply Eqs. 16-18, preserving the original delta and LCT cap.
 
-The reconstruction uses the same conservative runtime model as the paper-style
-experiments: `cet = mu + z(alpha) * sigma`, where the default uncertainty is
-`sigma = 0.05 * mu` and `alpha = 0.99`.
+The article is inconsistent about whether initial priority is EST or EFT.
+`nosf.priority.policy=EST` is the documented default because it follows
+Algorithm 3's operational prose; `EFT` is available for sensitivity analysis.
+The default transfer mode remains `COMMON_SHARED_STORAGE`, because the supplied
+task means already include shared-storage I/O. `PAPER_NETWORK` enables explicit
+edge transfers with same-VM transfer equal to zero.
 
-The original NOSF article is not available in this repository, so this is not
-claimed as a line-for-line reproduction of its unpublished pseudocode. The
-current experiment also exposes one task-sized, dedicated on-demand container
-configuration. Consequently, NOSF's heterogeneous reusable-VM comparison and
-utilization tie-break reduce to a single feasible candidate here; its deadline,
-priority, uncertainty, cost, and feedback rules are still applied.
+NOSF runs in the common comparison market rather than the paper's historical
+EC2 market. In particular, it inherits `cbmw.ondemand.delay.sec` directly, so
+its default provisioning delay is the same 90 seconds as CBMW. The billing
+quantum and heterogeneous VM types remain configurable independently.
 
 ### CEWB Spot Baseline
 
@@ -234,19 +238,21 @@ paper's historical AWS price trace.
 
 ### Baseline Certification Status
 
-NOSF and CEWB cannot currently be certified as exact reproductions of their
-original publications. Their complete source pseudocode, implementation, and
-all experimental constants are not available in this repository.
+The NOSF scheduling logic is implemented from the original publication, while
+its default run intentionally uses this repository's common comparison market.
+CEWB remains a reconstructed baseline because its complete reference market
+and implementation are not available here.
 
-- **NOSF** is a paper-informed reconstruction of preprocessing, sub-deadlines,
-  EST-priority allocation, uncertainty handling, and completion feedback.
+- **NOSF** implements the published Algorithms 1-3 and Eqs. 1, 8-18. Its
+  default experiment profile intentionally uses the common CBMW market rather
+  than the paper's historical EC2 configuration.
 - **CEWB** implements PCP sub-deadlines, absolute interruption-penalty slack
   classes, shared spot and on-demand physical VM containers, periodic
   provisioning, progress-preserving recovery, and reconstructed pricing.
 
-Results should label both algorithms as **paper-informed reconstructed
-baselines**, not exact reference implementations. Exact certification requires
-the original algorithms and experiment parameters from their authors.
+CEWB results should remain labeled as a reconstructed baseline. NOSF results
+should identify the priority policy and market profile; `COMMON_MARKET` is an
+algorithm-faithful run, not a reproduction of the paper's original EC2 results.
 
 Focused CEWB validation (capacity/timing invariants plus a two-workflow smoke):
 
@@ -266,7 +272,8 @@ experiments remain reproducible:
 | CBMW price markup `gamma` | `1.0` | The paper defines the markup but does not publish the experimental value. |
 | Reserved-container startup | `0 s` separately | It is unknown whether the supplied runtime measurements already include this delay. |
 | Task cores and RAM | `1 core`, `1 MB` | The supplied DAX files do not contain task resource metadata. |
-| NOSF constants and VM-selection details | Current documented reconstruction | Complete source pseudocode and experimental constants are unavailable. |
+| NOSF original priority | `EST` | The paper's preprocessing text says EFT while Algorithm 3's operational description says EST; `EFT` is available as a sensitivity policy. |
+| NOSF experiment market | Common CBMW market | The scheduler follows the paper, while VM catalog, billing, and provisioning are controlled comparison parameters. |
 | CEWB spot classes, prices, capacities, and reliability | Current documented spot-market defaults | The original experimental market constants are unavailable. |
 
 Every reported experiment must state these values and any JVM-property
