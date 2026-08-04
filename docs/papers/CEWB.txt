@@ -1,0 +1,1408 @@
+Journal of Grid Computing (2023) 21:40
+https://doi.org/10.1007/s10723-023-09676-9
+RESEARCH
+A Cost-Efficient Workflow as a Service Broker Using
+On-demand and Spot Instances
+Bahareh Taghavi · Behrooz Zolfaghari ·
+Saeid Abrishami
+Received: 29 January 2023 / Accepted: 10 June 2023
+© The Author(s), under exclusive licence to Springer Nature B.V. 2023
+Abstract Inrecenttimes,cloudcomputinghasbecome slacktime.Furthermore,toreducevirtualmachinepro-
+a popular platform for running various applications, visioning delay, we have utilized container technology
+with workflows being one of the most common types. toexecuteworkflowtasks.Thiswasachievedbyprovi-
+However, efficient execution of workflows on cloud sioning large virtual machines and executing multiple
+resources requires expertise in resource management containerizedtasksoneachvirtualmachine.Threedif-
+techniques. Moreover, combining and running work- ferent pricing policies are also proposed in this work
+flows from different users can be more cost-effective with the aim of ensuring the broker’s profit, while also
+due to enhanced resource utilization. Therefore, a offering a reasonable discount to the users. Simula-
+workflow broker system is necessary to act as an inter- tion results indicate that the proposed system not only
+mediary between users and cloud providers. Although reducesfinalcostsbutalsoprovideshigherbrokerprof-
+workflow brokers have been extensively studied in its and executes more workflows within the deadline
+recent years, maximizing profits for both brokers and compared to previous works.
+usersbyutilizingdifferent pricingmodelshas notbeen
+adequately addressed. This paper proposes a workflow Keywords Cloud broker · Spot instance · Multiple
+broker that uses a combination of on-demand and spot workflow scheduling · Workflow as a service
+instances to minimize workflow execution costs while
+adhering to deadline constraints. The proposed system
+classifies resources into multiple classes based on their 1 Introduction
+reliability, with on-demand resources being the most
+reliableandspotinstancesclassifiedbytheirmaximum Cloud computing has become increasingly popular
+price. The system assigns workflows’ tasks to resource because of its convenient features, such as easy acces-
+classes based on their criticality, determined by their sibility, on-demand availability, and flexible resource
+allocation. Instead of investing in costly infrastructure,
+B. Taghavi· B. Zolfaghari ·
+B users can rent computing resources from providers via
+S. Abrishami ( )·
+theinternetbasedontheirneeds.InfrastructureasaSer-
+Department of Computer Engineering, Ferdowsi University
+of Mashhad, Mashhad, Iran vice (IaaS) cloud providers offer a variety of resources
+e-mail: s-abrishami@um.ac.ir in the form of Virtual Machines (VMs), which come
+B. Taghavi with predefined specifications, such as the number of
+e-mail: bahareh.taghavi@alumni.um.ac.ir processors, memory, storage, and other capabilities.
+Additionally,IaaScloudsofferapay-as-you-gopricing
+B. Zolfaghari
+e-mail: be.zolfaghari@mail.um.ac.ir model with different pricing plans, which are tailored
+123
+
+40 Page 2 of 19 Journal of Grid Computing (2023) 21:40
+to suit various business applications. This allows users for multiple workflows rather than just a single one.
+to access VMs in a cost-effective manner that meets Another important job is determining the user’s total
+their unique needs. service price. The final price should be set in a way
+Workflow applications are a widely recognized type thatthebrokermakesanacceptableprofit,whilereduc-
+of cloud computing application that involves a series ing the cost to the user to a reasonable level. While
+of computational tasks that are dependent on data and some researchers have examined the issue of design-
+must be executed in a particular order. These applica- ing a WaaS broker, the majority of them have only
+tions cover a broad range of complex scientific pro- focused on the on-demand pricing model offered by
+grams that are used in distributed systems [1]. Some public cloud providers for resource provisioning [3,6].
+examples of these types of applications include the Inorder tochoose theappropriate resources for pro-
+Montageapplication,whichisusedtogeneratemosaics visioning, the broker has three pricing options avail-
+of the sky, and the Cybershake application, which is able from well-known public cloud providers such
+used to characterize earthquake hazards. These appli- as Amazon: On-demand, Spot, and Reserved [7]. In
+cations have been widely studied and are frequently this paper, we utilized a combination of on-demand
+used in various scientific fields [2]. and spot instances to reduce the cost of executing
+Executing workflows on cloud resources while con- workflows. Amazon Web Services (AWS) offers a
+sideringbudgetanddeadlineconstraintspresentsasig- variety of on-demand and spot instances in the form
+nificant challenge [3]. Issues such as selecting appro- of virtual machines, which can be paid for on an
+priate VM types for each workflow task and determin- hourly or per-second basis. Spot Instances are a cost-
+ing the order in which tasks should be submitted make effective option that provides extra computing capac-
+workflow scheduling a complex problem that often ity in the Amazon Cloud at significantly lower prices
+requires optimization techniques beyond the knowl- than on-demand instances. However, the reliability of
+edge of most companies and ordinary users. To man- these instances is not guaranteed as they can be inter-
+age these aspects, cloud brokering is a common solu- rupted by cloud providers at any time [8]. Several
+tion.TheNationalInstituteofStandardsandTechnolo- other leading cloud providers have also made avail-
+gies (NIST) defines cloud brokering as ”an entity that able comparable resources, including Google Cloud
+manages the use performance, and delivery of cloud Platform’s Preemptible Virtual Machines (GCP Pre-
+services, and negotiates relationships between cloud emptible VMs) and Microsoft Azure’s Low-priority
+providers and cloud consumers” [4]. In this work, we Batch VMs (Microsoft Azure: Low-priority Batch
+consider a Workflow as a Service (WaaS) broker to VMs) [9]. While there are numerous studies avail-
+be an intermediary agent between users and cloud able on scheduling a single workflow on spot instances
+providers [5]. The broker is responsible for renting [10,11], there is a scarcity of research on scheduling
+a pool of different types of VMs with varying pric- multiple workflows on this platform, which is required
+ing models from the cloud provider and scheduling the for a workflow broker [12,13].
+user’sworkflowtasksontheseVMsbasedonbothtime Since 2017, Amazon has introduced a new pric-
+and cost criteria. ing model for spot instances that eliminates the need
+The main objectives of the workflow broker sys- for users to bid on prices [8]. The new pricing model
+tem are to complete the workflow execution within the offers more predictable spot prices that are based on
+user-defined deadline, in a cost-effective way, while the supply and demand of Amazon EC2’s spare capac-
+ensuring the broker’s profit. Proper resource manage- ity, rather than bid prices. Nonetheless, users can still
+ment by the broker is crucial in reducing user costs, control costs by specifying a maximum price that they
+and it involves two key phases: resource provisioning are willing to pay for a spot instance. In this paper,
+and resource scheduling. During resource provision- weleveraged thispropertytocreatedifferentclassesof
+ing, the broker should rent appropriate resources at spot instances based on their reliability, which is deter-
+a reasonable cost. In resource scheduling, the broker mined by their assigned maximum price, with higher
+should efficiently schedule workflow tasks on provi- maximumpricesindicatingmorereliableinstances.We
+sioned resources, maximizing utilization. It is worth thenassignedmorecriticalworkflowtaskstomorereli-
+notingthatinordertoutilizeresourcesmoreefficiently, ableclassofinstancestoensurebetterperformanceand
+the workflow broker should function as a scheduler stability.
+123
+
+Journal of Grid Computing (2023) 21:40 Page 3 of 19 40
+On the contrary, the process of provisioning VMs a separate VM for each task that eliminates provi-
+from a cloud provider involves a provisioning delay sioning delay overheads.
+that cannot be ignored [14]. This delay can lead to a • Proposing three different pricing policies that con-
+highoverheadinthesystem,especiallywhenhundreds sider both user cost-reduction and broker profit to
+of VMs are requested for executing multiple workflow determine the user’s final cost.
+tasks.Toaddressthisissue,containertechnologiessuch
+The paper is structured as follows: Section 2 pro-
+asDockercanbeutilized.Byusingacontainer,avirtual
+vides a discussion of the related work, while Section 3
+environment with separate CPU, memory, block I/O,
+presents the system model and definitions. The pro-
+and network space is provided, allowing for multiple
+posed system and its algorithms are described in Sec-
+taskstobeperformedinparallelonasingleVM.While
+tion 4. Section 5 covers the experimental results, and
+this approach can mitigate the VM provisioning over-
+Section6concludesthepaperbysummarizingthefind-
+head, it necessitates proper resource provisioning and
+ings and mentioning future works.
+schedulingalgorithmstominimizeresourceidlecapac-
+ity. Although some papers have employed containers
+forschedulingworkflowsoncloudresources,theyhave
+2 Related Work
+onlyexecutedonecontaineroneachVM[15,16].How-
+ever, there are few previous works which consider the
+There are numerous articles available on the subject of
+execution of multiple containers on a single VM to
+schedulingworkflowsincloudenvironments.Inaccor-
+reduceprovisioningdelaysandincreaseVMutilization
+dancewiththetitleandobjectivesofourpaper,wehave
+[17,18]. In this work, we propose a solution in which
+conductedareviewofrelatedliteratureinthreedistinct
+a small number of large on-demand and spot instances
+sub-sections. Firstly, we have examined WaaS brokers
+are requested, and multiple tasks are containerized on
+thatsolelyutilizeon-demandinstances.Astheschedul-
+theseVMssimultaneouslyusingcontainer technology.
+ingcomponentofaWaaSbrokeriscrucial,wealsocon-
+This paper introduces the Cost Efficient Workflow-
+sidered papers that address the challenge of scheduling
+as-a-ServiceBroker(CEWB)asasolutionforschedul-
+multiple workflows in this sub-section. Moving on to
+ing and resource provisioning of multiple workflows
+the next sub-section, we have scrutinized studies that
+from different users. We have made improvements
+have employed containers for scheduling workflows in
+to our previous classification-based resource manage-
+cloud environments. Finally, we have reviewed papers
+ment strategy [19] to optimize the scheduling of users’
+thattackletheproblemofworkflowschedulingonspot
+workflows. The CEWB utilizes containers which are
+instances.
+executedonacombinationofon-demandandspotlarge
+instances with varying levels of reliability. Addition-
+ally, we propose three different pricing policies that 2.1 Workflow as a Service
+take into account both user price discounts and bro-
+ker profits. The main contributions of this paper are as The scheduling of multiple workflows that enter a sys-
+follows: tem simultaneously has given rise to a concept known
+as Workflow as a Service (WaaS). The majority of
+• Considering the workflow brokering problem and the proposed articles on this topic utilize on-demand
+proposing a cost-efficient workflow broker that instances, which we have reviewed in this sub-section.
+receivesworkflowsfromuserswithadeadlinecon- As previously mentioned, we also considered papers
+straintandschedulesthemonapoolofspotandon- that address multiple workflow scheduling in this sub-
+demandinstancestoreduceusercostandensurethe section.
+broker profit. Liuetal.[20]proposedanonlinemultipleworkflow
+• Proposingamulti-levelqueueforschedulingready scheduling framework called onliNe multi-workflOw
+tasks based on the criticality level of the tasks and Scheduling Framework (NOSF). The scheduling pro-
+the reliability level of resources. cessisdividedintothreeparts:workflowpre-processing,
+• Selecting large VMs to containerize and execute virtualmachineallocation,andfeedbackprocessing.In
+multipletaskssimultaneouslyinsteadofrequesting resourceprovisioningandallocation,theyalsoconsider
+123
+
+40 Page 4 of 19 Journal of Grid Computing (2023) 21:40
+the uncertainty of task execution times. In [21], Ma et harnessed the potential of containers to reduce the pro-
+al. proposed a framework that divides the workflow visioning delay of VMs.
+plan into three phases. Initially, it sets the task param-
+eters according to the deadline and workflow structure
+and determines the ready tasks. Each ready task is then 2.2 Cloud Container Scheduling
+assigned to a virtual machine to minimize costs and
+meet its requirements. As each task completes execu- With the rise of cloud computing, container technol-
+tion, the parameters of all related tasks are updated. ogy has gained popularity, and cloud providers such
+Adhikari et al. [22] have developed another multi- as Amazon have introduced related services. Further-
+pleworkflow schedulingalgorithmthatconsistsoftwo more, container scheduling has become a prominent
+main stages: updating and mapping tasks to VMs. In topic of discussion in recent times. Gerlach et al. intro-
+the first stage, the execution time is determined based duced Skyport, a container-based workflow manage-
+on each workflow’s deadline and communication costs ment system designed for multi-cloud environments
+between tasks. The tasks are then scheduled on the that utilizes Docker as its containerization technology
+VMstoincreaseresourceutilization.Chakravarthietal. [27]. In a similar vein, Filgueira et al. proposed Aster-
+[23] presented a multi-criteria decision-making algo- ism, which combines the Pegasus and dispel4py work-
+rithmforschedulingworkflows.Thisalgorithmaimsto flowmanagementsystemswithDockercontainertech-
+increase resource efficiency while meeting budget and nology[28].Bothoftheseworksprovidepracticalsys-
+deadlineconstraints.Thealgorithmconsidersthecom- tem implementations and focus on technical aspects,
+binedweightsofcost,executiontime,anddatatransfer but they do not address scheduling and resource provi-
+time to identify suitable resources for each task. Arab- sioning issues, which are the main topics of our paper.
+nejad et al. [24] proposed another algorithm to sched- In a different research paper, Ye et al. [15] proposed
+ule multiple workflows and handle multiple deadline the use of cloud container services for scheduling two
+constraints with cost reduction. They divided the tasks types of workflows - offline batch workflows (DIWs)
+intodifferentlevelstoincreasetheparallelexecutionof and online stream workflows (DSWs). The proposed
+tasks. Each level has its own deadline and budget, and scheduling method is called Stochastic Hybrid Work-
+the tasks in each level are independent of each other. flows Dynamic Scheduling (SHWS). DSWs are prior-
+Ma et al. [25] proposed the Real-time Multiple- itized to meet their deadline, and then the remaining
+WorkflowScheduling(RMWS)scheme,whichdynam- resources are allocated to schedule DIWs. Similarly,
+ically schedules workflows with minimum cost under Rodriguez and Buyya [3] also developed a container-
+different deadline constraints. The scheduling pro- based framework for WaaS in which they proposed
+cess involves assigning a sub-deadline to each task an algorithm called EPSM (Elastic resource Provi-
+upon a new workflow’s arrival, allocating each ready sioning and Scheduling algorithm for Multiple work-
+task to the cheapest instance according to its sub- flows).EPSMaimstominimizetheoverallcostofleas-
+deadline, and updating the parameters of predeces- ing virtual machines (VMs) while ensuring that each
+sor tasks upon completion before allocating them to individual workflow meets its deadline. Rajasekar and
+appropriate VMs. Similarly, Chen et al. [26] intro- Palanichamy developed an algorithm called Scalable
+ducedtheunceRtainty-awareOnlineSchedulingAlgo- Resource Provisioning and Scheduling algorithm for
+rithm(ROSA)toscheduledynamicandmultiplework- Multiple workflows (SRPSM) for WaaS frameworks,
+flows with deadlines, considering the uncertainty of which also utilizes containers in its approach [16]. All
+task start/execution/finish time and data transfer time three algorithms, schedule only one container on each
+among tasks. ROSA assigns each ready task to the VM. In contrast, our proposed solution leases large
+cheapest instance which can finish it before its pre- VMs to execute multiple containers on the same VM,
+dicted latest finish time. therebyenhancingtheutilizationofVMs.Furthermore,
+Compared to our proposed solution, all of the afore- none of these works utilize spot instances to reduce the
+mentioned methods utilize only on-demand instances, leasing cost.
+without taking into account the possibility of utiliz- In their article [9], Ranjan et al. put forth a schedul-
+ing spot instances to minimize the cost of executing ing system for workflows in software-defined data
+workflows. Additionally, none of these methods have centers that relies on containers. Their focus was on
+123
+
+Journal of Grid Computing (2023) 21:40 Page 5 of 19 40
+improvingenergyefficiencyfortheresourceproviders. prietary and non-proprietary types. They have utilized
+In contrast, our paper aims to reduce the cost of exe- a combination of block spot and on-demand instances
+cuting workflows for users. to minimize the cost. They have identified idle time
+Tarafdar et al. recently published an article [18] that blocks of instances and improved the mapping of tasks
+introduces a multi-criteria scheduling algorithm for a by enhancing their previous algorithm. Monge et al.
+WaaS broker. Their algorithm considers three parame- [31] have introduced an auto-scaling strategy that opti-
+ters simultaneously: makespan, rental cost, and energy mizes the execution of workflows using spot instances.
+consumption.Likeourproposedmethod,Tarafdaretal. In this work, tasks are scheduled on resources based
+usemultiplecontainersonasingleVM.Saeedizadeand on their slack time, and the objective is to minimize
+Ashtiani also developed a workflow scheduling algo- the makespan, monetary cost, and probability of task
+rithm[17]foraWaaSbrokercalledDynamic,Deadline failures simultaneously. A uniform distribution is used
+and Budget-aware, Workflow Scheduling (DDBWS). to compute the bid price. In another work, Monge et
+It takes into account both deadline-constrained and al. [32] proposed Cloud Multi-objective Intelligence
+budget-constrained workflows, and like our proposed (CMI),amulti-objectiveapproachthatusesthegenetic
+method, schedules multiple containers on a single VM sorting algorithm to find a set of Pareto-optimal solu-
+bysolvingamulti-resourcepackingproblem.However, tions. The optimal solution that satisfies the criteria is
+neither of these works utilize spot instances to reduce selected, and tasks are scheduled on both spot and on-
+the cost of executing workflows, which is a feature of demand instances. Pham et al. [33] developed a multi-
+ourproposedmethod.Additionally,theirmethodshave objectiveworkflowschedulingstrategytominimizethe
+different objective criteria when compared to ours. makespan and cost. This model offers a range of trade-
+off solutions for various fulfillment and interruption
+rates.Allofthesestudiesaddresstheschedulingofsin-
+2.3 Spot Instances Scheduling gle workflows and are not suitable for a WaaS broker,
+and hence are not comparable to our proposed method.
+Over the past few years, spot instances have been As far as we know, only two previous studies have
+utilized in numerous works owing to their cost- addressed the issue of scheduling multiple workflows
+effectiveness. Our focus in this paper is on workflow using the spot pricing model [12,13]. Zhou et al. pre-
+schedulingalgorithmsthatutilizespotinstances.Many sented Dyna, a WaaS broker that utilizes the A* algo-
+of the articles on this topic have focused on scheduling rithm to select a combination of spot and on-demand
+a single workflow, and we will review them first. instances forexecuting each task,withthegoal ofmin-
+Poola et al. [10] introduced a workflow schedul- imizing workflow execution cost under deadline con-
+ing algorithm that utilizes spot instances initially straints, similar to our work [12]. However, applying
+and switches to on-demand instances as slack time the A* algorithm to a variety of instance types and
+decreases.Theyalsoproposedabiddingstrategybased hundreds of tasks can result in an extremely large state
+on execution time parameters to minimize costs. This spaceandimposeasignificantcomputationalanddelay
+work was extended in [29] with the introduction of a overhead on the system. Additionally, the Dyna algo-
+just-in-time scheduling algorithm that improved reli- rithm considers pricing based on the hourly billing
+ability and fault-tolerance capabilities using duplica- period, which is not very efficient due to new pricing
+tion techniques. Kumar et al. [11] presented another models by cloud providers based on seconds. Further-
+algorithm that schedules workflows using both spot more, they did not consider using containers, result-
+instances and block spot instances to reduce costs. In ing in each VM executing only one task at a time,
+order to achieve fault-tolerance, tasks are first sched- causing provisioning delay overheads. Despite these
+uled on spot instances based on their slack time. If limitations, this study is one of the best in this field
+there is no slack time, tasks are scheduled on block with objectives similar to ours, and we have used it for
+spot instances. All of these works address the problem comparison after modifying it (including changing the
+of scheduling a single workflow and are not suitable hourly pricing model).
+for a WaaS broker, in contrast to our proposed method. Sampaio and Barbosa presented an algorithm for
+Chen et al. [30] have proposed an algorithm for scheduling multiple workflows on Amazon EC2
+scheduling workflows by categorizing tasks into pro- resources,whichincludeson-demand,spotblocks,and
+123
+
+40 Page 6 of 19 Journal of Grid Computing (2023) 21:40
+spotinstances[13,34].Theyutilizedcontainertechnol- Table 1 Notations and their definitions
+ogy and container migration in case of spot instance
+Notation Definition
+interruption. However, their algorithm schedules only
+onecontaineroneachVM,whileweuselargerVMsto Coresvm The number of cores of the selected VM
+type
+executemultiplecontainersonthesameVMtoimprove
+VM utilization. Additionally, their approach employs
+Pricev o
+m
+nd The price of on-demand instances of the
+selected VM type
+spotblocks,whicharenolongeravailablesincetheend
+of 2022. We did not compare our algorithm to theirs Pricev sp m ot The price of spot instances of the selected
+VM type
+because our objectives differ: they aimed to sched-
+Pricev m
+m
+in The minimum observed spot price in the
+uledeadline-andbudget-constrainedworkflows,while spot history
+we aimed to minimize the cost of workflow execution
+Delayvm VM provisioning delay
+while meeting its deadline.
+Delaycnt Container deployment delay
+To the best of our knowledge, no previous research
+Delaysnp The delay of taking a snapshot from a
+has specifically addressed the issue of minimizing the container
+ultimatecostofaWaaSbrokerbyefficientlymanaging Warningspot The time between the declaration of a
+containers on large VMs utilizing both on-demand and warning of a spot instance
+spot pricing models. Additionally, none of the existing interruption and the actual failure of the
+solutionsofferacomprehensivebrokersystem,includ- instance
+ing pricing policies that ensure both the broker’s profit Ws The s’th entered workflow
+and user discounts, which is the primary focus of this Ts Tasks of the s’th workflow
+paper. Ds Deadline of the s’th workflow
+Cores(ti ) The number of required cores for a task ti
+ExeTime(ti ) Estimated execution and I/O time of task
+3 System Architecture and Models ti
+Subdeadline(ti ) The sub-deadline assigned to a task ti
+This section begins by introducing the architecture of SlackTime(ti ) Slack time of a task ti
+theCEWB,followedbydiscussionsontheresourceand Class(ti ) Class of each task ti according to its
+criticality
+application models. Finally, the problem definition is
+presented.Table1providesalistofimportantnotations
+Intervalsch The length of each scheduling interval
+that will be introduced throughout this section. Intervalprv The length of each provisioning interval
+ClassNum The number of priority classes for
+instances and ready tasks
+3.1 System Architecture
+MaxPrice(ck ) The maximum price for spot instances of
+a class ck (k ≥ 2)
+The system’s general architecture is illustrated in
+Fig. 1, which includes three primary components: the
+Negotiation Module, Scheduling Module, and Pro- Provisioning Module, manages the resource pool and
+visioning Module. The Negotiation Module receives adjusts the number of running VMs as needed. The
+workflows from users and verifies if the user-defined provisioning module also runs at regular intervals, and
+deadline is feasible. If the deadline is acceptable, the the length of each interval is denoted by Interval prv.
+system negotiates with the user regarding the work- However,itsintervalsaremuchlongerthantheschedul-
+flow execution price based on the pricing policy. If the ing intervals.
+user agrees to the offered price, the system proceeds InCEWB,theresourcepoolconsistsofvariouslarge
+with the workflow execution. The Scheduling Module, on-demand and spot instances. Also, the ready task
+whichrunsinregularintervalsdenotedby Interval , queue contains tasks with different levels of criticality.
+sch
+is responsible for categorizing and assigning tasks To manage spot instances and task assignment accord-
+to containers created on resources, with the goal of ing to their criticality level, a classification technique
+maximizing the utilization of resources. Finally, the presented in our previous work [19] is used with some
+123
+
+Journal of Grid Computing (2023) 21:40 Page 7 of 19 40
+Fig. 1 The overall view of
+the proposed system
+modifications.Theresourcepoolisdividedintoseveral 3.2 Resource Model
+classes,asillustratedinFig.1.Thenumberofclassesis
+determined by the broker administrator. The first class This paper has utilized a combination of Amazon spot
+consists of on-demand instances that are reserved for and on-demand instances. On-demand instances are
+the most critical tasks with the tightest slack times. more reliable, but they come at a higher fixed price. On
+The following classes are assigned to spot instances theotherhand,spotinstancesprovidecheapercompute
+with different maximum prices. The higher the class, capacity in the Amazon Cloud. However, the price of
+thehigherthemaximumpriceanddegreeofreliability. spot instances fluctuates over time depending on the
+The purpose of classifying VMs based on their maxi- supply and demand of these resources. Amazon can
+mumpriceistoreducetheexecutioncostfortaskswith reclaim and interrupt spot instances when it needs the
+a lower level of criticality. These tasks are assigned to capacityback,butitprovidesatwo-minutenoticetothe
+lower classes and are put on hold until the spot price user before doing so. Users have the ability to control
+drops to the maximum price of the lower classes, and thespotpricebyspecifyingthemaximumpricetheyare
+then their execution begins. The more critical tasks are willingtopay.Ifthepriceofaspotinstanceexceedsthe
+assignedtohigherclasseswithinstanceshavinghigher maximum price specified by the user, the provider will
+maximum prices, ensuring more reliability and lower take action to preempt or terminate the instance. We
+wait have utilized this parameter to classify the provisioned
+Moreover, in order to reduce the time it takes to set spot resources into different levels.
+up VMs, the CEWB system employs container tech- Although there are various types of instances avail-
+nologies likeDocker. Thisinvolves encapsulating each able in Amazon Cloud, this paper assumes that a bro-
+workflow task within a container, with multiple con- ker selects a single large instance type to execute
+tainers being scheduled and run on a single VM, as tasks for workflows. The selection of this instance type
+depicted in Fig. 1. To accomplish this objective, the should be based on the properties of the tasks, ensur-
+Provisioning Module rents out large VMs with a high ing that it has high performance and can handle mul-
+number of cores from a cloud provider. By doing so, tiple containers simultaneously, but without wasting
+multiple tasks can be executed on these VMs without computing resources due to idleness. All spot and on-
+incurring any provisioning delay. However, it is essen- demand instances are provisioned from this selected
+tialtochoose theappropriate number ofcores forthese instancetype.Weassumethattheselectedinstancetype
+large VMs so as not to waste resources. has Coresvm processing cores. Additionally, the paper
+123
+
+40 Page 8 of 19 Journal of Grid Computing (2023) 21:40
+employs a billing cycle model where instances are dency between tasks is defined as e = (t ,t ), where
+k i j
+chargedpersecondwithaminimumof60seconds.The task t is the parent of task t . This means that a child
+i j
+priceofeachinstancedependsonitstype: Price v o m nd for task can only start running when all of its parent tasks
+spot
+on-demand instances and Pricevm for spot instances, have completed execution.
+where the latter’s price is subject to fluctuations over In this work, it is assumed that each task t requires
+i
+time. Finally, instances are acquired from the cloud a certain number of processing cores, denoted by
+provider with a provisioning delay of Delayvm , and Cores(t
+i
+),andthisisastrictconstraint.Therefore,each
+Warning refers to the period between the declara- task must be executed on a container with a number of
+spot
+tionofawarningofaspotinstanceinterruptionandthe cores that matches the number specified for the task.
+actual failure of the instance. Additionally, it is assumed that the execution time of
+It is assumed in the paper that each VM is used to each task t on a container hosted on a VM, denoted
+i
+execute multiple tasks, and each task runs on a con- by ExeTime(t ), can be estimated using an existing
+i
+tainer with the required number of cores. A container performance prediction technique [35,36]. Although
+can only be created on a VM if it has the necessary there may be some error in the estimated execution
+number of idle cores. There are two methods for run- time, we use this value to calculate the priority of each
+ningcontainersonAmazon:AWSFargateandAmazon task during scheduling. Since the proposed scheduling
+ElasticComputeCloud(EC2).AWSFargateisaserver- algorithm is dynamic (as opposed to static), the actual
+less compute engine where users only focus on build- execution time of tasks will be the basis for making
+ingapplicationswithoutmanagingservers.Thesecond decisions in the system. Note that if a task t is inter-
+i
+methodemployedinthisworkrequiresdirectcontainer rupted and backed up by the scheduler using a snap-
+management on virtual machines. When deploying a shot, then its execution time is adjusted to its remain-
+container on a VM, there is a provisioning delay of ing execution time. This is calculated as the current
+Delay
+ctn
+, which is significantly less than Delayvm . ExeTime(t
+i
+) minus the time it had already executed
+Multiple containers can be created simultaneously on on the previous instance.
+top of a VM without affecting each other’s perfor- Another important aspect is the data transfer time
+mance. between two tasks along a dependency e . According
+k
+In order to deal with the issue of unreliable spot to [37], there are two models for data sharing: peer-to-
+instances, we can create a backup of a container by peer(P2P)andsharedstorage.InP2Pmodel,theparent
+taking a snapshot of it when we receive a warning tasks directly send data to the child tasks (i.e., syn-
+from the provider that the instance it’s running on will chronous communication). In this model the container
+be interrupted. This snapshot, or container image, can of parent task should remain running until all of the
+then be used to restore the container when its tasks are childtasksreceivesdata.Sinceinourproposedmethod,
+rescheduled on another spot or on-demand instance. a child task with a loose sub-deadline may wait in the
+However, there is a delay involved in taking the snap- ready queue for a long time to receive a spot instance
+shot, which we refer to as Delay . This means that with a low price, this model is not applicable. On the
+snp
+if a spot instance is reclaimed by the provider, it will other side, in shared storage model, parent tasks store
+takeapproximately2×Delay tobackupandrestore their output data in a in a global shared storage such
+snp
+each container on another instance. as Amazon S3 (Simple Storage Service) or Amazon
+EFS (Elastic File System), and the child tasks retrieve
+input data from the same storage asynchronously. This
+3.3 Application Model model better fits our proposed method. We assume that
+for each task t , the volume of input and output data
+i
+The broker’s input consists of workflows that come is predetermined, so the data transfer time between
+from multiple users at different times. Each workflow the task and the shared storage service can be esti-
+received from the s-th user can be represented as a mated and it is considered in the task execution time,
+triple W = (T , E , D ). Here, T = {t ,t ,...,t } i.e. ExeTime(t ). Therefore, ExeTime(t ) is the esti-
+s s s s s 1 2 n i i
+represents the set of tasks in the workflow, E = mated execution time of t , including the time of read-
+s i
+{e ,e ,...,e } represents the dependencies between ing input files and writing output files. As the main
+1 2 m
+tasks, and D is the deadline set by the user. A depen- concern of our proposed method is to reduce the cost
+s
+123
+
+Journal of Grid Computing (2023) 21:40 Page 9 of 19 40
+of renting VMs, we do not consider the cost of leas- deadline of the workflow to individual tasks based on
+ing shared storage which is negligible in comparison their execution time and workflow deadline. To start,
+to the cost of VMs. However, the broker administrator the algorithm identifies the overall critical path of the
+should consider this cost in long term, e.g. one year, workflow and distributes the deadline among the crit-
+as its overhead costs and amortize it among users in its ical tasks on this path. After this initial distribution,
+pricing policy for the workflow execution. each critical task is assigned a sub-deadline. The PCP
+algorithm repeats this process for other tasks by treat-
+ing each critical task in turn as an exit task, using its
+3.4 Problem Definition
+sub-deadline as a deadline, and creating a partial criti-
+cal path that ends in that critical task. The deadline is
+The objective of this research is to maximize the prof-
+then distributed in the same way as before. This recur-
+its of the WaaS broker, while also offering the user
+sive procedure continues until all tasks are assigned a
+a fair discount. In order to achieve this goal, the study
+sub-deadline.
+aimstodecreasethecostofrentingspotandon-demand
+Once the sub-deadline has been assigned to each
+resourcesfromthecloudprovider.Additionally,weaim task, the slack time parameter SlackTime(t ) is cal-
+i
+to establish a reasonable service price for users that
+culated for each task t using (1). In this equation
+i
+encourages them to use the broker’s services for their
+CurTime is the current time when the slack time
+workflow applications rather than renting resources
+is calculated. The slack time parameter reflects the
+directly from the cloud provider.
+criticality level of each task. Tasks with tight slack
+time are considered to be more critical, and will
+therefore be scheduled on high-reliability instances.
+4 The Proposed System
+Remember that ExeTime(t ) is the remaining execu-
+i
+tion time for tasks that have been previously backed up
+In this section, we will provide an explanation of
+and restored
+the CEWB system that has been proposed. As previ-
+ously mentioned, CEWB consists of three main mod-
+SlackTime(t ) = Subdeadline(t ) − ExeTime(t )
+ules:Scheduling,Provisioning,andNegotiation.These i i i
+−CurTime (1)
+modules will be described in detail in the following
+sub-sections.
+Theconceptofslacktimeisappliedtodeterminethe
+level of criticality for each task, which helps in allocat-
+4.1 Scheduling Module ingthemtodifferentclassesofinstancesintheresource
+pool.Readytasksareclassifiedintodifferentclassesby
+The scheduling module is a process that runs at regular using Equation 2. Within this equation, Class(t ) rep-
+i
+intervals and assigns tasks to available resources. The resentstheassignedclassfortaskt ,andClassNum is
+i
+length of each interval is referred to as Interval . the total number of classes which is established by the
+sch
+Duringeachinterval,tasksthatarereadytobeexecuted broker administrator. The equation calculates the ratio
+within a workflow are placed in a queue. These tasks between the amount of extra time available for a task
+have varying levels of importance, depending on their to be executed (slack time) and the potential penalty
+execution time and position in the workflow. In order for interrupting the task and scheduling it on another
+toprioritizethesetasks,aparameterisdefinedtodeter- instance. Penalty represents the maximum penalty
+int
+mine their level of criticality with regards to meeting oftaskinterruption,whichincludesvariousdelayssuch
+the deadline constraint. This is done using the Partial as backing up and restoring a container, waiting for the
+Critical Path (PCP) algorithm, which is explained in next provisioning interval, provisioning a new virtual
+[38]. machine, and waiting for the next scheduling interval
+The PCP algorithm assigns a sub-deadline, denoted and deploying a container. If the ratio is less than one,
+by Subdeadline(t ), to each task t within the work- it means that the task is very critical and cannot toler-
+i i
+flow. This is accomplished by distributing the overall ate interruptions. On the other hand, if the ratio is high
+123
+
+40 Page 10 of 19 Journal of Grid Computing (2023) 21:40
+for a task, it can afford to take risks and be scheduled scheduler and placed in the ready task queue for the
+on cheaper, less reliable instances. desiredclass.OncethetaskisreassignedtoanewVM,
+Penalty int =2 × Delay snp +Interval prv +Delayvm execution resumes from the last checkpoint.
++Interval + Delay )
+sch cnt
+SlackTime(t ) Algorithm 1 Task Scheduling.
+Class(t )=max((cid:3) i (cid:4),ClassNum)(2)
+i Penalty Require: ReadyTasks : list of current ready tasks of all work-
+int
+flows
+Algorithm 1 describes the process of scheduling IdleVMs(ck ) : list of VMs that have idle cores for each
+tasks. Initially, the scheduler classifies the ready tasks class ck
+accordingto(2).Afterthat,itproceedstoallocatetasks Ensure: a mapping of ready tasks to idle resources
+to the available resources, starting with the highest pri-
+ority class, which is the on-demand class.. Each task 1 2 : : pro fo ce r d a u ll re ta T sk a s sk ti S ∈ ch R e e d a u d l y in T g a ( s R k e s a d d o yTa (cid:6) sk C s l , a I s d si l f e y V in M g r s e ( a c d k y ))
+requiresacertainnumberofcores,andacontainerwith tasks
+the corresponding number of cores must be created on 3: k ← Compute Class(ti ) based on (2)
+VMs.TheBest-Fitalgorithmisusedtoreducethenum-
+4: Add ti to ReadyTasks(ck ))
+5: end for
+ber of idle cores in each VM and maximize resource
+utilization. This algorithm takes a sorted list of ready 6: for k ← 1 to ClassNum do
+tasks in ascending order of their slack times for a given 7: SortReadyTasks(ck )inascendingorderofslacktimes
+8: if k > 2 then (cid:6) to use idle resources from higher
+class, along with a list of available VMs for that class
+classes
+as input. It assigns each task t i to a VM that has the 9: Add IdleVMs(ck−1 ) to IdleVMs(ck )
+minimum number of idle cores available, as long as 10: end if
+that number is greater than or equal to the number of
+required cores for that task, i.e., Cores(t ) (as shown 11: for all (tasks ti in ReadyTasks(ck )) do (cid:6) Best-Fit
+i
+algorithm
+in Line 11-20). 12: Select vms ∈ IdleVMs(ck ) which has the mini-
+To avoid wasting resources, after scheduling the mum number of
+tasks of higher classes, the scheduler considers VMs idlecoresgreaterthanorequaltoCores(ti )
+with idle cores in higher classes to execute tasks from
+13: if vms != null then
+lower classes. This helps to reduce the number of idle 1 1 5 4 : : R D e e d p u lo c y e a th c e on n ta u i m ne b r e f r or of ti i o d n le vm co s res in vms by
+coresintheVMsduringeachschedulinginterval.How- Cores(ti )
+ever, due to the high criticality of the tasks in the on- 16: if vms is full then
+demand class, VMs in this class are not used for tasks
+17: remove vms from IdleVMs(ck )
+18: end if
+in lower classes (as indicated in Line 8). Any tasks
+19: end if
+that cannot be assigned to a VM during a scheduling 20: end for
+interval remain in the task queue and are reclassified 21: end for
+22: end procedure
+and rescheduled based on their slack time in the next
+interval.
+Whenataskiscompletedsuccessfully,thecontainer
+associated with it is released and the virtual machine
+gets back the processing cores it had allocated for that
+container. Furthermore, all the child tasks of the com- 4.2 Provisioning Module
+pleted task are examined, and if their parent tasks have
+been executed before, they are included in the queue The resource provisioning module is responsible for
+of ready tasks. To minimize the impact of faults result- managing the number of VMs in the instance pool.
+ing from spot instance interruption by the provider due Similar to the scheduling module, this module is also
+to insufficient capacity, we utilize Amazon’s notifica- called periodically at the intervals of size Interval prv,
+tion system known as the Termination Notice. When a but the intervals are greater than the scheduling period.
+warningisissuedtwominutesbeforeinstanceinterrup- Inthiswork,large-sizeVMsareselectedsothatanum-
+tion,acheckpointoftherunningtaskisstoredinshared ber of containers can be created on them at the same
+memory. The checkpointed task is then returned to the time. In this way, the overhead of the VM provisioning
+123
+
+Journal of Grid Computing (2023) 21:40 Page 11 of 19 40
+isexperienced onlyonce,andthenforeachtask,acon- Algorithm 2 : VM Provisioning
+tainer with the required number of cores is created on Require: ReadyTasks(ck ):listofcurrentreadytasksforeach
+these VMs with a lower provisioning delay. class ck
+The VMs in the instance pool are categorized
+IdleVMs(ck ) : list of VMs that have idle cores for each
+class ck
+into different classes based on their maximum prices.
+Ensure: Provision required resources and terminate fully idle
+Instanceswithhighermaximumpricearemorereliable resources
+andareusedforcriticaltasks,andinstances withlower
+maximumpriceareusedfortaskswithmoreslacktime.
+1: procedureProvisioning(ReadyTasks(ck ), IdleVMs(ck ))
+2: for all scheduling class ck do
+Themaximumpriceforaspotinstanceineachclassc k , 3: IdleCores(ck ) ← sum of idle cores in IdleVMs(ck )
+denoted by MaxPrice(c k ), is calculated using (3). In 4: ReqCores(ck ) ← sum of Cores(ti ) for each ti ∈
+p
+th
+r
+i
+i
+s
+ce
+eq
+in
+ua
+t
+t
+h
+io
+e
+n
+s
+,
+p
+P
+ot
+ri
+h
+c
+is
+e
+t
+v m
+o
+m i
+r
+n
+y
+i
+o
+s
+f
+th
+th
+e
+e
+m
+s
+i
+e
+n
+l
+i
+e
+m
+ct
+u
+e
+m
+d i
+o
+n
+b
+s
+s
+ta
+e
+n
+rv
+c
+e
+e
+d
+ty
+sp
+p
+o
+e
+t
+,
+5: Read i y f T R a e s q k C s( o c r k ) es(ck ) > IdleCores(ck ) then
+6: Nvm ←(cid:3)(ReqCores(ck )−IdleCores(ck ))/Coresvm (cid:4)
+and ClassNum is the total number of classes. As the
+7: request and provision Nvm instances for class ck
+equation indicates, higher classes (with lower index k) 8: end if
+have maximum prices that are closer to the on-demand 9: for all vmj ∈ IdleVMs(ck ) do
+price. It should also be noted that the first class, c , is
+10: if all the vmj’s cores are idle then
+1 11: if vmj’s status is idle then
+designated for on-demand instances. 12: terminate vmj
+ClassNum − k + 1 13: else
+MaxPrice(c
+k
+) = Price
+v
+m
+m
+in +
+ClassNum
+1
+15
+4
+:
+:
+end
+se
+i
+t
+f
+vmj’s status as idle
+×(Price v o m nd − Price v m m in) (3) 1 1 6 7 : : else set vmj’s status as busy
+Algorithm 2 describes the process of provisioning 18: end if
+VMs.Duringeachinterval,thealgorithmcomparesthe 19: end for
+20: end for
+number of idle cores of the VMs with the number of
+21: end procedure
+cores required for the tasks in the ready queue of each
+class. If the number of idle cores in the VMs is not suf-
+ficient to accommodate the required cores of the tasks
+in the ready queue, new VMs are requested from the andaccepted.Theδparameterisdeterminedbythebro-
+cloud provider. On the other side, if there are idle VMs ker’sadministratorandittakesintoaccountthepossible
+in the resource pool, the algorithm marks them to be delays that can occur due to resource provisioning, and
+shut down in the next interval. Since provisioning a inaccurateestimationofexecutiontimesanddatatrans-
+new VM takes a significant amount of time, idle VMs mission times. The price is then determined based on a
+are not terminated immediately during the current pro- pricing policy, which takes into account the rental cost
+visioning interval. Instead, they are labeled as idle. In ofinstances,thebroker’sprofit,theuser’sdiscount,and
+the next provisioning interval, if the VMs with an idle the overhead costs. The overhead costs include penal-
+label are still idle, they will be shut down. If they are ties for services not completed as agreed, as well as the
+being used, the label is cleared to keep them available cost of renting storage resources for intermediate data
+for future usage. and taking and restoring snapshots. It is assumed that
+if the broker cannot complete a workflow within the
+user’s deadline, the received fee will be returned to the
+4.3 Negotiation Module user as a penalty.
+Pricing policies have a significant impact on the
+This particular module has the responsibility of receiv- profitability of the broker and the attractiveness of
+ing workflows from users, checking to see if they can the service to users. Pricing policies can also take
+be executed before the specified deadline, and provid- into account resource management strategies to cre-
+ing a price quote. Once a workflow is received, the ate more opportunities for both the broker and the
+module first calculates its critical path. If the deadline user. For example, if the pricing strategy is aware of
+given by the user is at least δ percent greater than this resource management details, it is possible to predict
+critical path, then the workflow is considered feasible the amount of resources that will be consumed for
+123
+
+40 Page 12 of 19 Journal of Grid Computing (2023) 21:40
+each user, and to estimate and communicate the cost to as D . Essentially, the more flexible the deadline of
+s
+to the user before the service is executed. In this partic- theworkflow,thegreaterthediscountthatcanbegiven.
+ularwork,threedifferentpricingpoliciesareproposed, To calculate the discount, the system first estimates the
+which are explained in the following. Two of the poli- executiontimeandexecutioncostofrunningthework-
+cies offer the price to the user upfront, while the other flow W onon-demandinstances,whicharedenotedas
+s
+one offers the price at the end. ExeTime (W )and ExeCost (W ),respectively.
+ond s ond s
+Constant-profit pricing: In this policy, the cost of Then, using (6), it computes a discount ratio. This ratio
+the executed workflows is determined and received at is used in (7) to calculate the final price that the user
+the end of the execution. Under this pricing policy, the will be charged for executing the workflow.
+user will be charged for the cost of resources used as
+well as an additional percentage (α) for the broker’s
+D − CurTime
+profit, once the workflow meets the deadline. The cost DiscRatio(W ) = s (6)
+s ExeTime (W )
+of a workflow in this policy is calculated using (4), ond s
+where Price(t ) represents the execution cost of task
+i
+t i , which is determined using (5). In (5), V MList(t i ) (cid:3)
+referstothelistofvirtualmachinesonwhichtaskt was DiscRatio − 1
+i Price(W ) = 1 − × β)
+s
+executed (because spot instances may be interrupted, a DiscRatio
+task may have been executed on multiple resources). ×ExeCost (W ) (7)
+ond s
+Price(vm ) refers to the cost of virtual machine
+j
+vm . This cost is determined by the type of virtual Prediction-based pricing: This policy provides the
+j
+machine being used, which can be either on-demand user with the price of executing a workflow at the out-
+or spot, and the price of spot instances when they set. This price is determined by estimating the cost
+are rented. Finally, ExeTime(t ,vm ) represents the of running the workflow using on-demand and spot
+i j
+duration for which task t is being executed on virtual instances, and adding a percentage (γ) for the broker’s
+i
+machine vm . profit. To accurately predict the total cost of execut-
+j
+ing the workflow, it’s necessary to estimate future spot
+(cid:2)
+prices. A number of algorithms have been proposed in
+Price(W ) = (1 + α) × ( Price(t )) (4)
+s i
+literature for this purpose, and in this particular study,
+ti ∈Ts
+we have employed the algorithm introduced in [39].
+(cid:3) The paper presents two algorithms based on Markov
+Price(t ) =
+(cid:2) Cores(t
+i
+)
+× Price(vm ) regime-switching, and we have selected the DMRS-
+i j
+vmj ∈VMList(ti )
+Cor
+(cid:4)
+esvm A
+m
+R
+or
+-
+e
+S
+a
+W
+cc
+a
+u
+l
+r
+g
+a
+o
+te
+ri
+r
+t
+e
+h
+s
+m
+ul
+,
+ts
+w
+f
+h
+o
+i
+r
+c
+f
+h
+or
+h
+e
+a
+c
+s
+as
+b
+t
+e
+p
+e
+e
+n
+ri
+f
+o
+o
+d
+u
+s
+n
+e
+d
+x
+t
+c
+o
+ee
+p
+d
+r
+i
+o
+n
+d
+g
+u
+2
+c
+4
+e
+× ExeTime(t ,v ) (5) hours.
+i j
+The procedure for estimating costs is presented
+Constant-discount pricing: This policy estimates in Algorithm 3. Initially, the user-defined deadline is
+and receives the cost of workflow execution upon the dividedamongthetasksintheworkflowusingthePCP
+receipt of each workflow. To estimate the total cost algorithm, ensuring that each task has a sub-deadline.
+needed to complete all the tasks in a workflow, the pol- The tasks are then processed in a topological order,
+icy assumes that each task will be completed using an meaning that each parent task is processed before its
+on-demand virtual machine. The policy then subtracts child tasks. The algorithm calculates two new parame-
+a maximum of β percentage from this estimated cost ters: EarliestStart(t ), which is the earliest time task
+i
+and gives the remaining amount to the user. As the cost t can begin running if the workflow starts now, and
+i
+ofspotinstancesismuchlowerthanthatofon-demand LatestStart(t ), which is the latest time task t can
+i i
+instances, it is expected that the broker will still make start execution without missing its sub-deadline. (8)
+a reasonable profit even after offering this discount to and (9) illustrate how these parameters are computed.
+the users. The SlackTime(t ) is calculated using (10), which
+i
+The amount of discount that can be applied to a is similar to the previous (1), but uses the maximum
+workflow W dependsonitsdeadline,whichisreferred value of the sub-deadlines of its parents instead of the
+s
+123
+
+Journal of Grid Computing (2023) 21:40 Page 13 of 19 40
+current time, as it represents the expected time of the Algorithm 3 : Workflow Cost Estimation.
+execution start for t i . 1: procedure CostEstimation(Ws (Ts ,Es , Ds ))
+EarliestStart(t ) = max
+(cid:5)
+EarliestStart(t )
+2: Compute Subdeadline(ti ) for each task using PCP algo-
+i j rithm
+tj ∈Parents(ti )
+(cid:6) 3: TotalCost = 0
++ExeTime(t j ) (8) 4: for all ti ∈ Ts in topological order do
+5: if ti is the entry task t1 then
+LatestStart(t
+i
+) =
+−
+Su
+D
+b
+e
+d
+l
+e
+a
+a
+y
+l
+p
+i
+r
+n
+v
+e
+−
+(t
+i
+)
+D
+−
+ela
+E
+y
+x
+c
+e
+nt
+Time(t
+i (
+)
+9)
+6
+7
+:
+: ExeTim S
+E
+e l (
+a
+a t1
+r
+c )
+l
+k
+i
+− T
+es
+i C
+t
+m
+S
+u e
+t
+r
+a
+( T t
+r
+1
+t
+i )
+(
+m
+t1
+e
+) ←
+=
+CurTi
+S
+m
+u
+e
+bdeadline(t1 ) −
+8: else
+SlackTime(t
+i
+) = Subdeadline(t
+i
+) − ExeTime(t
+i
+) 9: Compute EarliestStart(ti ) using (8)
+− max Subdeadline(t ) (10)
+10: Compute SlackTime(ti ) using (10)
+tj ∈Parents(ti ) j 1
+1
+1
+2
+:
+:
+e
+C
+n
+o
+d
+m
+i
+p
+f
+ute Latest(ti ) using (9)
+After determining the class of task t i , its execution 13: Compute Class(ti ) using (2)
+cost is estimated. If it belongs to the first class, the cost
+e H s o ti w m e a v t e io r, n if is it ba b s e e l d on o g n s t t h o e o o t n h - e d r e s m p a o n t d cl i a n s s s t e a s n , c w e e pr a ic im e.
+1
+1
+4
+5
+:
+: ExeTi
+i
+m
+f C
+e E (
+l
+t x
+a
+i ) e
+s
+C
+s(
+o
+ti
+s
+)
+t(
+=
+ti
+1
+)
+the
+←
+n
+C C o o r r e e s s
+(cid:6)
+( v t m i
+o
+)
+n-
+×
+dem
+P
+a
+r
+n
+i
+d
+c
+i
+e
+n
+v o
+s
+m n
+t
+d
+anc
+×
+e
+to predict the minimum spot price between the earli- 16: else (cid:6) spot instance
+est and latest start time of t i using the DMRS-AR-SW 17: MinPricev sp m ot ← Estimate the minimum spot
+price between
+algorithm, and use this price to estimate the execution
+EarliestStart(ti ) and
+costoft i .Thepredictedpricefortheentireworkflowis LatestStart(ti )
+obtained by summing up the predicted prices for each
+task. 18: ExeTime E (t x i ) eCost(ti ) ← C C o o r r e e s s ( v t m i ) × MinPricev sp m ot ×
+19: end if
+20: TotalCost = TotalCost + ExeCost(ti )
+5 Performance evaluation
+21: end for
+22: return TotalCost
+We utilized a widely-known cloud simulation frame- 23: end procedure
+work called CloudSim [40] to simulate and evaluate
+our system under various scenarios. We extended this
+tooltoincludeworkflowsandmodelingofspotinstance
+features similar to those offered by Amazon EC2. To We chose to compare the results of CEWB with the
+assess the performance of our algorithms, we designed Dyna algorithm [12], due to their similarities in using
+and executed several experiments. Table 2 presents the spot instances and scheduling multiple workflows. To
+parameter values used in these experiments. ensureafaircomparison,weassumedthattasksrequire
+afixednumberofcoresintheDynaalgorithmandallo-
+cated one virtual machine with the same number of
+Table 2 Values of simulation parameter
+coresaseachtask.Additionally,wechangedthehourly
+Parameter Value billing period of Dyna to a second-based billing sys-
+tem, so that both algorithms could be evaluated under
+Delayvm (According 100 sec
+equal conditions. For the simulation, we utilized six
+to [41])
+types of instances, which are described in Table 3. The
+Delaycnt (According to 0.4 sec
+[14]) first three larger instances were used for our proposed
+Delaysnp 90 sec CEWB, while the latter three were used to implement
+Warningspot 120 sec Dyna, where each task is scheduled on a single VM.
+Number of cores required 2,4 and 6 We obtained the price histories of these spot instances
+for each task (Cores(ti )) from August to October 2020, and used the first three
+Intervalsch 20 sec weeks of these histories as spot history for price fore-
+Intervalprv 100 sec casting. The remaining weeks were used to simulate
+the behavior of spot instances.
+123
+
+40 Page 14 of 19 Journal of Grid Computing (2023) 21:40
+Table 3 Selected instance types from Amazon EC2 and Dyna. Note that when there is only one class
+in CEWB, it only utilizes on-demand instances. As
+Type Cores Cost per hour ($)
+depicted in the diagram, the resource rental cost in
+m5.12xlarge 48 2.688 CEWB is significantly lower than that of the Dyna
+m5.8xlarge 32 1.792 algorithm, except for the on-demand only (1-class)
+m5.4xlarge 16 0.896 case.Theprimaryreasonbehindthisobservationisthat
+m5.2xlarge 8 0.4480 CEWB delays the execution of non-critical ready tasks
+m5.xlarge 4 0.224 with longer deadlines until the price of spot instances
+m5.large 2 0.112 decreases, thus reducing the overall execution cost. In
+contrast, Dyna executes ready tasks immediately at the
+current spot price, which results in higher costs com-
+pared to CEWB.
+To generate the input workload, we used Pega-
+AnothernotableobservationinFig.2istherelation-
+sus software [42] to create five real-world workflows,
+ship between cost and the number of classes. Accord-
+namely Montage, Ligo, Sight, Cybershake, and Epige-
+nomics. We generated 200 workflows of varying sizes, ing to the graph, as the number of classes increases,
+ranging from 50 to 1000 tasks, and randomly set their the cost decreases. This is because the lower classes
+deadlines to between 140% and 200% of the execution havelowermaximumprices,andworkflowswithmore
+time of their critical path. Using the generated work- relaxed deadlines can benefit from the lower prices of
+flows,wecreatedthreedifferentworkloadswitharrival these lower classes.
+rates based on a Poisson distribution. These workloads In order to evaluate how the size of VMs (i.e., num-
+had average arrival rates of 2, 0.6, and 0.1 workflows ber of cores) affects the cost of workflow execution,
+per minute, respectively. In the following section, we an experiment was conducted using different instance
+will discuss the results of the experiments. types, specifically those with 16, 32, and 48 cores. The
+results,asshowninFig.3,indicatethatthebestperfor-
+mance is achieved using 32 core instances. However,
+5.1 Resource rental cost evaluation
+48 core instances have the worst performance due to
+lower utilization and the wastage of resources. It is
+To compare the resource rental cost of the proposed
+worth noting that the choice of appropriate resource
+CEWB with Dyna, we initially used only m5.4xlarge
+type and the number of cores should be carefully con-
+instances with 16 cores for the proposed method.
+sideredbytheadministrator,asitdependsonthesystem
+Figure 2 illustrates the results for different numbers of
+conditions, such as the number of incoming workflows
+classes for CEWB (ranging from one to four classes)
+Fig. 2 Resource rental cost
+with different arrival rates
+for CEWB and Dyna
+123
+
+Journal of Grid Computing (2023) 21:40 Page 15 of 19 40
+Fig. 3 Resource rental cost
+for different instance types
+(16, 32 and 48 cores)
+per minute and the resources required by its tasks. Vir- Interestingly, Fig. 4 also indicates that the utilization
+tual machines with higher numbers of cores will per- of resources in CEWB increases when the arrival rate
+form better in high workload environments. per minute increases from 0.1 to 0.6. This was pre-
+dictable because with a value of 0.1 for this parameter,
+the number of workflows and, therefore, the number of
+5.2 Resource utilization ready tasks in the system is very small, which causes
+resourcestobeunderutilized.However,whenthevalue
+Although the cost of renting CEWB is less than Dyna, of this parameter is increased to 0.6, the number of
+it is expected that the utilization of resources inCEWB ready tasks in the system increases, leading to higher
+will be lower due to the use of larger instances. This utilization.Inbothofthesesituations,anincreaseinthe
+assumptionissupportedbythedatapresentedinFig. 4.
+However, for CEWB, utilization is not a top priority
+as long as the cost of renting resources remains low.
+Fig. 4 Resource utilization
+with different arrival rates
+for CEWB and Dyna)
+123
+
+40 Page 16 of 19 Journal of Grid Computing (2023) 21:40
+number of classes results in decreased utility, which posed CEWB system outperformed Dyna under var-
+is reasonable because when there are more classes, ious conditions. This is attributed to the fact that the
+more instances are provisioned compared to fewer proposed system eliminates VM provisioning delay,
+classes. unlike Dyna. Although the VM provisioning delay is
+Surprisingly, as the arrival rate parameters increase the same for both systems, CEWB utilizes larger VMs
+to 2, there is a decrease in resource utilization. This and creates containers with a shorter deployment delay
+phenomenon can be attributed to the fact that when ontheseVMs,allowingforoneVMtoexecutemultiple
+the number of ready tasks increases and the system tasks simultaneously. This minimizes the waiting time
+becomes congested, the provisioning module responds fortasks,resultinginmoreworkflowsbeingcompleted
+by allocating more resources to meet the sub-deadlines within the deadline.
+ofthesetasks.However,itappearsthattheprovisioning
+module tends to over-provision resources under such
+pressure, leading to a reduction in resource utilization. 5.4 Pricing policies evaluation
+This issue can be considered as a potential area for
+future improvement, focusing on enhancing the per- The profitability of the broker is influenced by its pric-
+formanceoftheprovisioningmoduleincongestedsce- ing policy parameters, namely α, β, and γ. These
+narios with a high number of ready tasks. parameters need to be carefully set by the bro-
+Figure 5 shows the utilization of various instance ker’s administrator to ensure profitability while also
+types for CEWB. As anticipated, larger instances attracting customers with appropriate discounts. The
+with more cores have lower utilization, with 16-core constant-profit pricing policy is well-suited for bro-
+instances exhibiting the best utilization. However, as ker administrators as it allows them to determine the
+previously mentioned, 32-core instances have the best price based on the actual cost of workflow execution
+performance in terms of rental cost. andincorporatethedesiredprofitmargin.However,this
+pricing policy may not be ideal for users, as the price is
+only determined after the workflow execution is com-
+5.3 Number of completed workflows plete.Usersprefertoknowthefinalpricebeforeexecut-
+ing their workflow so that they can make an informed
+The number of workflows that met their deadline is a decision whether to send it to the broker or not. Addi-
+significant measure for evaluating the performance of tionally,ifthepriceisannouncedinadvance,usersmay
+a workflow broker. Figure 6 presents the results of this find it to be high and choose to extend the workflow’s
+evaluation. It is evident from the figure that the pro- deadline in order to pay a lower price. Therefore, it
+Fig. 5 Resource utilization
+for different instance types
+(16, 32 and 48 cores)
+123
+
+Journal of Grid Computing (2023) 21:40 Page 17 of 19 40
+Fig. 6 The percentage of
+workflows completedwithin
+their deadline
+appears that the other two pricing methods are more parameter,denotedasβ,thecostofrunningworkflows
+favorable options from the user’s perspective. usingon-demandresourcesneedstobecalculated.The
+The prediction-based pricing method is considered total cost of executing all workflows in the experiment
+ideal for both the broker and the user when it can accu- using on-demand resources, represented by
+rately estimate the final cost of workflow execution.
+(cid:2)
+This method allows for the announcement of the price
+Total = ExecCost (W )
+in advance, enabling the broker to optimize its profit ond ond s
+based on the cost estimation. However, if the estimated
+Ws
+cost is inaccurate, it may result in a loss for the bro-
+without any discount, amounts to 1710.8. The last col-
+ker. The accuracy of the prediction-based pricing is
+umn of Table 4 showcases the ratio of the real cost
+presented in Table 4, which shows a maximum error
+to Total . By utilizing this column, the maximum
+ond
+percentage of 12.5
+potential profit for the broker can be calculated as
+The constant-discount policy can also be utilized to
+59.1%(forthelastrow).Thebroker’sadministratorcan
+negotiate prices with the user prior to executing work-
+utilize these values to determine an appropriate value
+flows. To determine a suitable value for the discount
+for the parameter β, taking into consideration both the
+Table 4 Comparison of estimated and actual costs of executing workflows
+Average Number of Estimated Real cost Error Percentage of real cost
+arrival rate classes cost cost percentage to on-demand cost
+2 2 807.79 853.67 −5.6% 49.9%
+3 807.79 840.52 −4% 49.1%
+4 807.79 825.70 −2.2% 48.2%
+0.6 2 802.2 760.47 5% 44.4%
+3 802.2 736.45 8% 43%
+4 802.2 720.58 10% 42.1%
+0.1 2 802.24 812.97 −1.3% 47.5%
+3 802.24 738.37 7.9% 43.1%
+4 802.24 701.19 12.5% 40.9%
+123
+
+40 Page 18 of 19 Journal of Grid Computing (2023) 21:40
+broker’sprofitandtheuser’sdiscounttoattractalarger Funding Theauthorsdeclarethatnofunds,grants,orothersup-
+user base. port were received during the preparation of this manuscript.
+Data Availibility The workflow datasets analysed during the
+current study are generated using Pegasus workflow generator
+available in https://confluence.pegasus.isi.edu/display/pegasus/
+WorkflowGenerator
+6 Conclusion
+Declarations
+With the increasing demand for the running of work-
+flowapplicationsoncloudsystems,designinginterme-
+Competing Interests The authors have no relevant financial or
+diary providers to manage and provide workflow ser-
+non-financial interests to disclose.
+vices easily and cost-effectively is an important issue.
+Due to the dynamic feature of cloud environments,
+a cloud broker must efficiently manage and execute References
+workflows belonging to different users with differ-
+ent deadlines. For this reason, in this paper, we pro- 1. Yi, S., Kondo, D., Andrzejak, A.: Reducing costs of spot
+pose a Workflow as a Service broker with scheduling instances via checkpointing in the amazon elastic compute
+cloud.In:2010IEEE3rdInternationalConferenceonCloud
+andresourceprovisioningalgorithmstomakedynamic
+Computing, pp. 236–243 (2010)
+decisionsfortheresourcemanagementandtaskassign-
+2. Bharathi, S., Chervenak, A., Deelman, E., Mehta, G., Su,
+ment of user workflows in a cost-efficient manner. M.-H., Vahi, K.: Characterization of scientific workflows.
+The proposed system classifies resources into multi- In:2008ThirdWorkshoponWorkflowsinSupportofLarge-
+scale Science, IEEE pp. 1–10 (2008)
+ple classes based on their reliability. The system then
+3. A.Rodriguez, M., Buyya, R.: Scheduling dynamic work-
+assigns tasks in workflows to specific resource classes
+loads in multitenant scientific workflow as a service plat-
+based on their criticality, which is determined by their forms. Future Gener Comput Syst 79, 739–750 (2018)
+slack time. Furthermore, the system runs each task 4. Hogan,M.,Liu,F.,Sokol,A.,Tong,J.:Nistcloudcomputing
+standards roadmap. NIST Spec Publ 35, 6–11 (2013)
+inside one container and places multiple containers on
+5. Wang, J., Korambath, P., Altintas, I., Davis, J., Crawl, D.:
+large virtual machines, to take advantage of fewer con-
+Workflowasaserviceinthecloud:Architectureandschedul-
+tainer delays and avoid time overhead caused by fre- ing algorithms. Procedia Comput Sci 29, 546–556 (2014)
+quent provision and shutdown of small VMs. Several 6. Étienne Michon, Gossa, J., Genaud, S., Unbekandt, L.,
+Kherbache, V.: Schlouder: A broker for iaas clouds. Future
+pricingpoliciesarealsoproposedtocalculateusercosts
+Gener Comput Syst 69, 11–23 (2017)
+considering user discounts and broker profit. The sim-
+7. Amazon EC2. https://aws.amazon.com/ec2
+ulation results show that the proposed system outper- 8. Amazon Spot Instances. https://aws.amazon.com/blogs/
+forms Dyna algorithm in terms of deadline guarantee, compute/new-amazon-ec2-spot-pricing/
+9. Lin, L., Pan, L., Liu, S.: Methods for improving the avail-
+and the resource rental cost.
+ability of spot instances: A survey. Computers in Ind 141,
+Thereareafewthingsthatcouldbedonetoenhance
+103718 (2022)
+the proposed system. Firstly, the system could be 10. Poola, D., Ramamohanarao, K., Buyya, R.: Fault-tolerant
+expandedtooperateinamulti-cloudenvironment,tak- workflowschedulingusingspotinstancesonclouds.Proce-
+dia Comput Sci 29, 523–533 (2014)
+ing into account the varying prices of different cloud
+11. Vinay, K., Kumar, S.M.D., Raghavendra, S., KR, V.: Cost
+providers, and choosing the most suitable resources to
+and faulttolerant aware resource management for scientific
+minimize costs. Additionally, pricing policies could workflowsusinghybridinstancesonclouds.MultimedTools
+be improved by implementing more accurate pre- Appl 77(8), 10171–10193 (2018)
+12. Zhou,A.C.,He,B.,Liu,C.:Monetarycostoptimizationsfor
+diction techniques and factoring in precise overhead
+hosting workflow-as-a-service in iaas clouds. IEEE Trans
+costs. Cloud Comput 4(1), 34–48 (2016)
+13. Sampaio, A.M., Barbosa, J.G.: Constructing reliable
+Author contributions All authors contributed in conceptu- computing environments on top of amazon ec2 spot
+alization and proposing the algorithm. Bahareh Taghavi con- instances.Algorithms13(8)(2020).https://doi.org/10.3390/
+tributed in implementation and preparing results. The first draft a13080187
+of the manuscript was written by Bahareh Taghavi and Behrooz 14. Piraghaj, S.F., Dastjerdi, A.V., Calheiros, R.N., Buyya, R.:
+Zolfaghari and Saeid Abrishami commented on previous ver- Containercloudsim:Anenvironmentformodelingandsim-
+sions of the manuscript. All authors read and approved the final ulation of containers in cloud data centers. Softw Pract Exp
+manuscript. 47(4), 505–521 (2017)
+123
+
+Journal of Grid Computing (2023) 21:40 Page 19 of 19 40
+15. Ye, L., Xia, Y., Yang, L., Yan, C.: Shws: Stochastic hybrid preemptive tasks. Future Gener Comput Syst 89, 659–669
+workflows dynamic scheduling in cloud container services. (2018)
+IEEE Trans Autom Sci Eng 1–17 (2021) 31. A.Monge, D., Garino, C.G.: Adaptive spot-instances aware
+16. Rajasekar, P., Palanichamy, Y.: Scheduling multiple scien- autoscalingforscientificworkflowsonthecloud.In:InLatin
+tific workflows using containers on iaas cloud. J Ambient American High Performance Computing Conference, 485.
+Intell Humaniz Comput 12, 7621–7636 (2021) Berlin, Heidelberg, pp. 13–27 (2014)
+17. Saeedizade, E., Ashtiani, M.: Ddbws: a dynamic dead- 32. A.Monge,D.,Pacini,E.,Mateos,C.,Alba,E.,Garino,C.G.:
+line and budget-aware workfow scheduling algorithm in Cmi:Anonlinemulti-objectivegeneticautoscalerforscien-
+workfow-as-a-serviceenvironments.JSupercomput77(12), tificandengineeringworkflowsincloudinfrastructureswith
+14525–14564 (2021) unreliable virtual machines. J Netw Comput Appl 149(8),
+18. Tarafdar, A., Karmakar, K., Das, R.K., Khatua, S.: Multi- 102464 (2020)
+criteriaschedulingofscientificworkflowsintheworkflowas 33. Pham, T.-P., Fahringer, T.: Evolutionary multi-objective
+aserviceplatform.ComputElectrEng105,108458(2023). workflow scheduling for volatile resources in the cloud.
+https://doi.org/10.1016/j.compeleceng.2022.108458 IEEE Trans Cloud Comput 1–1 (2020)
+19. Zolfaghari, B., Abrishami, S.: A multi-class workflow 34. Sampaio, A.M., Barbosa, J.G.: Workflow scheduling with
+ensemble management system using on-demand and spot amazon ec2 spot instances: Building reliable compute
+instances in cloud. Future Gener Comput Syst 137, 97–110 environments. International J Mach Learn Comput 10(1),
+(2022) 140–147 (2020)
+20. Liu,J.,Ren,J.,Dai,W.,Zhang,D.,Zhou,P.,Zhang,Y.,Min, 35. Pham,T.-P.,Durillo,J.J.,Fahringer,T.:Predictingworkflow
+G., Najjari, N.: Online multi-workflow scheduling under task execution time in the cloud using a two-stage machine
+uncertain task execution time in iaas clouds. J Syst Archit learning approach. IEEE Trans Cloud Comput 8(1), 256–
+9(3), 1180–1194 (2021) 268 (2020). https://doi.org/10.1109/TCC.2017.2732344
+21. Ma, X., Xu, H., Gao, H., Bian, M.: Real-time multiple- 36. daSilva,R.F.,Juve,G.,Rynge,M.,Deelman,E.,Livny,M.:
+workflow scheduling in cloud environments. IEEE Trans Online task resource consumption prediction for scientific
+Netw Service Manag 18(4) (2021) workflows. Parallel Process Lett 25(03), 1541003 (2015).
+22. Adhikari, M., Koley, S.: Cloud computing: A multi- https://doi.org/10.1142/S0129626415410030
+workflow scheduling algorithm with dynamic reusability. 37. Rodriguez, M.A., Buyya, R.: A taxonomy and survey on
+Arab J Sci Eng 43, 645–660 (2018) schedulingalgorithmsforscientificworkflowsiniaascloud
+23. Chakravarthi, K.K., Shyamala, L.: Topsis inspired budget computing environments. Concurr Comput Pract Experi-
+and deadline aware multi-workflow scheduling for cloud ence 29(8), 4041. https://doi.org/10.1002/cpe.4041
+computing. J Syst Archit 114, 101916 (2021) 38. Abrishami, S., Naghibzadeh, M., Epema, D.H.J.: Cost-
+24. Arabnejad, V., Bubendorfer, K., Ng, B.: Dynamic multi- driven scheduling of grid workflows using partial critical
+workflow scheduling: A deadline and cost-aware approach paths. IEEE Trans Parallel Distrib Syst 23(8), 1400–1414
+forcommercialclouds.FutureGenerComputSyst100,98– (2011)
+108 (2019) 39. Cai, Z., Li, X., Ruiz, R., Li, Q.: Price forecasting for spot
+25. Ma, X., Xu, H., Gao, H., Bian, M.: Real-time multiple- instances in cloud computing. Future Gener Comput Syst
+workflow scheduling in cloud environments. IEEE Trans 79, 38–53 (2018)
+Netw Service Manag 18(4), 4002–4018 (2021). https://doi. 40. Calheiros,R.N.,Ranjan,R.,Beloglazov,A.,Rose,C.A.F.D.,
+org/10.1109/TNSM.2021.3125395 Buyya,R.:Cloudsim:atoolkitformodelingandsimulation
+26. Chen,H.,Zhu,X.,Liu,G.,Pedrycz,W.:Uncertainty-aware ofcloudcomputingenvironmentsandevaluationofresource
+online scheduling for real-time workflows in cloud service provisioningalgorithms.SoftwPractExperience41(1),23–
+environment. IEEE Trans Services Comput 14(4), 1167– 50 (2011)
+1178 (2021). https://doi.org/10.1109/TSC.2018.2866421 41. Mao, M., Humphrey, M.: A performance study on the vm
+27. Gerlach, W., Tang, W., Keegan, K., Harrison, T., Wilke, startup time in the cloud. In: 2012 IEEE Fifth International
+A., Bischof, J., D’Souza, M., et al.: Skyport: container- Conference on Cloud Computing, pp. 423–430 (2012)
+based execution environment management for multi-cloud 42. Pegasusworkflow generator.https://confluence.pegasus.isi.
+scientific workflows. In: 2014 5th International Workshop edu/display/pegasus/WorkflowGenerator
+on Data-Intensive Computing in the Clouds, 79, pp. 25–32
+(2014)
+28. Filgueira,R.,Silva,R.F.D.,Krause,A.,Deelman,E.,Atkin- Publisher’s Note Springer Nature remains neutral with regard
+son,M.:Asterism:Pegasusanddispel4pyhybridworkflows tojurisdictionalclaimsinpublishedmapsandinstitutionalaffil-
+for data-intensive science. In: 2016 Seventh International iations.
+WorkshoponData-IntensiveComputingintheClouds(Dat-
+aCloud), pp. 1–8 (2016) Springer Nature or its licensor (e.g. a society or other partner)
+29. Poola, D., Ramamohanarao, K., Buyya, R.: Enhancing reli- holdsexclusiverightstothisarticleunderapublishingagreement
+abilityofworkflowexecutionusingtaskreplicationandspot with the author(s) or other rightsholder(s); author self-archiving
+instances. ACM Trans Auton Adapt Syst (TAAS) 10(4), 1– of the accepted manuscript version of this article is solely gov-
+21 (2016) erned by the terms of such publishing agreement and applicable
+30. Chen, L., Li, X., Ruizb, R.: Idle block based methods law.
+for cloud workflow scheduling with preemptive and non-
+123

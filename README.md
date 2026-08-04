@@ -154,14 +154,19 @@ scheduler:
 The article is inconsistent about whether initial priority is EST or EFT.
 `nosf.priority.policy=EST` is the documented default because it follows
 Algorithm 3's operational prose; `EFT` is available for sensitivity analysis.
-The default transfer mode remains `COMMON_SHARED_STORAGE`, because the supplied
-task means already include shared-storage I/O. `PAPER_NETWORK` enables explicit
-edge transfers with same-VM transfer equal to zero.
+NOSF has two explicit experiment profiles:
 
-NOSF runs in the common comparison market rather than the paper's historical
-EC2 market. In particular, it inherits `cbmw.ondemand.delay.sec` directly, so
-its default provisioning delay is the same 90 seconds as CBMW. The billing
-quantum and heterogeneous VM types remain configurable independently.
+- `COMMON_MARKET` (default) uses one configurable homogeneous VM type,
+  60-second billing, common shared storage, and one run.
+- `PAPER_ALIGNED` uses the paper's seven Table 2 EC2 types and slowdown
+  factors, hourly billing, 100-Mbps network transfers with zero same-VM edge
+  cost, and 30 independent seeded repetitions.
+
+The paper-aligned profile deliberately retains the common comparison controls:
+the project's three deadline factors, the same workflow population, the shared
+`cbmw.runtime.stddev.ratio`, and `cbmw.ondemand.delay.sec=90` rather than the
+paper's 97-second boot time. Explicit NOSF VM, billing, transfer, or repetition
+properties can still override profile defaults for sensitivity experiments.
 
 ### CEWB Spot Baseline
 
@@ -244,8 +249,9 @@ CEWB remains a reconstructed baseline because its complete reference market
 and implementation are not available here.
 
 - **NOSF** implements the published Algorithms 1-3 and Eqs. 1, 8-18. Its
-  default experiment profile intentionally uses the common CBMW market rather
-  than the paper's historical EC2 configuration.
+  default `COMMON_MARKET` profile supports controlled CBMW comparison, while
+  `PAPER_ALIGNED` restores the paper's VM catalog, hourly billing, network
+  model, and 30-repetition protocol subject to the documented shared controls.
 - **CEWB** implements PCP sub-deadlines, absolute interruption-penalty slack
   classes, shared spot and on-demand physical VM containers, periodic
   provisioning, progress-preserving recovery, and reconstructed pricing.
@@ -273,7 +279,7 @@ experiments remain reproducible:
 | Reserved-container startup | `0 s` separately | It is unknown whether the supplied runtime measurements already include this delay. |
 | Task cores and RAM | `1 core`, `1 MB` | The supplied DAX files do not contain task resource metadata. |
 | NOSF original priority | `EST` | The paper's preprocessing text says EFT while Algorithm 3's operational description says EST; `EFT` is available as a sensitivity policy. |
-| NOSF experiment market | Common CBMW market | The scheduler follows the paper, while VM catalog, billing, and provisioning are controlled comparison parameters. |
+| NOSF experiment profile | `COMMON_MARKET` | Select `PAPER_ALIGNED` for the paper VM catalog, hourly billing, network model, and repetition protocol. |
 | CEWB spot classes, prices, capacities, and reliability | Current documented spot-market defaults | The original experimental market constants are unavailable. |
 
 Every reported experiment must state these values and any JVM-property
@@ -346,6 +352,15 @@ Use JVM properties such as
 `-Dcbmw.algorithms=CBMW`, `-Dcbmw.max.workflows=5`, and
 `-Dcbmw.max.scenarios=1` to restrict smoke or diagnostic runs.
 
+Run the nine NOSF scenarios with the paper-aligned market and 30 repetitions:
+
+```powershell
+java '-Dcbmw.algorithms=NOSF' '-Dnosf.profile=PAPER_ALIGNED' `
+  '-Dcbmw.output.dir=Output/nosf_paper_aligned' `
+  '-Dcbmw.export.details=false' '-Dcbmw.detail.log=false' '-Dcbmw.quiet=true' `
+  -cp "bin;lib/*" org.workflowsim.examples.cbmw.CBMWSimulation
+```
+
 ---
 
 ## Simulation Parameters
@@ -364,6 +379,14 @@ Use JVM properties such as
 | `cbmw.ondemand.memory.per.gb.sec` | `0.0` | Default memory price per GB-second |
 | `cbmw.ondemand.delay.sec` | `90.0` | On-demand provisioning delay (`opd`) |
 | `cbmw.ondemand.min.billing.sec` | `60.0` | Minimum on-demand billing duration |
+| `nosf.profile` | `COMMON_MARKET` | `PAPER_ALIGNED` selects the paper NOSF market and repetition defaults |
+| `cbmw.repetitions` | profile default: `1` or `30` | Independent repetitions of every scenario/algorithm |
+| `cbmw.run.start` | `0` | First exported run number, useful when extending an experiment |
+| `cbmw.seed.base` | `20260716` | Base seed used to derive a deterministic seed per repetition |
+| `cbmw.runtime.resample` | true when repetitions > 1 | Resample task runtimes per run; algorithms share samples within a run |
+| `nosf.billing.quantum.sec` | profile default: `60` or `3600` | Reusable NOSF VM billing quantum |
+| `nosf.transfer.mode` | profile default | `COMMON_SHARED_STORAGE` or `PAPER_NETWORK` |
+| `nosf.vm.type.count` | profile default: `1` or `7` | Explicit value overrides the profile VM catalog |
 
 ---
 
@@ -410,9 +433,11 @@ not full operational expenditure including prepaid reservations.
 Scenario rows are written to both the current algorithm's own `results.csv`
 and the combined comparison `results.csv`. Columns:
 ```
-scenario,load,deadlineClass,algorithm,arrivalScale,tightness,run,total,
+scenario,load,deadlineClass,algorithm,arrivalScale,tightness,run,runSeed,
+nosfProfile,total,
 accepted,rejected,metDeadline,rejectedNegotiation,rejectedPlanning,
-acceptanceRate,deadlineRate,overallSuccessRate,onDemandCost,spotCost,
+acceptanceRate,deadlineRate,overallSuccessRate,countViolation,timeViolation,
+onDemandCost,spotCost,
 estimatedRawCost,offeredPrice,reservedCost,totalCost,makespan,reservedUtil,
 onDemandUsageRatio,spotUsageRatio
 ```
@@ -423,6 +448,8 @@ Workflow admission and success are reported with separate denominators:
 acceptanceRate     = accepted / total submitted
 deadlineRate       = met deadline / accepted
 overallSuccessRate = met deadline / total submitted
+countViolation     = workflows missing deadline / total submitted
+timeViolation      = mean(max(0, completion - deadline) / deadline span)
 rejected           = total submitted - accepted
 ```
 
@@ -433,6 +460,11 @@ hiding workflows rejected before execution.
 Comparison charts use `overallSuccessRate`, so deadline success is measured
 against all submitted workflows. The conditional `deadlineRate` remains in CSV
 outputs for admission and execution diagnostics.
+
+Aggregate CSVs report the number of repetitions and the mean, minimum, maximum,
+and sample standard deviation for total cost, on-demand VM utilization, count
+violation, and time violation. `task_execution.csv` includes the run, seed,
+profile, sampled runtime, and actual NOSF VM type/name for auditability.
 
 ### Detailed event log
 

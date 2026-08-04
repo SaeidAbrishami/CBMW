@@ -45,6 +45,8 @@ public class TaskExecutionRecord {
     private String status = "";
     private String schedulingReason = "";
     private int interruptionCount;
+    private double actualVmPricePerSecond = Double.NaN;
+    private String actualVmName = "";
 
     public TaskExecutionRecord(int taskId, String taskName, int workflowId,
                                String workflowPath, double workflowArrivalTime,
@@ -126,6 +128,8 @@ public class TaskExecutionRecord {
     public String getStatus() { return status; }
     public String getSchedulingReason() { return schedulingReason; }
     public int getInterruptionCount() { return interruptionCount; }
+    public double getActualVmPricePerSecond() { return actualVmPricePerSecond; }
+    public String getActualVmName() { return actualVmName; }
     public List<Integer> getParentIds() { return Collections.unmodifiableList(parentIds); }
 
     public double getWaitingTime() {
@@ -190,6 +194,16 @@ public class TaskExecutionRecord {
 
     public void markInterrupted() {
         interruptionCount++;
+    }
+
+    public void setActualVmPricePerSecond(double price) {
+        if (Double.isFinite(price) && price >= 0.0) {
+            actualVmPricePerSecond = price;
+        }
+    }
+
+    public void setActualVmName(String name) {
+        actualVmName = name == null ? "" : name;
     }
 
     private static double finiteDifference(double left, double right) {

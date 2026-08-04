@@ -30,8 +30,8 @@ public class NOSFBroker extends AbstractWorkflowBroker {
     /** One source of truth: NOSF uses the same provisioning delay as CBMW. */
     static final double PROVISIONING_DELAY =
             HybridVmPool.ON_DEMAND_PROVISIONING_DELAY;
-    static final double BILLING_QUANTUM = readPositive(
-            "nosf.billing.quantum.sec", 60.0);
+    static final double BILLING_QUANTUM =
+            NOSFConfiguration.billingQuantumSeconds();
 
     private final NOSFWorkflowPlanner workflowPlanner = new NOSFWorkflowPlanner();
     private final NOSFResourceSelector selector =
@@ -44,10 +44,11 @@ public class NOSFBroker extends AbstractWorkflowBroker {
     public NOSFBroker(String name, double tightness) throws Exception {
         super(name, tightness);
         CBMWLogger.logf("NOSF-CONFIG",
-                "profile=COMMON_MARKET types=%d provisioningDelay=%.1f"
+                "profile=%s types=%d provisioningDelay=%.1f"
                         + " billingQuantum=%.1f sigmaRatio=%.4f priority=%s"
                         + " transferMode=%s bandwidthMbps=%.1f",
-                vmTypes.size(), PROVISIONING_DELAY, BILLING_QUANTUM,
+                NOSFConfiguration.profileName(), vmTypes.size(),
+                PROVISIONING_DELAY, BILLING_QUANTUM,
                 NOSFRuntimeModel.STDDEV_RATIO,
                 workflowPlanner.getPriorityPolicy().name(),
                 workflowPlanner.getTransferModel().getMode().name(),
@@ -250,6 +251,8 @@ public class NOSFBroker extends AbstractWorkflowBroker {
                 + state.type.runtime(workflow.getEstimatedExecTime(taskId));
         state.vm.setState(WorkflowSimTags.VM_STATUS_BUSY);
         vmPool.taskStarted(state.vm.getId(), taskId);
+        accounting.markTaskConfiguration(taskId, state.type.name,
+                state.type.pricePerSecond);
         accounting.markTaskSubmitted(job, "On-Demand");
         accounting.snapshotUtilization(vmPool);
         schedule(getId(), queueDelay + actualRuntime,

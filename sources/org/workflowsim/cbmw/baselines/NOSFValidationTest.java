@@ -4,10 +4,13 @@ import java.util.Arrays;
 import java.util.Collections;
 import org.cloudbus.cloudsim.CloudletSchedulerSpaceShared;
 import org.workflowsim.CondorVM;
+import org.workflowsim.FileItem;
 import org.workflowsim.Job;
 import org.workflowsim.Task;
+import org.workflowsim.cbmw.ExperimentRunContext;
 import org.workflowsim.cbmw.HybridVmPool;
 import org.workflowsim.cbmw.WorkflowRecord;
+import org.workflowsim.utils.Parameters;
 
 /** Fast equation and invariant tests for paper-faithful NOSF. */
 public final class NOSFValidationTest {
@@ -15,12 +18,61 @@ public final class NOSFValidationTest {
 
     public static void main(String[] args) {
         testRuntimeWeight();
+        testProfileDefaults();
+        testPaperVmTypes();
         testSharedProvisioningDelay();
         testPaperResourceSelection();
         testOneWaitingTaskAndBootBilling();
+        testPaperNetworkTransfer();
+        testReplicateRuntimeSampling();
         testPcpPreprocessingAndFeedback();
         testFeedbackTouchesOnlyReadyImmediateSuccessors();
         System.out.println("NOSF paper equations and invariants: PASS");
+    }
+
+    private static void testProfileDefaults() {
+        String previousProfile = System.getProperty("nosf.profile");
+        String previousBilling = System.getProperty("nosf.billing.quantum.sec");
+        String previousTransfer = System.getProperty("nosf.transfer.mode");
+        String previousTypeCount = System.getProperty("nosf.vm.type.count");
+        try {
+            System.setProperty("nosf.profile", "PAPER_ALIGNED");
+            System.clearProperty("nosf.billing.quantum.sec");
+            System.clearProperty("nosf.transfer.mode");
+            System.clearProperty("nosf.vm.type.count");
+            require(NOSFConfiguration.defaultRepetitions() == 30,
+                    "paper profile must default to 30 repetitions");
+            require(close(NOSFConfiguration.billingQuantumSeconds(), 3600.0),
+                    "paper profile must default to hourly billing");
+            require("PAPER_NETWORK".equals(NOSFConfiguration.defaultTransferMode()),
+                    "paper profile must default to paper network transfers");
+            require(NOSFVmType.configuredTypes().size() == 7,
+                    "paper profile must default to seven VM types");
+        } finally {
+            restoreProperty("nosf.profile", previousProfile);
+            restoreProperty("nosf.billing.quantum.sec", previousBilling);
+            restoreProperty("nosf.transfer.mode", previousTransfer);
+            restoreProperty("nosf.vm.type.count", previousTypeCount);
+        }
+    }
+
+    private static void testPaperVmTypes() {
+        java.util.List<NOSFVmType> types = NOSFVmType.paperTypes();
+        require(types.size() == 7, "paper profile must expose seven VM rankings");
+        String[] names = {"m2.4xlarge", "m2.2xlarge", "m1.xlarge",
+                "m2.xlarge", "m1.large", "m1.medium", "m1.small"};
+        int[] cores = {8, 4, 4, 2, 2, 1, 1};
+        double[] hourly = {0.980, 0.490, 0.350, 0.245, 0.175, 0.087, 0.044};
+        double[] weights = {1.0, 1.2, 1.3, 1.4, 1.6, 1.8, 2.0};
+        for (int i = 0; i < types.size(); i++) {
+            NOSFVmType type = types.get(i);
+            require(names[i].equals(type.name) && cores[i] == type.cores,
+                    "paper VM identity or vCPU count differs at index " + i);
+            require(close(type.pricePerSecond * 3600.0, hourly[i]),
+                    "paper VM hourly price differs at index " + i);
+            require(close(type.runtime(100.0), 100.0 * weights[i]),
+                    "paper VM processing weight differs at index " + i);
+        }
     }
 
     private static void testRuntimeWeight() {
@@ -82,6 +134,43 @@ public final class NOSFValidationTest {
         state.waiting = new Job(77, 1000);
         require(!state.canAcceptWaitingTask(),
                 "VM with a waiting task must reject another waiting task");
+
+        NOSFVmState paperBilling = new NOSFVmState(vm(8, type), type, 0.0, 90.0);
+        require(close(paperBilling.billedCost(100.0, 3600.0), 36.0),
+                "paper billing must round a partial hour to 3600 seconds");
+        require(close(paperBilling.currentBillingBoundary(100.0, 3600.0), 3600.0),
+                "paper VM must remain reusable until its hourly boundary");
+    }
+
+    private static void testPaperNetworkTransfer() {
+        Task parent = task(20, 1.0);
+        Task child = task(21, 1.0);
+        FileItem output = new FileItem("shared.dat", 12_500_000.0);
+        output.setType(Parameters.FileType.OUTPUT);
+        FileItem input = new FileItem("shared.dat", 12_500_000.0);
+        input.setType(Parameters.FileType.INPUT);
+        parent.addFile(output);
+        child.addFile(input);
+        NOSFTransferModel transfer = new NOSFTransferModel(
+                NOSFTransferModel.Mode.PAPER_NETWORK, 100.0);
+        require(close(transfer.delay(parent, child, 1, 1), 0.0),
+                "same-VM paper transfer must be zero");
+        require(close(transfer.delay(parent, child, 1, 2), 1.0),
+                "cross-VM paper transfer must use bytes*8/bandwidth");
+    }
+
+    private static void testReplicateRuntimeSampling() {
+        long seed0 = ExperimentRunContext.seedForRun(1234L, 0);
+        long seed1 = ExperimentRunContext.seedForRun(1234L, 1);
+        ExperimentRunContext.configure(0, seed0, true, "PAPER_ALIGNED");
+        double first = ExperimentRunContext.sampleRuntime("wf.xml", 7, 100.0);
+        double repeated = ExperimentRunContext.sampleRuntime("wf.xml", 7, 100.0);
+        require(close(first, repeated),
+                "same run/task identity must reproduce the same runtime sample");
+        ExperimentRunContext.configure(1, seed1, true, "PAPER_ALIGNED");
+        double secondRun = ExperimentRunContext.sampleRuntime("wf.xml", 7, 100.0);
+        require(!close(first, secondRun),
+                "independent replicate seeds must change runtime samples");
     }
 
     private static void testPcpPreprocessingAndFeedback() {
@@ -166,6 +255,11 @@ public final class NOSFValidationTest {
 
     private static boolean close(double a, double b) {
         return Math.abs(a - b) < 1e-7;
+    }
+
+    private static void restoreProperty(String name, String value) {
+        if (value == null) System.clearProperty(name);
+        else System.setProperty(name, value);
     }
 
     private static void require(boolean condition, String message) {

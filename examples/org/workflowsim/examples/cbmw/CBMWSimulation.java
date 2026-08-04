@@ -32,6 +32,7 @@ import org.workflowsim.cbmw.CBMWBroker;
 import org.workflowsim.cbmw.CBMWDetailedResultExporter;
 import org.workflowsim.cbmw.CBMWLogger;
 import org.workflowsim.cbmw.CBMWResultCollector;
+import org.workflowsim.cbmw.ExperimentRunContext;
 import org.workflowsim.cbmw.HybridVmPool;
 import org.workflowsim.cbmw.PaperRuntimeModel;
 import org.workflowsim.cbmw.WorkflowArrivalData;
@@ -40,6 +41,7 @@ import org.workflowsim.cbmw.baselines.CEWBBroker;
 import org.workflowsim.cbmw.baselines.CEWBPolicyMode;
 import org.workflowsim.cbmw.baselines.DynamicGreedyBroker;
 import org.workflowsim.cbmw.baselines.NOSFBroker;
+import org.workflowsim.cbmw.baselines.NOSFConfiguration;
 import org.workflowsim.cbmw.baselines.StaticGreedyBroker;
 import org.workflowsim.utils.ClusteringParameters;
 import org.workflowsim.utils.OverheadParameters;
@@ -94,6 +96,15 @@ public class CBMWSimulation {
             "cbmw.max.workflows", 50);
     private static final boolean QUIET = Boolean.parseBoolean(
             System.getProperty("cbmw.quiet", "false"));
+    private static final int REPETITIONS = Integer.getInteger(
+            "cbmw.repetitions", NOSFConfiguration.defaultRepetitions());
+    private static final int RUN_START = Integer.getInteger(
+            "cbmw.run.start", 0);
+    private static final long BASE_SEED = Long.getLong(
+            "cbmw.seed.base", 20260716L);
+    private static final boolean RESAMPLE_RUNTIMES = Boolean.parseBoolean(
+            System.getProperty("cbmw.runtime.resample",
+                    Boolean.toString(REPETITIONS > 1)));
 
     private static final DeadlineClass[] DEADLINES = {
             new DeadlineClass("tight", 1.2),
@@ -112,6 +123,12 @@ public class CBMWSimulation {
     };
 
     public static void main(String[] args) throws Exception {
+        if (REPETITIONS <= 0) {
+            throw new IllegalArgumentException("cbmw.repetitions must be positive");
+        }
+        if (RUN_START < 0) {
+            throw new IllegalArgumentException("cbmw.run.start must be non-negative");
+        }
         if (QUIET) Log.disable();
         ensureDir(new File(OUTPUT_ROOT));
         ensureDir(new File(ALGORITHM_OUTPUT_ROOT));
@@ -130,6 +147,11 @@ public class CBMWSimulation {
         System.out.println("[run] Workflow source: "
                 + new File(WORKFLOW_DIR).getAbsolutePath());
         System.out.println("[run] Workflow manifest: " + POISSON_FILE);
+        System.out.println("[run] NOSF profile: " + NOSFConfiguration.profileName());
+        System.out.println("[run] Repetitions: " + REPETITIONS
+                + " starting at run " + RUN_START
+                + " baseSeed=" + BASE_SEED
+                + " resampleRuntimes=" + RESAMPLE_RUNTIMES);
         if (ALGORITHMS.contains("CBMW")) {
             double multiplier = PaperRuntimeModel.conservativeEstimate(1.0);
             System.out.println(String.format(Locale.US,
@@ -170,38 +192,43 @@ public class CBMWSimulation {
                 double simDuration = arrivals.get(arrivals.size() - 1).getArrivalTime()
                         + SIM_BUFFER_SECS;
 
-                for (String algo : ALGORITHMS) {
-                    File algorithmDir = algorithmOutputDir(algo);
-                    CBMWResultCollector.ScenarioMetrics row =
-                            runScenario(algo, load, deadline, arrivals, simDuration,
-                                    algorithmDir);
+                for (int replicate = 0; replicate < REPETITIONS; replicate++) {
+                    int run = RUN_START + replicate;
+                    long runSeed = ExperimentRunContext.seedForRun(BASE_SEED, run);
+                    for (String algo : ALGORITHMS) {
+                        File algorithmDir = algorithmOutputDir(algo);
+                        CBMWResultCollector.ScenarioMetrics row =
+                                runScenario(algo, load, deadline, arrivals, simDuration,
+                                        algorithmDir, run, runSeed);
 
-                    comparisonCsv.append(CBMWResultCollector.toCsvRow(row)).append("\n");
-                    comparisonMetrics.add(row);
-                    saveCsv(COMPARISON_CSV_OUTPUT, comparisonCsv.toString());
-                    saveCsv(COMPARISON_AGGREGATE_CSV_OUTPUT,
-                            buildAggregateCsv(comparisonMetrics));
+                        comparisonCsv.append(CBMWResultCollector.toCsvRow(row)).append("\n");
+                        comparisonMetrics.add(row);
+                        saveCsv(COMPARISON_CSV_OUTPUT, comparisonCsv.toString());
+                        saveCsv(COMPARISON_AGGREGATE_CSV_OUTPUT,
+                                buildAggregateCsv(comparisonMetrics));
 
-                    StringBuilder algoCsv = algorithmCsv.computeIfAbsent(algo,
-                            unused -> new StringBuilder(CBMWResultCollector.csvHeader())
-                                    .append("\n"));
-                    List<CBMWResultCollector.ScenarioMetrics> algoMetrics =
-                            algorithmMetrics.computeIfAbsent(algo, unused -> new ArrayList<>());
-                    algoCsv.append(CBMWResultCollector.toCsvRow(row)).append("\n");
-                    algoMetrics.add(row);
-                    saveCsv(new File(algorithmDir, "results.csv").getPath(),
-                            algoCsv.toString());
-                    saveCsv(new File(algorithmDir, "results_aggregate.csv").getPath(),
-                            buildAggregateCsv(algoMetrics));
+                        StringBuilder algoCsv = algorithmCsv.computeIfAbsent(algo,
+                                unused -> new StringBuilder(CBMWResultCollector.csvHeader())
+                                        .append("\n"));
+                        List<CBMWResultCollector.ScenarioMetrics> algoMetrics =
+                                algorithmMetrics.computeIfAbsent(algo,
+                                        unused -> new ArrayList<>());
+                        algoCsv.append(CBMWResultCollector.toCsvRow(row)).append("\n");
+                        algoMetrics.add(row);
+                        saveCsv(new File(algorithmDir, "results.csv").getPath(),
+                                algoCsv.toString());
+                        saveCsv(new File(algorithmDir, "results_aggregate.csv").getPath(),
+                                buildAggregateCsv(algoMetrics));
 
-                    System.out.println("Completed: " + load.name + " "
-                            + deadline.name + " " + algo);
-                    completedScenarios++;
-                    if (completedScenarios >= MAX_SCENARIOS) {
-                        System.out.println("[run] Stopped after " + completedScenarios
-                                + " scenario(s) because cbmw.max.scenarios="
-                                + MAX_SCENARIOS);
-                        break scenarioLoop;
+                        System.out.println("Completed: " + load.name + " "
+                                + deadline.name + " " + algo + " run=" + run);
+                        completedScenarios++;
+                        if (completedScenarios >= MAX_SCENARIOS) {
+                            System.out.println("[run] Stopped after " + completedScenarios
+                                    + " scenario run(s) because cbmw.max.scenarios="
+                                    + MAX_SCENARIOS);
+                            break scenarioLoop;
+                        }
                     }
                 }
             }
@@ -224,8 +251,12 @@ public class CBMWSimulation {
                                       DeadlineClass deadline,
                                       List<WorkflowArrivalData> arrivals,
                                       double simDuration,
-                                      File algorithmDir) throws Exception {
+                                      File algorithmDir,
+                                      int run,
+                                      long runSeed) throws Exception {
         ensureDir(algorithmDir);
+        ExperimentRunContext.configure(run, runSeed, RESAMPLE_RUNTIMES,
+                NOSFConfiguration.profileName());
         Parameters.setTightness(deadline.tightness);
         Parameters.setSimDuration(simDuration);
         Parameters.setCostModel(Parameters.CostModel.VM);
@@ -247,6 +278,16 @@ public class CBMWSimulation {
         WorkflowPlanner planner = new WorkflowPlanner("planner_0", 1);
         WorkflowEngine  engine  = planner.getWorkflowEngine();
 
+        String scenario = load.name + "_" + deadline.name;
+        String label = scenario + "_" + algorithm + "_t" + deadline.tightness
+                + "_r" + run;
+        String logFile = new File(algorithmDir, label + "_detail.log").getPath();
+        if (DETAIL_LOG) {
+            CBMWLogger.init(logFile);
+        } else {
+            CBMWLogger.disable(logFile);
+        }
+
         AbstractWorkflowBroker broker = createBroker(algorithm, deadline.tightness);
         engine.replaceScheduler(broker);
         broker.submitVmList(broker.getVmPool().getReservedVms());
@@ -259,14 +300,6 @@ public class CBMWSimulation {
         }
         broker.setSimEndTime(simDuration);
 
-        String scenario = load.name + "_" + deadline.name;
-        String label   = scenario + "_" + algorithm + "_t" + deadline.tightness;
-        String logFile = new File(algorithmDir, label + "_detail.log").getPath();
-        if (DETAIL_LOG) {
-            CBMWLogger.init(logFile);
-        } else {
-            CBMWLogger.disable(logFile);
-        }
         CloudSim.startSimulation();
         CloudSim.stopSimulation();
         CBMWLogger.close();
@@ -278,7 +311,8 @@ public class CBMWSimulation {
         collector.printReport(label, algorithm);
         CBMWResultCollector.ScenarioMetrics metrics = collector.toScenarioMetrics(
                 scenario, load.name, deadline.name,
-                algorithm, load.arrivalScale, deadline.tightness, 0,
+                algorithm, load.arrivalScale, deadline.tightness, run,
+                runSeed, NOSFConfiguration.profileName(),
                 broker.getAccounting().getOnDemandUsageRatio(),
                 broker.getAccounting().getSpotUsageRatio());
 
@@ -288,6 +322,9 @@ public class CBMWSimulation {
                 broker.getVmPool(),
                 algorithm,
                 scenario,
+                run,
+                runSeed,
+                NOSFConfiguration.profileName(),
                 deadline.tightness,
                 simDuration);
         detailedExporter.appendTaskCsv(
@@ -410,15 +447,17 @@ public class CBMWSimulation {
         Map<String, Aggregate> groups = new LinkedHashMap<>();
         for (CBMWResultCollector.ScenarioMetrics row : rows) {
             String key = row.scenario + "|" + row.load + "|" + row.deadlineClass
-                    + "|" + row.algorithm;
+                    + "|" + row.algorithm + "|" + row.nosfProfile;
             groups.computeIfAbsent(key, unused -> new Aggregate(row)).add(row);
         }
 
         StringBuilder csv = new StringBuilder();
-        csv.append("scenario,load,deadlineClass,algorithm,arrivalScale,tightness,runs,")
+        csv.append("scenario,load,deadlineClass,algorithm,nosfProfile,"
+                        + "arrivalScale,tightness,runs,")
                 .append("avgTotal,avgAccepted,avgRejected,avgMetDeadline,")
                 .append("avgRejectedNegotiation,avgRejectedPlanning,")
                 .append("avgAcceptanceRate,avgDeadlineRate,avgOverallSuccessRate,")
+                .append("avgCountViolation,avgTimeViolation,")
                 .append("avgOnDemandCost,")
                 .append("avgSpotCost,avgEstimatedRawCost,avgOfferedPrice,")
                 .append("avgBrokerRevenue,avgBrokerProfit,")
@@ -427,7 +466,12 @@ public class CBMWSimulation {
                 .append("avgSimulationDurationHours,")
                 .append("avgReservedUtil,avgOnDemandUsageRatio,avgSpotUsageRatio,")
                 .append("avgProvisionedOnDemandVms,avgOnDemandVmUtilization,")
-                .append("avgDeadlineRiskTasks\n");
+                .append("avgDeadlineRiskTasks,")
+                .append("minTotalCost,maxTotalCost,stddevTotalCost,")
+                .append("minOnDemandVmUtilization,maxOnDemandVmUtilization,")
+                .append("stddevOnDemandVmUtilization,")
+                .append("minCountViolation,maxCountViolation,stddevCountViolation,")
+                .append("minTimeViolation,maxTimeViolation,stddevTimeViolation\n");
         for (Aggregate aggregate : groups.values()) {
             csv.append(aggregate.toCsvRow()).append("\n");
         }
@@ -493,6 +537,7 @@ public class CBMWSimulation {
         private final String load;
         private final String deadlineClass;
         private final String algorithm;
+        private final String nosfProfile;
         private final double arrivalScale;
         private final double tightness;
         private int runs;
@@ -505,6 +550,8 @@ public class CBMWSimulation {
         private double acceptanceRate;
         private double deadlineRate;
         private double overallSuccessRate;
+        private double countViolation;
+        private double timeViolation;
         private double onDemandCost;
         private double spotCost;
         private double estimatedRawCost;
@@ -523,12 +570,17 @@ public class CBMWSimulation {
         private double provisionedOnDemandVms;
         private double onDemandVmUtilization;
         private double deadlineRiskTasks;
+        private final RunningStats totalCostStats = new RunningStats();
+        private final RunningStats onDemandUtilStats = new RunningStats();
+        private final RunningStats countViolationStats = new RunningStats();
+        private final RunningStats timeViolationStats = new RunningStats();
 
         Aggregate(CBMWResultCollector.ScenarioMetrics first) {
             this.scenario = first.scenario;
             this.load = first.load;
             this.deadlineClass = first.deadlineClass;
             this.algorithm = first.algorithm;
+            this.nosfProfile = first.nosfProfile;
             this.arrivalScale = first.arrivalScale;
             this.tightness = first.tightness;
         }
@@ -544,6 +596,8 @@ public class CBMWSimulation {
             acceptanceRate += row.acceptanceRate;
             deadlineRate += row.deadlineRate;
             overallSuccessRate += row.overallSuccessRate;
+            countViolation += row.countViolation;
+            timeViolation += row.timeViolation;
             onDemandCost += row.onDemandCost;
             spotCost += row.spotCost;
             estimatedRawCost += row.estimatedRawCost;
@@ -562,29 +616,75 @@ public class CBMWSimulation {
             provisionedOnDemandVms += row.provisionedOnDemandVms;
             onDemandVmUtilization += row.onDemandVmUtilization;
             deadlineRiskTasks += row.deadlineRiskTasks;
+            totalCostStats.add(row.totalCost);
+            onDemandUtilStats.add(row.onDemandVmUtilization);
+            countViolationStats.add(row.countViolation);
+            timeViolationStats.add(row.timeViolation);
         }
 
         String toCsvRow() {
-            return String.format(Locale.US,
-                    "%s,%s,%s,%s,%.4f,%.1f,%d,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,"
-                            + "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,"
-                            + "%.4f,%.4f,%.2f,%.4f,%.2f,%.2f,%.2f,%.4f,%.4f,%.4f,%.4f,"
-                            + "%.4f,%.4f,%.2f",
-                    scenario, load, deadlineClass, algorithm, arrivalScale,
-                    tightness, runs, total / runs, accepted / runs,
-                    rejected / runs, metDeadline / runs,
-                    rejectedNegotiation / runs, rejectedPlanning / runs,
-                    acceptanceRate / runs, deadlineRate / runs,
-                    overallSuccessRate / runs,
-                    onDemandCost / runs, spotCost / runs,
-                    estimatedRawCost / runs, offeredPrice / runs,
-                    brokerRevenue / runs, brokerProfit / runs,
-                    reservedCost / runs, totalCost / runs, makespan / runs,
-                    simulationStartTime / runs, simulationDuration / runs,
-                    simulationDurationHours / runs,
-                    reservedUtil / runs, onDemandUsageRatio / runs,
-                    spotUsageRatio / runs, provisionedOnDemandVms / runs,
-                    onDemandVmUtilization / runs, deadlineRiskTasks / runs);
+            return String.join(",",
+                    scenario, load, deadlineClass, algorithm, nosfProfile,
+                    f4(arrivalScale), f1(tightness), Integer.toString(runs),
+                    f2(total / runs), f2(accepted / runs), f2(rejected / runs),
+                    f2(metDeadline / runs), f2(rejectedNegotiation / runs),
+                    f2(rejectedPlanning / runs), f4(acceptanceRate / runs),
+                    f4(deadlineRate / runs), f4(overallSuccessRate / runs),
+                    f4(countViolation / runs), f4(timeViolation / runs),
+                    f4(onDemandCost / runs), f4(spotCost / runs),
+                    f4(estimatedRawCost / runs), f4(offeredPrice / runs),
+                    f4(brokerRevenue / runs), f4(brokerProfit / runs),
+                    f2(reservedCost / runs), f4(totalCost / runs),
+                    f2(makespan / runs), f2(simulationStartTime / runs),
+                    f2(simulationDuration / runs),
+                    f4(simulationDurationHours / runs), f4(reservedUtil / runs),
+                    f4(onDemandUsageRatio / runs), f4(spotUsageRatio / runs),
+                    f4(provisionedOnDemandVms / runs),
+                    f4(onDemandVmUtilization / runs), f2(deadlineRiskTasks / runs),
+                    f4(totalCostStats.min()), f4(totalCostStats.max()),
+                    f4(totalCostStats.stddev()), f4(onDemandUtilStats.min()),
+                    f4(onDemandUtilStats.max()), f4(onDemandUtilStats.stddev()),
+                    f4(countViolationStats.min()), f4(countViolationStats.max()),
+                    f4(countViolationStats.stddev()), f4(timeViolationStats.min()),
+                    f4(timeViolationStats.max()), f4(timeViolationStats.stddev()));
+        }
+    }
+
+    private static String f1(double value) {
+        return String.format(Locale.US, "%.1f", value);
+    }
+
+    private static String f2(double value) {
+        return String.format(Locale.US, "%.2f", value);
+    }
+
+    private static String f4(double value) {
+        return String.format(Locale.US, "%.4f", value);
+    }
+
+    private static final class RunningStats {
+        private int count;
+        private double mean;
+        private double sumSquaredDeviation;
+        private double min = Double.POSITIVE_INFINITY;
+        private double max = Double.NEGATIVE_INFINITY;
+
+        void add(double value) {
+            count++;
+            double delta = value - mean;
+            mean += delta / count;
+            sumSquaredDeviation += delta * (value - mean);
+            min = Math.min(min, value);
+            max = Math.max(max, value);
+        }
+
+        double min() { return count == 0 ? 0.0 : min; }
+
+        double max() { return count == 0 ? 0.0 : max; }
+
+        double stddev() {
+            return count < 2 ? 0.0
+                    : Math.sqrt(sumSquaredDeviation / (count - 1));
         }
     }
 

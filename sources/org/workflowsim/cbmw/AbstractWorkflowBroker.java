@@ -459,7 +459,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         }
         wfr.setRejectionReason("");
         finalizeWorkflowNegotiation(wfr);
-        applyPerturbedRuntimes(data.getDaxPath(), tasks);
+        applyActualRuntimes(data.getDaxPath(), wfr, tasks);
         accounting.registerWorkflowTasks(wfr, tasks, tightness, true, "ACCEPTED");
 
         List<Job> jobs = wrapTasksAsJobs(tasks, wfr);
@@ -516,7 +516,17 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
      * matching .txt file. One runtime (seconds) per line, in job-declaration order.
      * If no .txt file exists the nominal runtimes from the XML are kept as-is.
      */
-    private void applyPerturbedRuntimes(String daxPath, List<Task> tasks) {
+    private void applyActualRuntimes(String daxPath, WorkflowRecord workflow,
+                                     List<Task> tasks) {
+        if (ExperimentRunContext.shouldResampleRuntimes()) {
+            for (Task task : tasks) {
+                double nominal = workflow.getNominalExecTime(task.getCloudletId());
+                double sampled = ExperimentRunContext.sampleRuntime(
+                        daxPath, task.getCloudletId(), nominal);
+                task.setCloudletLength((long) Math.max(sampled * 1000.0, 100.0));
+            }
+            return;
+        }
         String txtPath = daxPath.replaceAll("\\.xml$", ".txt");
         File txtFile = new File(txtPath);
         if (!txtFile.exists()) return;

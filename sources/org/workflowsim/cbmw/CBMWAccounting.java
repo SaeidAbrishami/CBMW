@@ -100,6 +100,20 @@ public class CBMWAccounting {
         else runningReservedTasks.add(taskId);
     }
 
+    public void markTaskPrice(int taskId, double pricePerSecond) {
+        TaskExecutionRecord record = taskRecords.get(taskId);
+        if (record != null) record.setActualVmPricePerSecond(pricePerSecond);
+    }
+
+    public void markTaskConfiguration(int taskId, String vmName,
+                                      double pricePerSecond) {
+        TaskExecutionRecord record = taskRecords.get(taskId);
+        if (record != null) {
+            record.setActualVmName(vmName);
+            record.setActualVmPricePerSecond(pricePerSecond);
+        }
+    }
+
     public void markTaskFinished(Cloudlet cl, boolean onDemand) {
         markTaskFinished(cl, onDemand ? "On-Demand" : "Reserved");
     }

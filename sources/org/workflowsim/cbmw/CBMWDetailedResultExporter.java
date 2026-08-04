@@ -24,6 +24,9 @@ public class CBMWDetailedResultExporter {
     private final HybridVmPool vmPool;
     private final String algorithm;
     private final String scenario;
+    private final int run;
+    private final long runSeed;
+    private final String experimentProfile;
     private final double alpha;
     private final double simDuration;
 
@@ -32,6 +35,9 @@ public class CBMWDetailedResultExporter {
                                       HybridVmPool vmPool,
                                       String algorithm,
                                       String scenario,
+                                      int run,
+                                      long runSeed,
+                                      String experimentProfile,
                                       double alpha,
                                       double simDuration) {
         this.workflows = workflows;
@@ -39,6 +45,9 @@ public class CBMWDetailedResultExporter {
         this.vmPool = vmPool;
         this.algorithm = algorithm;
         this.scenario = scenario;
+        this.run = run;
+        this.runSeed = runSeed;
+        this.experimentProfile = experimentProfile;
         this.alpha = alpha;
         this.simDuration = simDuration;
     }
@@ -322,7 +331,8 @@ public class CBMWDetailedResultExporter {
     }
 
     private List<Object> taskHeader() {
-        return row("Algorithm", "Scenario", "Workflow ID", "Workflow",
+        return row("Algorithm", "Scenario", "Run", "Seed", "NOSF Profile",
+                "Workflow ID", "Workflow",
                 "Workflow Disposition", "Task ID", "Task Name", "Parents ID",
                 "Task Cores", "Task RAM (MB)", "Resource Requirement Source",
                 "On-Demand Price Per Second",
@@ -332,7 +342,7 @@ public class CBMWDetailedResultExporter {
                 "EST (s)", "EFT (s)", "LST (s)", "LFT (s)",
                 "Scheduled Start SST (s)", "SubDeadline (s)",
                 "Planned VM ID", "Planned VM Type", "Actual VM ID",
-                "Actual VM Type", "Provision Order Time (s)",
+                "Actual VM Type", "Actual VM Name", "Provision Order Time (s)",
                 "Container Ready Time (s)", "Provisioning Delay (s)",
                 "Dependency Ready Time (s)",
                 "Scheduler Observed Ready Time (s)",
@@ -346,14 +356,17 @@ public class CBMWDetailedResultExporter {
 
     private List<Object> taskRow(TaskExecutionRecord record) {
         boolean submitted = Double.isFinite(record.getSubmitTime());
-        return row(algorithm, scenario, record.getWorkflowId(),
+        return row(algorithm, scenario, run, runSeed, experimentProfile,
+                record.getWorkflowId(),
                 normalizePath(record.getWorkflowPath()),
                 record.getWorkflowDisposition(), formatTaskId(record.getTaskId()),
                 emptyToUnknown(record.getTaskName()),
                 formatParentIds(record.getParentIds()), record.getTaskCores(),
                 record.getTaskRamMb(), record.getResourceRequirementSource(),
-                fmtRate(HybridVmPool.onDemandPricePerSecond(
-                        record.getTaskCores(), record.getTaskRamMb())),
+                fmtRate(Double.isFinite(record.getActualVmPricePerSecond())
+                        ? record.getActualVmPricePerSecond()
+                        : HybridVmPool.onDemandPricePerSecond(
+                                record.getTaskCores(), record.getTaskRamMb())),
                 fmtPrecise(record.getNominalRuntime()),
                 fmtPrecise(record.getRuntimeStddev()),
                 fmtPrecise(record.getConservativeRuntime()),
@@ -368,6 +381,7 @@ public class CBMWDetailedResultExporter {
                 record.getPlannedVmId() == null ? "" : record.getPlannedVmId(),
                 record.getPlannedVmType(), submitted ? record.getVmId() : "",
                 submitted ? record.getVmType() : "",
+                submitted ? record.getActualVmName() : "",
                 fmtPrecise(record.getProvisioningOrderTime()),
                 fmtPrecise(record.getContainerReadyTime()),
                 fmtPrecise(record.getProvisioningDelay()),

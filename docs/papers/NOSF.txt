@@ -1,0 +1,2110 @@
+This article has been accepted for publication in a future issue of this journal, but has not been fully edited. Content may change prior to final publication. Citation information: DOI 10.1109/TCC.2019.2906300, IEEE
+Transactions on Cloud Computing
+JOURNALOFLATEXCLASSFILES,VOL.*,NO.*,AUGUST* 1
+Online Multi-Workflow Scheduling under
+Uncertain Task Execution Time in IaaS Clouds
+Jiagang Liu, Ju Ren, Member, IEEE, Wei Dai, Deyu Zhang, Member, IEEE, Pude Zhou,
+Yaoxue Zhang, Senior Member, IEEE, Geyong Min, Member, IEEE, Noushin Najjari
+Abstract— Cloud has become an important platform for executing numerous deadline-constrained scientific applications generally
+represented by workflow models. It provides scientists a simple and cost-efficient method of running workflows on their rental Virtual
+Machines (VMs) anytime and anywhere. Since pay-as-you-go is a dominating pricing solution in clouds, extensive research efforts
+have been devoted to minimizing the monetary cost of executing workflows by designing tailored VM allocation mechanisms. However,
+most of them assume that the task execution time in clouds is static and can be estimated in advance, which is impractical in real
+scenarios due to performance fluctuation of VMs. In this paper, we propose an onliNe multi-workflOw Scheduling Framework, named
+NOSF, to schedule deadline-constrained workflows with random arrivals and uncertain task execution time. In NOSF, workflow
+scheduling process consists of three phases, including workflow preprocessing, VM allocation and feedback process. Built upon the
+new framework, a deadline-aware heuristic algorithm is then developed to elastically provision suitable VMs for workflow execution,
+with the objective of minimizing the rental cost and improving resource utilization. Simulation results demonstrate that the proposed
+algorithm significantly outperforms two state-of-the-art algorithms in terms of reducing VM rental costs and deadline violation
+probability, as well as improving the resource utilization efficiency.
+Index Terms—Cloud Computing, Workflow Scheduling, VM Rental Cost, Uncertain Task Execution Time, Multiple Workflows.
+(cid:70)
+1 INTRODUCTION
+W ITH the rapid development of big data analytics, data many types of pre-configured computing resources named virtual
+processing applications are becoming increasingly com- machines (VMs) for leasing, allowing customers to access nearly
+plex and generally comprised of hundreds or even thousands unlimited VMs on-demand based on the “pay-as-you-go” pricing
+of compute-intensive and data-intensive tasks with dependent scheme. Different types of VMs can be dynamically acquired and
+relationships [1]. A popular method to represent such applications released for processing various workflows, and generally charged
+is to adopt the direct acyclic graph (DAG) structure model, known per time frame or billing period. For example, Amazon’s Elastic
+as workflow, which has been widely applied in many scien- Compute Cloud (EC2)1 charges customers by an hourly-based
+tific communities, such as astronomy, high-energy physics, bio- pricing model. Consequently, optimizing the system performance,
+informatics and earthquake science. These scientific workflows are as well as minimizing the VM rental cost, by elastically provision-
+usually deadline-constrained, and require massive and distributed ing VM resources for executing workflows has become a research
+computing resources for timely executions [2], [3]. Traditional trend in cloud computing.
+high performance computing platforms [4], such as clusters and As a result, there have been numerous research works focus-
+grids [5], have very high maintenance cost and cannot efficiently ing on optimally allocating suitable computing resources for the
+adapt to the surge of computing resources required for execution of continuously submitted workflows. Since the workflow scheduling
+the workflows with random arrivals. This consequently motivates problem is a well-known NP-hard problem, it has been widely
+the development of new computing platforms that are capable studied in clusters and grids [6]–[8] with the objectives of min-
+of provisioning elastic computing resources for processing the imizing total execution time or maximizing energy efficiency.
+randomly submitted workflows. Cloud computing provides such However, when scientific workflows are deployed in IaaS clouds,
+feasible and efficient solution for deployment of scientific work- the research focus changes to how to minimize the total cost
+flows. Particularly, Infrastructure-as-a-Service (IaaS) clouds offer of VM leasing and guarantee the deadline constraints of each
+workflow. To achieve this goal, a tailored workflow scheduling
+algorithm should carefully consider two primary characteristics of
+• Jiagang Liu, Ju Ren, Deyu Zhang, Pude Zhou and Yaoxue Zhang are
+IaaS clouds, i.e., elastic VM resources and pricing scheme based
+with the School of Information Science and Engineering, Central South
+University, Changsha, China, 410083. Jiagang Liu is also with the School on billing periods. For the former, the scheduling algorithm should
+of Computer and Information Science, Hunan Institute of Technology, first select a suitable number and type of VMs from the resource
+Hengyang, China, 421002. E-mails: {jiagliu, renju, zdy876, pude.zhou,
+pool to execute workflows and meet their deadline constraints.
+zyx}@csu.edu.cn.
+• Wei Dai is with University of Arkansas at Little Rock, USA. E-mail: While for the latter, the algorithm should minimize the total cost
+wxdai@ualr.edu. of VM leasing under a time-cost trade-off by making full use
+• Geyong Min, Noushin Najjari are with the Department of Mathematics of the time units charged on the VMs to finish the workflows.
+andComputerScience,UniversityofExeter,Exeter,UnitedKingdom,EX4
+With these considerations, extensive workflow scheduling algo-
+4QF. E-mails:{g.min@exeter.ac.uk, n.najjari@gmail.com.}
+• Ju Ren is the corresponding author of this paper. rithms have been proposed recently (e.g., [9]–[15]), which are
+Manuscript received *, *; revised August *, *. 1. https://aws.amazon.com/cn/ec2/pricing/on-demand/
+2168-7161 (c) 2018 IEEE. Personal use is permitted, but republication/redistribution requires IEEE permission. See http://www.ieee.org/publications_standards/publications/rights/index.html for more information.
+
+This article has been accepted for publication in a future issue of this journal, but has not been fully edited. Content may change prior to final publication. Citation information: DOI 10.1109/TCC.2019.2906300, IEEE
+Transactions on Cloud Computing
+JOURNALOFLATEXCLASSFILES,VOL.*,NO.*,AUGUST* 2
+capable of optimizing the rental cost and utilization efficiency of workflows as much as possible for improving the utilization
+VMs. However, vast majority of the existing algorithms focus on efficiency.
+elastically acquiring VMs provisioned by the IaaS provider and • We propose a deadline-aware heuristic algorithm, based on
+designing scheduling plans for a single workflow (e.g., [11], [14]). NOSF, to minimize the VM rental cost during the whole
+It is inevitable that a huge number of idle time slots caused by scheduling process.The proposed algorithm can reduce the
+the constraints of data dependence relationships should appear on deadline violation probability of the scheduled workflows,
+leased VMs, irrespective of strategies designed for scheduling a by adaptively adjusting the scheduling priorities and subdead-
+single workflow. Due to the random arrival of scientific workflows, lines of the ready tasks online. Hence, the propagated impacts
+workflow scheduling algorithm should be able to dynamically of the fluctuated task execution time can be mitigated.
+allocate VM resources for workflows submitted stochastically. • We conduct extensive simulations on realistic workflow
+Thus, we can orchestrate tasks among workflows submitted during datasets, and validate the superiority of NOSF, by comparing
+the same periods to properly share billing periods of VMs, such it to two existing algorithms, in terms of VM rental cost
+that both the wastage of idle time slots can be reduced and the and deadline violation probability reduction (average 50.5%
+efficiency of resource utilization can be improved. and 55.7%, respectively), as well as improving resource
+In addition, most of the existing workflow scheduling algo- utilization efficiency (average 32.6%). Also, we evaluate the
+rithms proposed to provision elastic VM resources are based on impact of the estimation method with a variation factor on
+the assumption that the task execution time of each workflow the performance of the scheduling algorithm, and analyze
+on a specific type of VM is deterministic and can be accurately how the algorithm can achieve the near-optimal VM rental
+estimated beforehand [11], [14], [15]. However, since the VMs cost and a better utilization efficiency based on the estimation
+established on infrastructure of real commercial IaaS clouds are method.
+incapable of maintaining persistent performance [16], [17], the
+The remainder of the paper is organized as follows. Section
+actual task execution time may fluctuate frequently, leading to
+2 briefly reviews the related work, while Section 3 introduces
+considerable task execution delays. The delays also affect suc-
+the system model and problem formulation. Then, we present
+cessor tasks under the data dependencies. Moreover, the effect
+the details of the proposed NOSF in Section 4, and describe the
+will continuously accumulate until the workflows are complete,
+deadline-aware heuristic algorithm and analyze its complexity in
+which may lead to the deadline violation for the workflows [18].
+Section 5. Finally, performance evaluation is presented in Section
+Therefore, besides the target of minimizing the VM rental cost,
+6, followed by a brief conclusion in Section 7.
+new challenges arise in controlling the propagated impact of the
+fluctuated task execution time of each workflow in IaaS clouds
+and reducing the deadline violation probability.
+In this paper, we propose an onliNe multi-workflOw
+2 RELATED WORK
+Scheduling Framework, named NOSF, for IaaS clouds. By dynam-
+The workflow scheduling problem is a famous NP-hard problem.
+ically allocating VM resources for randomly arrived workflows
+As a result, heuristic strategies are usually used to solve the
+based on the online status of scheduled tasks, NOSF not only
+challenge. In this section, we briefly review the existing heuristic
+captures the stochasticity of task execution time on VMs, but also
+strategies in IaaS clouds, and roughly divide them into three cate-
+mitigates the propagated impacts of the fluctuated task execution
+gories, including the scheduling under the deterministic execution
+time on each VM. The scheduling process of workflows in NOSF
+time, the scheduling under the stochastic execution time and the
+consists of three phases: workflow preprocessing, VM allocation
+scheduling for multiple workflows.
+and feedback process. The first phase determines the priorities of
+tasks in each arrived workflow in the light of its arrival time,
+and then transforms the deadline of the workflow to multiple
+2.1 Scheduling under Deterministic Execution Time
+subdeadlines for its tasks. The second phase heuristically allocates
+a VM with idle billing time for the task ready for scheduling Most existing works assume that the task execution time in VM is
+to achieve minimum cost growth and to improve utilization ef- deterministic. For example, Abrishami et al. [9] propose the Partial
+ficiency. Moreover for the purpose of prohibiting the propagated Critical Paths (PCP) theory and design two deadline-constrained
+impacts of the fluctuated task execution time on the unscheduled scheduling algorithms including IC-PCP and IC-PCPD2 in clouds,
+successor tasks, this phaseonly allowsone taskmapped toa VMto which can effectively reduce VM rental costs. Li et al. [14] extend
+wait on the VM every time. The last phase is to adaptively adjust the PCP algorithm to design a MCPCP algorithm for scheduling
+the originally assigned priorities and subdeadlines of the tasks deadline-constrained workflows in multi-cloud, aiming to reduce
+ready for scheduling, such that the deadline of the workflow can be VM rental costs. Wu et al. [19] develop a PCP-B2 algorithm,
+well met. Based on NOSF, we propose a deadline-aware heuristic which is an extension of the PCP considering the constraint of
+algorithm to minimize the total VM rental cost and meet the budget, to optimize the makespan.
+deadline of each workflow. Specifically, the major contributions The method of deadline assignment is also a critical strategy
+of this paper can be summarized as follows. for workflow scheduling under the deterministic execution time.
+• We propose NOSF, an online multi-workflow scheduling For instance, Cai et al. [11] focus on the nature of dependent task-
+framework, for IaaS clouds to dynamically allocate VM re- batches in workflows, and present a deadline assignment method
+sources for randomly arrived workflows with full considera- applied to task-batches. Furthermore, Calheiros et al. [20] separate
+tion of the stochastic task execution time caused by fluctuated workflow tasks into logical levels and proportionally divide the
+VM performance. In NOSF, new arrival workflows can be deadline over individual levels. However, the aforementioned
+processed in time of the execution of existing workflows, and scheduling strategies using the deadline assignment do not solve
+the VMs with idle billing time can be shared between multi- the challenge of VM performance fluctuations.
+2168-7161 (c) 2018 IEEE. Personal use is permitted, but republication/redistribution requires IEEE permission. See http://www.ieee.org/publications_standards/publications/rights/index.html for more information.
+
+This article has been accepted for publication in a future issue of this journal, but has not been fully edited. Content may change prior to final publication. Citation information: DOI 10.1109/TCC.2019.2906300, IEEE
+Transactions on Cloud Computing
+JOURNALOFLATEXCLASSFILES,VOL.*,NO.*,AUGUST* 3
+2.2 Scheduling under Stochastic Execution Time objective of minimizing the VM rental cost. To help understand,
+the common symbols used throughout this paper are listed in
+Some existing workflow scheduling approaches consider the
+Table 1.
+stochastic execution time on VMs with fluctuated performance.
+For example, Calheiros et al. [12] present an algorithm to replicate TABLE 1: Symbols and Meanings
+tasks, in order to mitigate the effects of VM performance fluctua-
+tions while matching workflow deadlines. Rodriguez et al. [18] Symbol Definition
+propose a meta-heuristic approach to minimize the total VM
+ξ A workflow;
+rental cost for executing deadline-constrained workflows. After s
+as The arrival time of workflow ξ ;
+that, Rodriguez et al. [21] also propose a budget-driven algorithm s
+ls The deadline of workflow ξ ;
+to optimize the execution time of single workflow under the finer- s
+ts The i-th task in workflow ξ ;
+grained pricing models. These algorithms estimate the task execu- i s
+es A precedence constraint which indicates that ts
+tion time based on the maximum computing capability of VMs, p,q p
+should be completed before ts is started;
+where task execution time is assumed to stochastically degrade q
+d(es ) The data transfer time associated with edge es ;
+within a range known in advance. However, our algorithms model p,q p,q
+pred(ts) All immediate predecessors of task ts;
+the task execution time on VMs as a stochastic variable with the i i
+succ(ts) All immediate successors of task ts;
+normal distribution. i i
+I The k-th active VM;
+In addition, the work [10] uses the same estimation method k
+B(I ) The processing time weight of VM I ;
+of the task execution time as used in this paper. Their adjustment k k
+Mest(ts) The earliest start time of task ts;
+scheme will update the subdeadline of a task-batch containing i i
+Meft(ts) The earliest completion time of task ts;
+successors, once a VM completes a task. Sahni et al. [22] use i i
+λs The stochastic execution time of task ts on the VM
+a monitor loop to obtain the gap between the actual task start i i
+with the highest ranking of computing services;
+time and the estimated task start time, in order to make scheduling
+w(λs) The approximate weight of the stochastic execution
+decisions in the next steps. But the time bound for scheduling each i
+time λs;
+successor in Sahni’s method is always the latest completion time i
+determined initially. Besides, the works in [10], [22] utilize differ- Mlct(ts i ) The latest completion time of task ts i ;
+ent methods that mitigate the effects of performance fluctuations. ζ(ts i ) The completion time of task ts i ;
+However, the aforementioned papers ignore the fact of sharing the (cid:36)(ts i ) k The predicted start time of task ts i on VM I k ;
+billing time of leased VMs with multiple workflows and random ψ(ts i ) k The predicted execution time of task ts i on VM I k ;
+arrival time. ϕ(ts i ) k The predicted completion time of task ts i on VM I k ;
+Φ The current system time;
+l (ts) The subdeadline of task ts;
+sub i i
+2.3 Scheduling for Multiple Workflows
+α A variance factor of the task execution time;
+There are some existing scheduling strategies designed for multi- β A variance factor of the workflow deadline;
+ple workflows. Rimal et al. [15] design a workflow scheduling η A variance factor to estimate the task execution
+policy, named CWSA, for the batch workload in multi-tenant time;
+clouds. Its objective is to minimize the completion time of the
+overall workflows, while neglecting the fluctuated performance
+of VMs in the policy. Moreover, in [23], authors propose a
+3.1 Cloud Resources and Workflow Models
+scheduling strategy to degrade the turnaround time of multiple
+workflows under the deterministic task execution time, for improv- For the cloud computing, cloud resources are comprised of virtu-
+ing scheduling performance in cluster environments. Additionally, alized services provisioned by IaaS cloud providers, which involve
+there are some works considering both multiple workflows and virtualized computing services and storage services [26]. The
+task execution time uncertainty. Chen et al. [24], [25] propose virtualized computing services can be categorized into various
+a heuristic strategy, which consists of proactive and reactive ap- rankings based on computing capabilities supported by these
+proaches, to schedule real-time multiple workflows with uncertain services with diverse hardware configurations, such as CPUs,
+task execution time. In their strategies, nevertheless, the priority memory, storage, and network. Such that, we can use the ranking
+and decision parameters of each successor task which will be to describe the different capabilities of various VMs. Any partial-
+scheduled are throughout the original setting values during the hour consumption of the leased VM is rounded up to the whole
+scheduling. hour. Moreover, we only focus on the rental cost generated by the
+In our work, NOSF divides the scheduling process of work- workflow scheduling strategy in this work, without considering
+flows into three phases, and dynamically allocates VM resources the negotiated Service Level Agreements (SLAs) provided by
+for randomly arrived workflows to share the billing time of IaaS cloud providers. With improvement of the virtualization
+leased VMs as much as possible. The proposed deadline-aware technology, IaaS cloud platforms may give an illusion of unlim-
+heuristic algorithm can adaptively adjust the scheduling priorities ited provisional capabilities of VMs. Hence, our model supports
+and subdeadlines of successor tasks ready for scheduling online to unlimited VM instances and any rankings of computing services
+conquer the impacts of VM performance fluctuations. for customers. The set of VMs leased by a customer in an IaaS
+cloud are denoted as I = {I |k ∈ [1,2..]}, where k indicates the
+k
+k-th leased VM. VMs with the same ranking can support the same
+3 MODELING AND PROBLEM FORMULATION
+computing capability and have the same rental price. Thus, VM
+In this section, we describe cloud resources and workflow models. I has a price factor associated with the service ranking, denoted
+k
+We also formulate the problem of workflow scheduling with the as price(I ), which represents the cost of VM I in each billing
+k k
+2168-7161 (c) 2018 IEEE. Personal use is permitted, but republication/redistribution requires IEEE permission. See http://www.ieee.org/publications_standards/publications/rights/index.html for more information.
+
+This article has been accepted for publication in a future issue of this journal, but has not been fully edited. Content may change prior to final publication. Citation information: DOI 10.1109/TCC.2019.2906300, IEEE
+Transactions on Cloud Computing
+JOURNALOFLATEXCLASSFILES,VOL.*,NO.*,AUGUST* 4
+time unit.Additionally, eachVM requiresa boot timefor itsproper initialization and preparation for undertaking computation, while the VM is leased. Notice that a VM is only active when its billing
+time units are leased by a customer. In order to reduce energy
+consumption the VM shuts down immediately after it is released t1(1)
+and is no longer in lease. 1 1
+Except for computing services, the storage services offered
+by IaaS cloud providers can store the input/output data files
+of applications on the volume by leveraging a local storage
+device, e.g., Amazon Elastic Block Store (EBS)2. Commercial
+IaaS providers charge for storage services based on the amount of
+volume allocated, but the cost of storage is irrelevant to scheduling
+strategies. Thus, the file storage expense can be neglected by
+our model. Moreover, we consider all computing and storage
+services to be provisioned by the same data center. In this case,
+the average network bandwidth between different VMs is roughly
+equal, so that the time of data transfer only relies on the size of
+the data transferred [27]. Since commercial IaaS providers ignore
+the charge of data transfer in a single data center, communication
+expenses on different VMs are ignored in our model.
+Task execution time on VMs depends on the task workload
+and computing capabilities of VMs [10], [15]. The execution time
+of a task on VMs with different rankings is not the same. Leasing a
+VM with a higher ranking means that a shorter execution time can
+be obtained but the VM rental cost will be increased. Therefore,
+we use a processing time weight associated with the ranking to
+describe the above features. Let the weight B(I ) of VM I be k k
+one if the execution time of a task can be minimized on this VM.
+For a specific VM I , B(I ) is defined as the ratio of the task k k
+execution time on I to the shortest execution time of the task. k
+In real cloud environments, VMs are incapable of maintaining
+persistent computing capabilities. Hence, the execution time of
+a task on a VM can fluctuate along with the variation of the
+computing capability of the VM. In the case, modeling of per-
+formance fluctuations of VMs can be transformed into a problem
+of modeling the task execution time with stochastic characteristics.
+The assumption that the task execution time is subject to normal
+distributions has been employed by many researchers [10], [28],
+[29]. In our work, the task execution time on a VM is also
+regarded as stochastic variables with independent and normal
+distributions.The expected value and variance of task execution
+time can be known by using some typical performance estimation
+techniques, such as historic tables [30], statistical prediction [31]
+and analytical modeling [32], in advance.
+We use an approximate weight [33] as the estimation of the
+task execution time with the stochastic characteristic. Thus, given
+X as the task execution time, the approximate weight w(X) is
+defined as
+ E(X) + (cid:112) D(X)), D(X)) (cid:54) 1, E(X)2 w(X) = (1)
+E(X) · (1 + √ 1 ), otherwise,
+
+D(X)
+where E(X) and D(X) represent the expected value and the
+variance of variable X, respectively. Let N(µ,σ2) denote the
+normal distribution with expected value µ and variance σ2. Since
+each value of X, X ∼ N(µ,σ2), satisfies σ/µ2 (cid:54) 1, the weight
+(cid:112)
+of X is expressed as w(X) = E(X) + D(X).
+A customer may randomly submit multiple workflows to an
+IaaS cloud provider. These submitted workflows may require
+2. http://aws.amazon.com/ebs/
+2168-7161 (c) 2018 IEEE. Personal use is permitted, but republication/redistribution requires IEEE permission. See http://www.ieee.org/publications_standards/publications/rights/index.html for more information.
+t 12 ( 12 ) 
+t 13 ( 13 )
+t1(1) 5 5
+
+t1(1) 4 4
+t 16 ( 16 ) 
+t1(1) 7 7
+e 11,2 e1 2,5
+e 13 ,6
+e1 4,7
+e 16
+e
+,8
+15
+,8
+t1(1)
+8 8
+e1
+7,8
+d
+d
+(
+(
+e
+e
+12
+13
+,5
+,6
+)
+)
+d(e1 ) 4,7
+d
+d
+( e
+( e
+15 ,8
+16
+,8
+)
+)
+d(e1 ) 1,2
+d(e1 )
+1,3
+d(e 1 1 ,4 ) d(e1 7,8 )
+e 11,3
+e1 1,4
+Fig. 1: An example of workflow modelled by DAG.
+different software components for execution on the same op-
+erating system. We denote these workflows as a set of Ω =
+{ξ ,ξ ,··· ,ξ }, where ξ = {as,ls,Gs} denotes a workflow. 1 2 w s
+as and ls indicate the arrival time and the deadline of workflow
+ξ , respectively. Gs(Ts,Es,Λs,Ds) is a DAG graph that models s
+workflow ξ . Ts = {ts,ts ··· ,ts} and Es = Ts × Ts denote s 1 2 n
+the set of tasks and edges, respectively. Then, λs ∈ Λs denotes the i
+stochastic execution time of task ts with the normal distribution, i
+while processing task ts on the VM with the highest ranking of i
+computing services. The directed edge es ∈ Es indicates the i,j
+data dependency between task ts and ts. Thus, task ts is the i j i
+immediate predecessor of task ts, while task ts is the immediate j j
+successor of task ts. Let pred(ts) and succ(ts) denote the set of i i i
+the immediate predecessors and successors of task ts, respectively. i
+A task without predecessors is an entry task, denoted by ts , entry
+and a task without successors is an exit task, denoted by ts . exit
+Additionally, each edge es has an associated time of data transfer i,j
+d(es ) ∈ Ds, which indicates the length of time required to i,j
+transfer the output data from the VM executing ts to the VM i
+executing ts. Notably, if both ts and ts are scheduled on the same j i j
+VM, d(es ) = 0. For each task ts to be scheduled on VM I , I i,j j k k
+needs to be reserved before the output data from the immediate
+predecessors of task ts starts to transfer. Then, VM I needs to j k
+keep active till all output data of VM I is transferred to the VMs k
+on which the immediate successors of task ts are to be scheduled. j
+It should be noted that storage services provisioned by the IaaS
+cloud provider are independent of the lifetime of VMs, e.g. EBS.
+Thus, the VM, on which a task is to be scheduled, is not required
+to be active, as the input data is being transmitted to the associated
+volume. In addition, in our proposed model each VM can merely
+execute one task at a time and the execution of tasks are non-
+preemptive.
+An example of the DAG (Fig. 1) consists of eight tasks
+from t1 to t1. t1 and t1 are the entry task and the exit task, 1 8 1 8
+respectively. The tasks are shown in the circles, while the transfer
+time associated with the output data are shown in rectangular shapes. For task t1, its immediate predecessors and successors 2
+are pred(t1) = t1, succ(t1) = t1, respectively.
+2 1 2 5
+3.2 Problem Formulation
+Our workflow scheduling aims to minimize the total VM rental
+costs for executing workflows, while satisfying the deadlines.
+Hence, in the following we define some notations.
+While a VM completes a task, the completion time of the task
+and the start time of the task can be obtained, which are denoted
+as ζ(ts) and τ(ts), respectively. Furthermore, the makespan for
+i i
+executing a workflow determines whether the scheduling of the
+
+This article has been accepted for publication in a future issue of this journal, but has not been fully edited. Content may change prior to final publication. Citation information: DOI 10.1109/TCC.2019.2906300, IEEE
+Transactions on Cloud Computing
+JOURNALOFLATEXCLASSFILES,VOL.*,NO.*,AUGUST* 5
+Completion signal
+Arrival Workflow signal Analyzer
+Workflow pool
+2168-7161 (c) 2018 IEEE. Personal use is permitted, but republication/redistribution requires IEEE permission. See http://www.ieee.org/publications_standards/publications/rights/index.html for more information.
+...
+operation data
+VM
+VM
+Resource VM
+Allocation
+VM
+Waiting Executing
+tasks task VMs
+VM pool
+Workflow
+Applications Workflow Scheduler IaaS Cloud
+...
+required VMs for the execution of workflow tasks. The customer
+can submit new workflows with different deadline requirements
+Online
+workflows to the workflow scheduler in time of the execution of existing
+Resource
+Manager workflows. Specifically, the workflow scheduler consists of a
+Feedback workflow analyzer, a resource manager, a task scheduler and a Process workflow pool. The workflow analyzer takes charge of analyzing
+the dependence relationships between workflow tasks and pre-
+Task Scheduler processing workflows. The workflow pool accommodates all of
+unscheduled workflow tasks. The resource manager will negotiate
+with the IaaS cloud provider to adjust dynamically computing re-
+source provisioning by acquiring and releasing VMs. Additionally,
+the task scheduler is responsible for identification of mappings
+between the workflow tasks and the offered VMs, in coordination
+Fig. 2: The online workflow scheduling framework.
+with the resource manager. The task scheduler also takes charge
+of scheduling the workflow tasks on leased VMs according to the
+workflow can satisfy the deadline. We defined the makespan of identified mappings.
+workflow ξ as The scheduling process of workflows in NOSF is divided into
+s
+three phases, including workflow preprocessing in the workflow
+MakeSpan = max{ζ(ts)} − as. (2)
+s ts∈Ts i analyzer, resource allocation and feedback process. The schedul-
+i
+ing process is motivated on receipt of two monitor signals, called
+We use Γs to denote the amount of incremental billing
+i,k the arrival signal and the completion signal, from the arrival of a
+time units required to execute task ts scheduled on VM I .
+i k submitted workflow and the completion of any executing tasks,
+Incremental billing time units are required, when VM I is newly
+k respectively. When the workflow scheduler receives an arrival
+leased to execute task ts. Moreover, if executing task ts does not
+i i signal, the preprocessing phase will initialize decision parameters.
+require incremental billing time units, then Γs = 0. Hence, the
+i,k Specifically, this phase calculates the original priority of each tasks
+optimization objective is defined as follows
+based on the arrival time and the dependence relationships of
+the workflow, and allocates original subdeadlines for each tasks
+|I| w n according to the worklow deadline. Afterwards, the preprocessing
+Min (cid:80) (cid:80) (cid:80) price(I ) · Γs · xs (3)
+xs
+i,k k=1s=1i=1
+k i,k i,k phase will deliver some entry tasks of the workflow to the resource
+subject to: MakeSpan + as (cid:54) ls, (4) allocation phase, and store other tasks into the workflow pool. The
+s
+resource allocation phase takes charge of applying VMs from the
+ζ(ts) + d(es ) ≤ τ(ts), (5)
+p p,i i resource manager. Then the resource allocation phase will also
+|I| allocate the VMs to the tasks ready for scheduling. It is worth
+(cid:80) xs (cid:54) 1. (6)
+i,k noting that only one task is allowed to wait on a VM in this
+k=1
+phase every time. In this way, the fluctuation of task execution
+where xs is a binary variable indicating that ts is scheduled on
+i,k i time on a VM can only affect the waiting task on the same VM.
+VM I . The binary variable is defined as
+k Besides, the feedback process will adjust the original priorities and
+(cid:40)
+1, if ts is scheduled on I , subdeadlines of some relevant tasks in the workflow pool, when
+xs i,k = 0, oth i erwise. k (7) the workflow scheduler receives a completion signal. The feedback
+will also deliver the adjusted tasks to the resource allocation phase.
+Constraint (4) indicates that the makespan of workflows should Such that, the propagated impacts of the fluctuated task execution
+satisfy the deadlines. Constraint (5) indicates the data dependen- time can also be mitigated. Upon each received signal, each of the
+cies of tasks among workflows. The start time of task ts should processing phases will be continuously triggered until all of the
+i
+be greater than or equal to the sum of the completion time of submitted workflows are processed successfully.
+immediate predecessor task ts p and the data transfer time d(es p,i ). In the rest of this section, we present the three phases of the
+Also, constraint (6) ensures that each task can be scheduled once scheduling process in detail.
+only.
+4 NOSF: ONLINE MULTI-WORKFLOW SCHEDUL-
+4.2 Preprocessing Phase
+ING FRAMEWORK
+The settings of the initial decision parameters are the primary
+In this section, we present each component of NOSF in detail.
+goals of the preprocessing phase, which involves determination
+We also introduce the operations of every phase for workflow
+of the original priority and subdeadline assignment of each task
+scheduling in NOSF.
+among arrival workflows.
+For an arrival workflow, the early start time and the latest
+4.1 Overview
+completion time of each task are important parameters for the
+The online multi-workflow scheduling framework (i.e., NOSF), scheduling decision. The former indicates the earliest time of a
+shown in Fig. 2, acts as an interface between the IaaS cloud task to be executed, while the latter indicates the latest time of a
+and customers. The core of NOSF is the workflow scheduler, task to be completed without missing the workflow deadline. They
+which can use on-demand resource provisioning to select the can be calculated by an assumption for scheduling all workflow
+
+This article has been accepted for publication in a future issue of this journal, but has not been fully edited. Content may change prior to final publication. Citation information: DOI 10.1109/TCC.2019.2906300, IEEE
+Transactions on Cloud Computing
+JOURNALOFLATEXCLASSFILES,VOL.*,NO.*,AUGUST* 6
+tasks on the VMs with the highest ranking. Let Mest(ts) denote Definition 1. Ready task: a task is an entry task, or its all
+i
+the earliest start time of task ts, which is defined as necessary predecessors have been completed.
+i
+Mest(ts i ) =
+ 
+
+a
+ts p
+s
+∈
+,
+m pr a ed x (ts i )
+i
+{
++
+f
+M
+d
+ts i
+(
+e
+e
+=
+s
+s p
+t
+,
+(
+i
+t
+t
+)
+s e
+s p
+}
+n
+)
+,
+t
+o
+r
++
+y
+th
+,
+w
+er
+(
+w
+λ
+i
+s p
+s
+)
+e,
+(8) e a
+p
+s n
+r
+t
+e
+d i
+d
+m
+F
+i
+t
+o
+c
+h a
+t
+r
+e t
+e
+e
+e
+d
+t
+a
+t i h m
+s
+c
+t
+e
+h
+a
+e
+r
+t
+r
+i
+t
+t
+e
+m h
+t
+a
+i
+a e
+m
+d
+t
+y
+a
+e
+V t
+t
+(cid:36)
+a
+M w
+s
+(
+k
+h
+t
+I i
+s i
+t
+c k
+s i
+)
+h
+k
+m
+t
+t
+o
+a
+o
+a s
+f
+b
+y k
+t
+e
+a
+t t a
+s
+s
+s i
+k
+k
+c
+m
+h
+e
+t
+e
+s i
+a t
+d
+o y
+o
+u
+n
+l
+e s
+e
+x t
+V
+d
+a e r c
+M
+t
+o
+u
+n
+e t x
+I
+e
+V
+k
+e t c
+M
+a
+c
+u s
+a
+t k
+n
+i
+I
+o
+k
+t
+b
+n
+,
+s i
+e
+. o
+w
+c
+n T
+e
+a
+h
+l
+V
+n
+c
+u
+e
+u
+M s
+e
+l
+,
+a
+d
+I t
+t
+h
+e
+t
+k
+o
+d
+e ,
+as
+where w(λs) represents the approximation weight of the stochas- max{Φ,ϕ(tr) , max {ζ(ts) + d(es )}},
+p j k p p,i (13)
+tic execution time λs and can be calculated by Eq. (1). Ac- ts p ∈pred(ts i )
+p
+cordingly, the earliest completion time of task ts i , denoted as where Φ and ϕ(tr j ) k indicate the current system time when
+Meft(ts i ), can be calculated by scheduling for task ts i is incurred, and the predicted completion
+Meft(ts) = Mest(ts) + w(λs). (9) time of task tr j on VM I k , respectively. Again, ζ(ts p ) represents
+i i i the completion time of task ts on the VM executing it.
+p
+We take the earliest completion time of each task as its original
+Theorem 1. The predicted execution time of task ts, denoted as
+priority. Then, we use Mlct(ts) to denote the latest completion i
+i ψ(ts) , on VM I is equal to B(I ) · w(λs).
+time of task ts, which is defined as i k k k i
+i
+ Proof. For the stochastic execution time λs of ts with the normal
+ls, if ts = ts , i i
+Mlct(ts) =
+
+min {M
+i
+lct(ts q
+ex
+)
+i
+−
+t
+w(λs q ) (10) b
+d
+y
+istr
+a
+ib
+c
+u
+o
+ti
+n
+o
+s
+n
+ta
+,
+n
+λ
+t
+s
+i a
+∼
+.
+N
+Ob
+(
+v
+µ
+i
+s
+i o
+,
+u
+σ
+sl i
+s
+y
+2
+,
+)
+a
+, i
+λ
+t
+s
+can
+∼
+be
+N
+pr
+(
+o
+a
+p
+µ
+o
+s
+r
+,
+tio
+(
+n
+|a
+a
+|
+l
+σ
+ly
+s
+m
+)2
+u
+)
+l
+.
+ti
+T
+pl
+h
+i
+e
+e
+n
+d
+i ts∈succ(ts) i i i
+ q i
+−d(es )},otherwise.
+B(I
+k
+)λs
+i
+∼ N(B(I
+k
+)µs
+i
+, (B(I
+k
+)σ
+i
+s)2) can be obtained.
+i,q Thus, B(I )µs + B(I )σs = B(I )(µs + σs) =
+k i k i k i i
+Although the latest completion time of each task is the bound of B(I )w(λs). This proves the theorem.
+k i
+its completion time, the latest completion time is too slack. We
+Accordingly, the predicted completion time ϕ(ts) of task ts
+use subdeadline to reduce the slack of the bound. i k i
+on VM I is calculated by
+We utilize partial critical path (PCP) [9] to obtain all PCP paths k
+of a workflow, and then transform the deadline of the workflow to ϕ(ts) = (cid:36)(ts) + ψ(ts) . (14)
+i k i k i k
+the deadline of each PCP path. Therefore, the task scheduling
+on the PCP path becomes an end-to-end scheduling [34]. In Definition 2. Suitable VM: it is an active VM offered by the IaaS
+this approach, the deadline of a PCP path can be divided into provider, which can complete the task to be scheduled on it before
+subdeadlines of the tasks on the path. The problem of matching the task’s subdeadline satisfying the following conditions:
+the deadline of a workflow is transformed to the problem of (1) The cost growth c(cid:103)ost(ts i ) k of VM I k for executing task ts i
+matching the subdeadline of each task. The deadline of a PCP path is the minimum. The definition of c(cid:103)ost(ts i ) k is described as
+i
+o
+s
+f
+r
+t
+e
+h
+p
+e
+re
+la
+se
+st
+nt
+t
+e
+a
+d
+sk
+as
+ts
+th
+a
+e
+n
+d
+d
+if
+t
+f
+h
+e
+e
+re
+e
+n
+a
+c
+r
+e
+lie
+b
+s
+e
+t
+tw
+st
+e
+a
+e
+rt
+n
+t
+t
+i
+h
+m
+e
+e
+la
+o
+t
+f
+es
+th
+t
+e
+co
+fi
+m
+rs
+p
+t
+l
+t
+e
+a
+t
+s
+io
+k
+n
+t
+t
+s
+im
+on
+e c(cid:103)ost(ts
+i
+)
+k
+= price(I
+k
+) × ψ(ts
+i
+)
+k
+. (15)
+k 1
+the path, i.e., Mlct(ts) − Mest(ts). We divide the path deadline (2) When there are multiple VMs satisfying Condition (1), the
+k 1
+into task subdeadlines on the PCP according to the proportion of one with the minimum idle time is selected because it is more likely
+the minimum execution time of the individual tasks [35]. In this to get higher resource utilization.
+way, the slack of individual tasks on the PCP is different but it’s
+The selection of “suitable VM” is based on the heuristic
+flexibility is the same, so that the subdeadline of task ts can be
+i method to minimize the rental cost of executing workflows and
+described as
+simultaneously improve the utilization efficiency of VMs as
+l (ts) = Mest(ts)+
+sub i 1 much as possible. According to the subdeadline of each task,
+Meft(ts) − Mest(ts) (11) the resource allocation phase firstly applies active VMs from
+i 1 × (Mlct(ts) − Mest(ts)),
+Meft(ts) − Mest(ts) k 1 the resource manager to satisfy Condition (1). If there are no
+k 1
+active VMs satisfying Condition (1), it will apply leasing a new
+where Mest(ts) is the execution time of the first task and
+1 VM from the resource manager. Note that if an offered VM
+Mlct(ts) is the execution time of the last task.
+k with the highest ranking of computing services fails to meet the
+Additionally, we define δ(ts) as the difference between
+i subdeadline of the target task, the offered VM will still be leased
+l (ts) and Mest(ts), i.e.,
+sub i i by the resource manager to execute the task, because exceeding
+δ(ts) = l (ts) − Mest(ts), (12) the task subdeadline in scheduling process for a specific task does
+i sub i i
+not mean missing of the whole workflow deadline.
+which represents the maximum duration of task ts i without missing To improve the readability, the attributes related to the resource
+the workflow deadline. allocation phase are shown in Fig. 3. There are two VMs with the
+same ranking, (i.e., I and I ) and three workflows (i.e., ξ ,ξ
+a b 1 2
+4.3 Resource Allocation and ξ ) in Fig. 3. Task t1 is completed on VM I and task t2
+3 1 a 1
+The resource allocation phase stores the tasks ready for scheduling is executing on VM I at current system time Φ. Exactly at this
+b
+into a queue, with a non-descending order of the priority. In the moment, VM I begins executing task t3 which had been waiting,
+a 1
+next step, the tasks in the queue will in turn be scheduled on VMs, while VM I was executing task t2. Moreover, task t1 becomes
+b 1 2
+for which the resource allocation phase applies to the resource the ready task that needs to be immediately scheduled. Thus, we
+manager. In the following, we introduce some definitions and basic will calculate the predicted start time of task t1 on I and I ,
+2 a b
+attributes for selecting VMs and scheduling tasks. respectively. For the former, the predicted completion time ϕ(t3)
+1 a
+2168-7161 (c) 2018 IEEE. Personal use is permitted, but republication/redistribution requires IEEE permission. See http://www.ieee.org/publications_standards/publications/rights/index.html for more information.
+
+This article has been accepted for publication in a future issue of this journal, but has not been fully edited. Content may change prior to final publication. Citation information: DOI 10.1109/TCC.2019.2906300, IEEE
+Transactions on Cloud Computing
+JOURNALOFLATEXCLASSFILES,VOL.*,NO.*,AUGUST* 7
+(t1) ((t1)d(e1 ))
+2 b 1 1,2
+2168-7161 (c) 2018 IEEE. Personal use is permitted, but republication/redistribution requires IEEE permission. See http://www.ieee.org/publications_standards/publications/rights/index.html for more information.
+( 1 t1 ) 
+d ( e 11,2 )
+(t2) (t1) 1 b 2 b
+t 11
+t 21
+(t2)
+1 b
+t 12
+Boot
+times
+3 ( t1 3 t
+1
+) a 
+(t1) (t3) 2 a 1 a
+t 12 billing time l su b ( t 12 )
+Completed Executing Testing
+tasks tasks tasks
+( t 12 ) a  t 1 1 t1 t2 
+1
+Ia 1 1
+t1 2
+ 2 t 1 2 Ib
+ t3
+3 1  time(s)
+time(s)
+Fig. 3: The implications of basic attributes for scheduling.
+of task t3 is greater than the value of ζ(t1) + d(e1 ), so the 1 1 1,2 value of (cid:36)(t1) is equal to ϕ(t3) . For the latter, the predicted
+2 a 1 a
+completion time ϕ(t2) of task t2 is less than the value of ζ(t1)+ 1 b 1 1 d(e1 ). Hence, the value of (cid:36)(t1) is equal to ζ(t1) + d(e1 ). 1,2 2 b 1 1,2
+Consequently, VM I is the suitable VM because VM I is the a a
+one with the minimum idle time.
+4.4 Feedback Processing
+In NOSF, the immediate successors are likely to become ready
+tasks in case of the completion of a task on a VM. The feedback
+processing needs to determine whether these successors are ready
+or not. Moreover, the processing takes charge of adjusting the
+original priorities and subdeadlines of these ready tasks.
+For a task that may be attached to multiple precedence con-
+straints, it can be adjusted while all of its immediate predecessors
+have been completed. Thus, the adjustment of the earliest comple-
+tion time of task t can be calculated as
+i
+(cid:92)
+Meft(ts) = max {ζ(ts) + d(es ) + w(λs)}. (16) i p p,i i ts∈pred(ts)
+p i
+Accordingly, the adjustment of the earliest start time of task ts is
+i
+denoted as
+M (cid:92) est(ts) = M (cid:92) eft(ts) − w(λs). (17) i i i
+(cid:92) When a scheduling decision is made for task ts, Meft(ts) is i i regarded as task ts’s new priority for the upward rank. i
+Since our model calculates the sum of the expected value
+and the standard deviation to estimate the task execution time
+which is subject to the normal distribution, the completion of ts’s i
+predecessor tasks may generate positive or negative deviations
+(cid:92) between the values of Mest(ts) and previous Mest(ts) due to i i
+normal distribution characteristics. Negative deviations may put
+task ts’s start time ahead, which does not violate the workflow i
+deadline. On the contrary, positive deviations may delay its start
+time, which may miss the task subdeadline. But more importantly,
+the propagation of positive deviations may miss the whole dead-
+line. Hence, the subdeadline of each task can be adjusted as
+ (cid:92) (cid:92) (cid:92) l (ts) = Mest(ts) + δ(ts), if Mest(ts) + δ(ts)
+ sub i i i i i
+< Mlct(ts), (18) i l (cid:92)
+(ts) = Mlct(ts), otherwise.
+sub i i
+(cid:92)
+where if and only if Mest(ts) + δ(ts) < Mlct(ts), the ad- i i i
+justed subdeadline of ts will not exceed its Mlct(ts). Otherwise, i i
+the latest completion time of ts will be delayed, compared to i
+Mlct(ts), leading to delay propagation for successor tasks. As a i (cid:92)
+result, l (ts) is directly equal to Mlct(ts).
+sub i i
+t 22
+I1
+I2
+t2 I1 1
+t2 t1
+I2 2 3
+a 2 = 1 2
+(t1) =20 2 2
+(t1)=18
+2
+( t 22 ) 2 = 2 5
+t1 t1 1 2
+t1 3
+t1 4
+ t2 t2
+1 2
+t2
+3
+l 2 billing time l1
+1 t1
+t 12  1
+t1 5
+t1
+ 2
+2
+(a)
+1 t1
+1 t1
+t 12
+t2 1
+t1 2
+2 t1
+t 22
+I1
+I2 t 3 1
+I1
+I2 t 2 2 t 3 1
+t 23
+t 23 t1 4
+( t 2 2 ) = 2 8 
+d ( e 22 ,3 )
+( t 13 ) 2 = 4 3 
+( t 1 3 ) = 4 0
+billing time
+Boot
+time Completed
+tasks 
+Executiong
+tasks
+Waiting t1 5
+tasks
+Sharing billing periods time(s)
+l 2 l 1
+d(e1 )0 3,5
+(b)
+Fig. 4: The illustrative process for scheduling multiple workflows.
+4.5 Illustrative Example of Scheduling Workflows
+In this subsection, we introduce an example (shown in Fig. 4) to
+clearly illustrate how the scheduling process works in NOSF.
+Assume that two workflows (i.e., ξ and ξ ) are submitted to 1 2
+the workflow scheduler at different time. For executing workflow
+ξ , moreover, the resource allocation phase leases two VMs (i.e.,
+1
+I and I ) with different rankings from the resource manager.
+1 2 We suppose that task t1 and task t1 have been scheduled on VM 1 2
+I and VM I , respectively, as illustrated in the upper part of 1 2 Fig. 4(a). When the time is 12s, I has completed t1 and is idle 1 1 while I is executing t1. At this time, the workflow scheduler 2 2
+receives the arrival signal of ξ . The preprocessing phase initial-
+2
+izes decision parameter for each tasks among ξ , immediately,
+2 and delivers t2 and t2 to the resource allocation phase. Assume
+1 2
+that t2 and t2 are scheduled on I and I , respectively. t2 can be
+1 2 1 2 1 executed directly, while t2 must wait due to the execution of t1 2 2
+on I . Afterwards, when I completes t1 at 18s, I will directly
+2 2 2 2 execute t2 on which was previously waiting, as shown in the lower 2
+part of Fig. 4(a). At this time, the workflow scheduler receives the
+completion signal of t1. The feedback process starts to adjust the
+2
+priority and subdeadline of t1 and then delivers t1 to the resource
+3 3
+allocation phase, since it becomes the ready task. Suppose that t1
+3
+is scheduled on I . Then, t1 must wait due to the execution of t2 at 2 3 2
+this moment. At time 28s, t2 is completed, as revealed in the upper
+2 part of Fig. 4(b), so I will immediately execute t1. Meanwhile, 2 3
+the feedback process will update the priority and subdeadline of
+t2, since the successor t2 of t2 becomes ready. Thus, t2 will be
+3 3 2 3
+schedule on a suitable VM. Suppose that I is such a VM. In order 1
+to enable I to execute t2, I need to transfer the output data of 1 3 2
+t2 to I . This process need to take the time d(e2 ), and thus t2 2 1 2,3 3
+must wait. As time goes on, when t1 is completed at time 40s, the 3
+feedback process will work again. As previously described, the
+
+This article has been accepted for publication in a future issue of this journal, but has not been fully edited. Content may change prior to final publication. Citation information: DOI 10.1109/TCC.2019.2906300, IEEE
+Transactions on Cloud Computing
+JOURNALOFLATEXCLASSFILES,VOL.*,NO.*,AUGUST* 8
+Algorithm 1: The preprocessing for an arrival workflow. Algorithm 2: The feedback processing for the completion
+Input: A Ds(Ts,Es) corresponds to the arrival workflow of a task on a VM.
+ξ s ; Input: A completed task ts i ; The VM I k which completes
+Output: A queue Q r saving the entry tasks belonging to task ts i ; The workflow pool pool;
+Ts; The workflow pool pool; Output: A queue Q r saving the tasks belonging to
+1 Q r ← ∅; succ(ts i ) in the workflow pool;
+2 Calculate Mest(ts i ), Meft(ts i ) and Mlct(ts i ) for each task 1 Q r ← ∅;
+among Ts according to Eqs. (8), (9) and (10); 2 if there exists a waiting task on I k then
+3 Traverse in turn all tasks among Ts from the exit nodes in 3 Execute the waiting task on I k ;
+order to find all PCP paths [9]; 4 for each ts q ∈ succ(ts i ) do
+4 Traverse in turn all tasks on each PCP path from the first 5 if all of pred(ts q ) have been completed then
+t e a a s c k h o ta n s t k he on pa th th e i p n at o h rd a e c r co to rd c i o n m g p to ut E e q l s s . u ( b 1 ( 1 ts i ) ) a a n n d d (1 δ 2 (t ); s i ) for 6 Calculate M (cid:92) eft(ts q ), M (cid:92) est(ts q ) and l s (cid:92) ub (ts q ) for ts q
+according to Eqs. (16), (17) and (18);
+5 6 A A d d d d a th ll e t o h t e he e r nt t r a y sk ta s s i k n s T in s T in s to in p to oo Q l; r ; 7 Add task ts q into Q r and remove task ts q from pool;
+7 Call ScheduleTask(Q r ); 8 Call ScheduleTask(Q r );
+successors t1 and t1 of t1, which become ready, will be scheduled
+4 5 3 When NOSF receives a completion signal of a VM, it will
+on the suitable VM for executing. At this point, I and I are idle.
+1 2 trigger the feedback process as shown in Alg. 2. Once VM I
+We assume that t1 4 and t1 5 are scheduled on I 1 and I 2 , respectively. completes task ts, the waiting task will be executed directl k y
+Then, I can immediately execute t1, due to d(e1 )=0, but I will i
+2 5 3,5 1 (Lines 2 and 3) if there is a waiting task on I . Subsequently, the
+execute t1 after receiving the output data of t1, as shown in the k
+4 3 algorithm will check whether the immediate successors, restrained
+lower part of Fig. 4(b). by ts, are the ready tasks. If the successors are ready, the algorithm
+i
+From Fig. 4, it can be observed that the actual task comple- will adjust the corresponding Mefts, Mests, and l s of the
+sub
+tion time is different from the predicted task completion time.
+ready tasks. Moreover, It will fetch the ready tasks into queue Q
+Especially, ζ(t1) and ζ(t1) is less than ϕ(t1) and ϕ(t1) , r
+2 3 2 2 3 2 and remove them from the workflow pool (Lines 4-7). Finally, the
+respectively, whereas ζ(t2) is greater than ϕ(t2) . As previously
+2 2 2 algorithm calls the Function ScheduleTask in terms of queue Q r
+mentioned, there exists a gap between the estimated task execution
+(Line 8).
+time and the actual task execution time on a VM, due to the
+Alg. 3 is in charge of scheduling the tasks in the queue in
+fluctuated VM performance. However, in NOSF, the fluctuation of
+which the ready tasks are passed by Alg. 1 and Alg. 2 on suitable
+task execution time on a VM can only affect the waiting task, such
+VMs. The algorithm sorts queue Q by a non-descending order
+as t2 and t1. Besides, tasks among workflows submitted during the r
+2 3 of the priority (Line 1). Notice that if task ts belongs to a new
+same periods are orchestrated to share the billing time, as shown i
+workflow in queue Q , then the initial Mest(ts) of ts is regarded
+in the lower part of Fig. 4(b). r (cid:92) i i
+as the priority. Else, the value of Mest(ts) is indicated as the
+i
+priority. Then the algorithm traverses each task ts in queue Q
+i r
+5 DEADLINE-AWARE HEURISTIC SCHEDULING in order to seek a set I of candidate VMs for task ts (Lines 2-
+i
+ALGORITHM 11). Although all immediate predecessors of task ts i in queue Q r
+have been completed at this moment, the output data from the
+In this section, we propose a deadline-aware heuristic scheduling
+predecessors may be transferred. We need to estimate the largest
+algorithm based on NOSF, and analyze the time complexity of the
+arrival time of the output data from immediate predecessors of
+algorithm. task ts by trying to test the candidates for suitable VMs. Thus, if
+The proposed algorithm consists of two steps, including the i
+there exists an idle VM I , Line 6 calculates the predicted start
+k
+preprocessing for arrival workflows shown in Alg. 1 and the time (cid:36)(ts) of task ts to be executed on VM I . Otherwise,
+feedback processing for the completion of a task on a VM the predic i ted k start time i (cid:36)(ts) of task ts is calculat k ed by Line 8.
+s
+n
+h
+e
+o
+w
+w
+w
+n
+o
+i
+r
+n
+kfl
+A
+o
+l
+w
+g
+,
+.
+t
+2
+h
+.
+e
+W
+pr
+h
+e
+e
+p
+n
+roc
+N
+e
+O
+ss
+S
+in
+F
+g
+r
+p
+e
+h
+ce
+a
+i
+s
+v
+e
+es
+(i.
+t
+e
+h
+.,
+e
+A
+a
+l
+r
+g
+ri
+.
+v
+1
+al
+) i
+s
+s
+ig
+t
+n
+ri
+a
+g
+l
+g
+o
+er
+f
+ed
+a Moreover, Line 9 calculates ϕ i ( k ts
+i
+)
+k
+and c(cid:103) i ost(ts
+i
+)
+k
+of task ts
+i
+on the
+basis of Eqs. (14) and (15). Next, the algorithm decides whether
+immediately. Firstly, the algorithm calculates the Mest, Meft VM I is a suitable candidate VM for task ts (Line 10). If VM
+and Mlct of all tasks among the arrival workflow according to I is a k candidate, it will be added into set I (L i ine 11). Again, the
+k
+Eqs.(8)-(10) (Line 2). Then, in turn, the algorithm traverses all obtained candidate set I may include multiple VMs, the algorithm
+tasks among the workflow from the exit nodes according to the will find out a VM with the minimal idle time from I as the suitable
+dependencies between tasks, and finds out all PCPs (Line 3). The VM for ts (Line 13). Finally, if each of active VMs does not match
+details of traversing tasks to find PCPs can be referred to [9]. the requi i rement for executing task ts, the algorithm will lease a
+Based on the obtained PCPs, the algorithm traverses all tasks i
+new suitable VM from all VM rankings the cloud provider offers
+on each PCP to assign the subdeadlines according to Eqs. (11)
+(Lines 14-15). If all VM rankings, nevertheless, can not satisfy the
+and (12) (Line 4). Whereafter, the algorithm fetches the entry subdeadline of task ts, a new VM with the highest ranking will be
+tasks among the workflow into queue Q (Line 5), and then takes i
+r leased (Line 17).
+all other remaining tasks of the workflow into the workflow pool
+(Line 6). Finally, the algorithm calls the Function ScheduleTask Theorem 2. The time complexity for processing an arrival work-
+through taking queue Q as the input (Line 7). flow ξ with Alg.1 is O(|T|2+|N |log(|N |)+|N |2|N |),
+r s in in in vm
+2168-7161 (c) 2018 IEEE. Personal use is permitted, but republication/redistribution requires IEEE permission. See http://www.ieee.org/publications_standards/publications/rights/index.html for more information.
+
+This article has been accepted for publication in a future issue of this journal, but has not been fully edited. Content may change prior to final publication. Citation information: DOI 10.1109/TCC.2019.2906300, IEEE
+Transactions on Cloud Computing
+JOURNALOFLATEXCLASSFILES,VOL.*,NO.*,AUGUST* 9
+Algorithm 3: Function ScheduleTask(Q ) VM rankings can be regarded as a constant. As the length of
+r
+Input: A queue Q saving the ready tasks; queue Q r is |N in |, scheduling each task in queue Q r needs time
+r
+1 Sort Q r by a non-descending order of the priority; O(|N in |log(|N in |) + |N in |2|N vm |), correspondingly. Thus, the
+3 2 for e G a r c o h w ta t s h k ← ts i ∈ +∞ Q r , I do ← ∅; t A im lg e .1 c i o s m O p ( l | e T xi | t 2 y + fo | r N s i c n h |l e o d g u ( li | n N g in a |) n + ew |N su in b | m 2| i N tte v d m w |) o . r T k h fl i o s w pro w v i e th s
+4 for each active I k do the theorem.
+5 if I k is idle then Theorem 3. The time complexity for the feedback process with
+6 (cid:36)(ts i ) k ← Alg. 2 is O(|N out |log(|N out |) + |N out ||N in ||N vm |), where
+max{Φ, ts∈ m pr a ed x (ts) {ζ(ts p ) + d(es p,i )}}; |N out | is the maximum outdegree of a task among ξ s .
+p i
+7 else Proof. When Alg. 2 adjusts the immediate successors of a com-
+8 (cid:36) m (t a s i x ) { k ϕ ← (tr j ) k , max {ζ(ts p ) + d(es p,i )}}; p n l e e e t d e s d ti t m as e k O t ( s i | , N i o t ut n | e ) e . d F s or to eac tr h av im er m se ed e i a a c te h s o u f cc s es u s c o c r ( s t o s i ) f , ta w sk hi t c s i h ,
+ts∈pred(ts) again, the algorithm needs to determine whether their immediate
+p i
+9 Calculate ϕ(ts i ) k and c(cid:103)ost(ts i ) k for ts i according to predecessors have been completed for the purpose of adjusting,
+which requires time O(|N |). Thus, the time complexity of
+Eqs. (14) and (15); in
+(cid:92) adjusting the immediate successors of task ts in the algorithm
+10 if ϕ(ts i ) k ≤ l sub (ts i ) and c(cid:103)ost(ts i ) k < Growth is O(|N ||N |). Besides, in Alg. 2, the i length of queue
+then out in
+Q saving the ready tasks is |N |, which will be delivered
+11 Add I k into I, then Growth ← c(cid:103)ost(ts i ) k ; to r Alg. 3. Consequently, the tim ou e t complexity of Alg. 3 is
+12 if I is not ∅ then O(|N out |log(|N out |) + |N out ||N in ||N vm |) according to Proof
+13 Find out the VM with the minimal idle time in I, for Theorem 2. Hence, The time complexity for the feedback pro-
+then schedule ts on it; cess is O(|N out |log(|N out |) + |N out ||N in ||N vm |). This proves
+i
+the theorem.
+14 else if There exists VM I h with the minimal c(cid:103)ost(ts i ) h ,
+which executes task ts while satisfying
+(cid:92) i 6 PERFORMANCE EVALUATION
+ϕ(ts) ≤ l (ts) then
+i sub i
+To evaluate the performance of different algorithms, we compare
+15 Lease a new VM I h with the minimal c(cid:103)ost(ts i ) h ; NOSF with ROSA [25] and IC-PCPD2 [9] algorithms, which are
+16 else two of the existing workflow scheduling algorithms in clouds.
+17 Lease a new VM with the highest ranking of ROSA is an online scheduling algorithm for multiple work-
+computing services; flows, considering the stochasticity of task execution time. More-
+18 Schedule ts i on the new VM after it has been initiated; over, ROSA utilizes the quantile for the normal distribution to
+estimate the stochastic task execution time. This algorithm ranks
+the tasks ready for scheduling based on their predicted latest start
+time, and take tasks’ predicted latest completion time as decision
+where |T| is the number of tasks among workflow ξ s , and |N in | is parameters. Then, these tasks are in turn scheduled according to
+the maximum indegree of a task among ξ s , and |N vm | represents the setting priorities and decision parameters.
+the number of active VMs, respectively. IC-PCPD2 is a scheduling algorithm for a single workflow
+under the deterministic task execution time, and adopts a similar
+Proof. Processing for an arrival workflow consists of two parts.
+method of deadline assignment with ours as well. This algorithm
+The first part defines preprocessing the new workflow. The second
+will in turn schedule the tasks of the workflow in a breadth-firth
+part is described in Alg. 3 for scheduling entry tasks in queue
+Q . We assume that a Ds(Ts,Es) corresponding to workflow way, while satisfying the subdeadline. In order to enable IC-
+r
+ξ consists of |T| tasks and |E| edges. As Ds is a DAG, the PCPD2 to be applicable for the online arrvial of workflows, we
+s
+maximum number of |E| is (|T|−1)(|T|−2), we suppose that |E| (cid:39) trigger it to schedule all the workflow tasks as soon as a workflow
+O(|T|2). Line 2 in Alg. 1 is to calcu 2 late Mest, Meft and Mlct for arrives.
+each task, which needs time O(|T|2). The time complexity of the
+PCP algorithm (Line 3 in Alg. 1) is O(|T|2) [9]. The subdeadline 6.1 Experimental Workflows and Performance Metrics
+assignment requires time O(|T|). Hence, the time complexity of We evaluate the three algorithms based on five realistic workflow
+the first part is O(|T|2). datasets that are available in DAX [2], including Montage, Cyber-
+Subsequently, the length of queue Q delivered to Alg. 3 is Shak, Epigenomics, LIGO and SIPHT. We create two workflow
+r
+at most equal to |N |. In Alg. 3, sorting tasks in queue Q template sets, involving a medium set and a large set, based on
+in r
+needs time O(|N |log(|N |)). For each task ts, Alg. 3 needs the workflow applications. The medium template set comprises
+in in i
+to traverse all active VMs and VM rankings for scheduling. In 30, 50 and 100 tasks, while the large template set is composed
+the part of traversing active VMs, Alg. 3 needs to try each of these workflows containing 1000 tasks. Accordingly, there are
+of immediate predecessors of ts for calculating the value of 15 workflow templates in the former, and there are 5 workflow
+i
+(cid:36)(ts). The calculation requires time O(|N |). Thus, the time templates in the latter.
+i in
+complexity of traversing active VMs is O(|N ||N |). Addi- Our optimization objective is not only to minimize the total
+vm in
+tionally, Lines14-15 of Alg. 3 need to traverse all VM rankings cost of VM leasing, but also to utilize two metrics to evaluate the
+for leasing a new VM. Since the number of VM rankings is performance of scheduling algorithms, which are presented below.
+far less than that of active VMs, the time required traversing (1) Resource Utilization
+2168-7161 (c) 2018 IEEE. Personal use is permitted, but republication/redistribution requires IEEE permission. See http://www.ieee.org/publications_standards/publications/rights/index.html for more information.
+
+This article has been accepted for publication in a future issue of this journal, but has not been fully edited. Content may change prior to final publication. Citation information: DOI 10.1109/TCC.2019.2906300, IEEE
+Transactions on Cloud Computing
+JOURNALOFLATEXCLASSFILES,VOL.*,NO.*,AUGUST* 10
+We use the average utilization efficiency of VMs to evaluate is denoted as f (ts). As the execution time of ts is modelled as
+t i i
+the three algorithms, which is defined as a stochastic variable following the normal distribution with the
+(cid:88) |I| (cid:44) (cid:88) |I| d ex e p sc e r c i t b e i d ng va th lu e e st µ oc ts i ha a s n ti d c c th h e ar v a a c r te ia r n is c t e ic: σ t 2 s i , Eq (22) is defined as
+Utilization = ET(I ) AT(I ), (19)
+k k
+k=1 k=1 µ ts i = f t (ts i ), σ ts i = f t (ts i ) · α, (22)
+where ET(I ) and AT(I ) represent the processing time and the
+k k where α is a variance factor that indicates the fluctuation of the
+total active time (including the processing and idle time) of VM
+task execution time. In our experiments, the stochastic execution
+I during executing the workflow set Ω.
+k time of task ts is defined using a normal random number generator
+(2) Deadline Violation Probability i
+with the expected value of µ ts and the standard deviation of σ ts.
+We define two metrics related to deadline violation shown i i
+To assign a deadline to each workflow, we need to define
+in Eqs. (20) [10] and (21), respectively, to evaluate the three
+the makespan for the shortest schedule M , which is gained by
+algorithms. S
+scheduling each workflow task on a distinct VM with the highest
+TimeV iolation = (cid:88) |Ω| MakeSpan s + as − ls (cid:44) |Ω|, (20) r th an e k d i e n a g d w lin h e il o e f a w ll o d r a k t fl a o t w ran ξ sfe c r an tim be e c i a s lc re u g la a t r e d d ed as a l s s z = ero a . s T + he β re ·M fore, ,
+ls − as s S
+s=1 where β is a deadline factor.
+The performance of scheduling algorithms is affected by
+(cid:46)
+CountV iolation = |Ω| |Ω|, (21) multiple parameters, such as the variance factor α of the task
+execution time, the deadline factor β, as well as the count of tasks
+where |Ω| represents the total number of workflow set Ω and among the workflows. Details of these parameters are listed as
+|Ω| represents the number of missed workflow deadlines during follows:
+processing workflow set Ω. Eq. (20) indicates the average duration (1) The variance factor α is tested with the values {0.1, 0.15,
+percentage of exceeding workflow deadlines in workflow set Ω. 0.2, 0.25, 0.3, 0.35, 0.4, 0.45, 0.5}, where the default value of α
+And Eq. (21) indicates the average percentage of the number of is {0.2}.
+missed workflow deadlines in Ω. (2) The deadline factor β is tested with the values {2, 2.5, 3,
+TABLE 2: VM Parameters Used in Experiments 3.5, 4}, where the default value of β is {2}.
+(3) The number of workflows from the medium template set
+VM Type vCPU Price per time unit($) B(·)1 is tested with the value {1000}, and that from the large template
+set is tested with the value {200}.
+m2.4xlarge 8 0.98 1.0
+We utilize randomly selected workflows to test each algorithm.
+m2.2xlarge 4 0.49 1.2
+For each group of parameter settings, each algorithm runs inde-
+m1.xlarge 4 0.35 1.3
+pendently for 30 times, then the minimum, average and maximum
+m2.xlarge 2 0.245 1.4
+of the results are obtained according to Eqs. (3), (19), (20) and
+m1.large 2 0.175 1.6
+(21).
+m1.medium 1 0.087 1.8
+m1.small 1 0.044 2.0
+1 B(·) indicates the processing time weight of the 6.3 Evaluation Results
+corresponding VM ranking. 6.3.1 Total VM Rental Cost and Resource Utilization
+From the experimental results obtained by the medium template
+set, we can observe the total VM rental cost and the utilization
+6.2 Simulation Settings efficiency of leasing VMs in the three algorithms. According to
+We use a laptop equipped with 3.3GHz Intel Core i5 processor Figs. 5(a) and 5(b), the total cost obtained by NOSF is less
+and 8GB memory as the experimental platform, and implement a than the cost of ROSA and IC-PCPD2 when α and β increase.
+discrete time simulator for cloud workflow scheduling simulation Moreover, Figs. 6(a) and 6(b) reveal that the utilization efficiency
+by using JAVA. In the experiments, VM parameters are configured of VMs achieved by NOSF are still better than the utilization
+on the basis of the General Purpose instance group that Amazon efficiency of ROSA and IC-PCPD2 when α and β increase. There
+EC2 provides by on-demand purchasing in US East region. The are two major reasons for this. Firstly, NOSF adjusts the predicted
+configurations [13] and prices for VMs are listed in Table 2. start time and the priorities of the ready tasks in each step, which
+We assume that without any limitations, the customer can lease prohibits the propagation of gaps between the predicted and real
+VMs with any rankings, and all required softwares for executing completion time of tasks. Secondly, NOSF seeks heuristically the
+workflows can be installed on each leased VM. Also, we set suitable VMs for the ready tasks. Therefore, the idle time slots on
+the average bandwidth between VMs to 100Mbps and the billing each VM may be impacted as possible. For example, the last idle
+period to 3600 seconds, as well as the boot time of a VM to 97 time in the billing period may be utilized sufficiently. Since ROSA
+seconds, based on the results of Amazon EC2. does not control the propagation of such gaps, it consequently
+To simulate the random arrival of workflows, we select a results in a lower utilization efficiency. IC-PCPD2 is an off-line
+workflow with a stochastic time interval following the Poisson algorithm designed for a single workflow. Inevitably, there exist a
+distribution with λ = 0.01, from one of the above two template huge number of idle time slots on leased VMs. Additionally, IC-
+sets to submit to the scheduler. In addition, the task runtime, which PCPD2 does not apply any strategy to handle the influence of the
+is recorded in the workflow traces, is regard as the baseline of the fluctuated execution time, which may also result in unpredicted
+task execution time. Then, the baseline execution time of task ts idle time slots and poor utilization efficiency.
+i
+2168-7161 (c) 2018 IEEE. Personal use is permitted, but republication/redistribution requires IEEE permission. See http://www.ieee.org/publications_standards/publications/rights/index.html for more information.
+
+This article has been accepted for publication in a future issue of this journal, but has not been fully edited. Content may change prior to final publication. Citation information: DOI 10.1109/TCC.2019.2906300, IEEE
+Transactions on Cloud Computing
+JOURNALOFLATEXCLASSFILES,VOL.*,NO.*,AUGUST* 11
+24
+22
+20
+18 16 14 12 10 8 6 4
+2
+0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50
+2168-7161 (c) 2018 IEEE. Personal use is permitted, but republication/redistribution requires IEEE permission. See http://www.ieee.org/publications_standards/publications/rights/index.html for more information.
+) $( ts o C l at o T
+x 1 0 3 25
+20
+N R O O S F A S 15 IC -P C P D 2 10 5
+0
+2.0 2.5 3.0 3.5 4.0
+V a r ia n c e F a c t o r : a
+(a)
+) $( ts o C l at o T
+x 1 0 3
+N O S F R O S A IC -P C P D 2
+D e a d lin e F a c t o r : b
+(b)
+Fig. 5: The total cost of scheduling workflows.
+100 90 80
+70
+60
+50
+40
+0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50
+) %( n oit
+azilit
+U
+ecr
+u ose
+R
+N O S F 100 R O S A IC -P C P D 2 90 80
+70
+60
+50
+40
+30 2.0 2.5 3.0 3.5 4.0
+V a r ia n c e F a c t o r : a
+(a)
+) %( n oit
+azilit
+U
+ecr
+u ose
+R
+160
+140
+120
+100 80 60 40 20 0 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50
+N O S F R O S A
+IC -P C P D 2
+D e a d lin e F a c t o r : b
+(b)
+Fig. 6: The resource utilization of scheduling workflows.
+6.3.2 Deadline Violation Probability
+In this subsection, we evaluate the deadline violation probability
+of the three algorithms for scheduling a medium template set.
+Fig. 7 shows that all three algorithms have a few workflows
+that do not complete before the deadlines under fluctuated task
+execution time. We can see that the deadline violation probability
+of IC-PCPD2 is much higher than the results of NOSF and
+ROSA because IC-PCPD2 fails to deal with the influence of
+the fluctuated execution time. Specifically, from Figs. 7(a) and
+7(b), we can observe that NOSF is obviously less than ROSA,
+in terms of the average duration of exceeding the deadlines and
+the number of workflows unsatisfying the deadlines, when α
+increases. This can be interpreted that the feedback process in
+NOSF controls the accumulation of the fluctuated task execution
+time for mitigating its propagation, so that the deadline violation
+probability is reduced. Figs. 7(c) and 7(d) reveal that the deadline
+violation probabilities of the three algorithms decrease with the
+increment of β. This demonstrates that prolongation of deadline
+enlarges the slack of tasks, so that each of the algorithms can
+schedule more workflows satisfying the relevant deadlines.
+6.3.3 ime Efficiency
+In order to evaluate the time efficiency of the three algorithms,
+in this subsection, we compare the average execution time of the
+algorithms under various α and β.
+From Fig. 8, we can observe that the time overhead of NOSF
+is smaller than that of IC-PCPD2 but higher than that of ROSA.
+This is because NOSF will adjust the predicted start time and the
+priorities of the ready tasks, then calculate theirs subdeadlines
+when a task is completed. It results in more execution time.
+In addition, Fig. 8(a) shows that the execution time of NOSF
+gradually decreases while the execution time of ROSA slightly
+increases with the increase of α. The differences between the two
+algorithms get smaller as α increases. From Fig. 8(b), we can also
+observe the similar tend. Besides, IC-PCPD2 has to release more
+)
+%(
+n oit al oi V e mi T
+80
+70
+60
+50 N O S F R O S A 40 IC -P C P D 2 30 20 10 0 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50
+V a r ia n c e F a c t o r : a
+(a)
+)
+%(
+n oit al oi V t n u o C N O S F R O S A IC -P C P D 2
+V a r ia n c e F a c t o r : a
+(b)
+160 140 120
+100
+80
+60 40 20 0
+-20 2.0 2.5 3.0 3.5 4.0
+)
+%(
+n oit
+al oi V e mi
+T
+70 N R O O S S A F 60
+IC -P C P D 2 50
+40
+30 20 10
+0 2.0 2.5 3.0 3.5 4.0
+D e a d lin e F a c t o r : b
+(c)
+)
+%(
+n oit
+al oi V t n u o
+C
+N O S F R O S A IC -P C P D 2
+D e a d lin e F a c t o r : b
+(d)
+Fig. 7: Deadline violation of scheduling workflows.
+VMs due to its inefficient resource utilization, which leads to more
+time consumption for seeking VMs for each task.
+14
+12
+10
+8
+6
+4
+2
+0
+0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50
+)s(
+e
+mi
+T
+n oit
+u
+c e x
+E
+14
+12
+10
+8
+6
+4
+N O S F R O S A 2
+IC -P C P D 2
+0
+2.0 2.5 3.0 3.5 4.0
+V a r ia n c e F a c t o r : a
+(a)
+)s(
+e
+mi
+T
+n oit
+u
+c e x
+E
+N O S F R O S A
+IC -P C P D 2
+D e a d lin e F a c t o r : b
+(b)
+Fig. 8: The average execution time of scheduling algorithms.
+6.3.4 Performance of Scheduling Large Workflows
+In this subsection, we evaluate the experimental results of the three
+algorithms for scheduling workflows from the large template set.
+As shown in Fig. 9, we can obviously see that the performance
+of NOSF for scheduling large workflows is still much better than
+IC-PCPD2 and ROSA in terms of the total VM rental cost and
+the utilization efficiency of leasing VMs, as well as the deadline
+violation probability. Besides, Fig. 9(a) shows that the total VM
+rental cost of each algorithm for scheduling large workflows is
+much higher than that for scheduling workflows from the medium
+template set. It is obvious that the more tasks among a workflow
+need longer time that leased VMs take to execute them, which
+results in higher costs. Moreover, Fig. 9(b) indicates that the
+number of tasks in workflows has little impact on resource uti-
+lization of scheduling multiple workflows. Additionally, Fig. 9(c)
+shows that the number of missed workflow deadlines is much
+higher in each of the algorithms for scheduling large workflows
+than that for scheduling workflows from the medium template set.
+However, Fig. 9(d) reveals that the average duration of exceeding
+the deadlines are much lower in each algorithm for scheduling
+large workflows for the following reasons. On one hand, the
+execution of the workflow containing more tasks results in the
+
+This article has been accepted for publication in a future issue of this journal, but has not been fully edited. Content may change prior to final publication. Citation information: DOI 10.1109/TCC.2019.2906300, IEEE
+Transactions on Cloud Computing
+JOURNALOFLATEXCLASSFILES,VOL.*,NO.*,AUGUST* 12
+more serious accumulation of the fluctuated task execution time,
+so that the number of missed workflow deadlines is higher. On
+the other hand, the makespan of the workflow is longer, due to
+containing more tasks. The proportion of the length of time taken
+to execute the workflow in the whole makespan is reduced after
+missing the deadline in each algorithm.
+To sum up, the above experiment results demonstrate that
+the performance of NOSF is better than both the IC-PCPD2
+and ROSA algorithms. Nevertheless, we only consider that the
+cost growth of an active VM must be the minimum, which is
+currently active before scheduling a new task on it regardless of
+the remaining billing period, when we make the selection decision
+for a suitable VM. This may lead to myopic optimization, due to
+lack of information about the remaining billing period.
+12
+11
+10
+9
+8 7 6 5
+4 3 2 1 0
+0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50
+2168-7161 (c) 2018 IEEE. Personal use is permitted, but republication/redistribution requires IEEE permission. See http://www.ieee.org/publications_standards/publications/rights/index.html for more information.
+) $( ts o C
+l at o T
+x 1 0 4
+100
+90
+80
+70 60
+50 N R O O S S A F 40 IC -P C P D 2 30
+0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50
+V a r ia n c e F a c t o r : a
+(a)
+)
+%(
+n oit azilit
+U ecr u ose R
+N O S F R O S A IC -P C P D 2
+V a r ia n c e F a c t o r : a
+(b)
+100
+90
+80
+70
+60 50 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50
+) %(
+n oit
+al oi
+V t n u o C
+70
+60
+50
+40
+30
+N O S F 20 R O S A IC -P C P D 2 10 0.10 0.15 0.20 0.25 0.30 0.35 0.40 0.45 0.50
+V a r ia n c e F a c t o r : a
+(c)
+) %(
+n oit
+al oi
+V e mi T
+Fig. 10(b) shows that the utilization efficiency of VMs in NOSF∗
+and ROSA∗ are decreased visibly as η = 0, compared to their
+original algorithms. Then, the utilization efficiency of VMs in
+NOSF∗ and ROSA∗ improves, with the increase of η (η ≤ 1.25).
+When 1.25 ≤ η ≤ 1.75, the variation of utilization efficiency
+is tiny in the two algorithms and both the two algorithms can
+achieve a better utilization efficiency. Again, Figs. 10(c) and
+10(d) show that the deadline violation probability of NOSF∗ and
+ROSA∗ decreases sharply when η varies from 0 to 3. We can
+also observe that the deadline violation probability of both the
+two algorithms almost reaches a lower value when η is around 3.
+This is because a normal stochastic variable located in the range
+of [µ − 3 · σ,µ + 3 · σ], with the probability of 99.74%. This
+result accounts for the fact that a vast majority of values of task
+execution time are located in the estimation range of µ+3·σ when
+the expression µ+3·σ is used to estimate the task execution time.
+In this case, the fluctuation of the task execution time almost does
+not exceed the range. Hence, the two algorithms can process even
+more workflows before the deadlines. The results in this group of experiments demonstrate that the
+estimation value of the task execution time with stochastic charac- teristic acutely effects the performance of NOSF∗ and ROSA∗ al- gorithms. The estimation of the stochastic execution time with the
+normal distribution enables the scheduling algorithms to achieve
+a lower VM rental cost and a better utilization efficiency of VMs.
+However, in IaaS clouds, we can still optimize the rental cost and
+N O S F the utilization efficiency of VMs further by setting an appropriate
+R O S A IC -P C P D 2 value of η. It is worth noting that our solution is designed by
+neglecting many factors, such as the energy consumption and
+the resource supply capacities of the providers, VM delay, etc.
+These factors, in fact, have some influence on the performance of scheduling algorithms, which should be carefully considered in our future work for further improving the performance of online
+V a r ia n c e F a c t o r : a
+workflow scheduling.
+(d)
+Fig. 9: Performance scheduling of large workflows.
+14
+12
+10
+6.4 Discussion on Estimation of Task Execution Time 8
+We evaluate the impact of task execution time estimation on the 6
+performance of NOSF and ROSA algorithms in this subsection.
+4
+We use µ + η · σ to estimate the task execution time, where η is 0.00 0.25 0.50 0.75 1.00 1.25 1.50 1.75 2.00 2.25 2.50 2.75 3.00
+a factor varying from 0 to 3 with an increment of 0.25. For the
+sake of fairness, each of the two algorithms utilizes the expression
+µ+η·σ for estimation, named asNOSF∗ and ROSA∗, respectively.
+We test the performance of the two algorithms, afterwards, for scheduling the first workflow template set. Fig. 10 shows that the performance of NOSF∗ is superior to that of ROSA∗. It also verifies that the feedback process and the adjustment mechanism in NOSF∗ work properly. More remark- able, the experimental results of Fig. 10 show that NOSF∗ and ROSA∗ change with the same trend in terms of VM rental cost,
+deadline violation probability and resource utilization efficiency,
+as η increases. According to Fig. 10(a), particularly, we can
+observe that the total VM rental cost obtained by NOSF∗ and
+ROSA∗ are considerably high when η = 0. Next, the total VM
+rental cost obtained by the two algorithms decreases obviously
+when η increases (η ≤ 1.5). While η is around 1.5, NOSF∗
+and ROSA∗ obtain the lowest approximate cost, without the sig-
+nificant variation. Additionally, in respect of resource utilization,
+) $( ts
+o C
+l
+at o
+T
+x 1 0 3 100
+N R O O S S A F* * 95
+90
+85
+80
+75
+70
+65 0.00 0.25 0.50 0.75 1.00 1.25 1.50 1.75 2.00 2.25 2.50 2.75 3.00
+F a c t o r : h
+(a)
+)
+%(
+n oit azilit
+U
+ecr
+u ose
+R
+N O S F* R O S A *
+F a c t o r : h
+(b)
+110
+100
+90 80 70 60 50 40 30 20 10 0 -10 0.00 0.25 0.50 0.75 1.00 1.25 1.50 1.75 2.00 2.25 2.50 2.75 3.00 ) %( n oit al oi V e mi T
+80
+N O S F* 70
+R O S A * 60 50 40 30 20 10 0 0.00 0.25 0.50 0.75 1.00 1.25 1.50 1.75 2.00 2.25 2.50 2.75 3.00
+F a c t o r : h
+(c)
+) %( n oit al oi V t n u o C N O S F* R O S A *
+F a c t o r : h
+(d)
+Fig. 10: The impact of task execution time estimation.
+7 CONCLUSIONS AND FUTURE WORK
+In this paper, we have investigated the online workflow scheduling
+problem that exists in IaaS clouds, where VMs have fluctuating
+
+This article has been accepted for publication in a future issue of this journal, but has not been fully edited. Content may change prior to final publication. Citation information: DOI 10.1109/TCC.2019.2906300, IEEE
+Transactions on Cloud Computing
+JOURNALOFLATEXCLASSFILES,VOL.*,NO.*,AUGUST* 13
+performance causing uncertain task execution time and workflows [14] B. Lin, W. Guo, N. Xiong, G. Chen, A. V. Vasilakos, and H. Zhang, “A
+arrive continuously and stochastically. To capture the stochasticity, pretreatment workflow scheduling approach for big data applications in
+multicloud environments,” IEEE Transactions on Network and Service
+we have proposed NOSF, an online multi-workflow scheduling
+Management, vol. 13, no. 3, pp. 581–594, 2016.
+framework, to schedule the deadline-constrained workflows in [15] B. P. Rimal and M. Maier, “Workflow scheduling in multi-tenant
+IaaS clouds online. Moreover, we have developed a deadline- cloud computing environments,” IEEE Transactions on Parallel and
+aware workflow scheduling algorithm, based on NOSF, to si- Distributed Systems, vol. 28, no. 1, pp. 290–304, 2017.
+[16] J. Schad, J. Dittrich, and J.-A. Quiane´-Ruiz, “Runtime measurements in
+multaneously minimize the total VM rental cost and deadline
+the cloud: observing, analyzing, and reducing variance,” Proceedings of
+violation probability of workflows. Extensive simulation results the VLDB Endowment, vol. 3, no. 1-2, pp. 460–471, 2010.
+on realistic workflow datasets have demonstrated that the proposed [17] D. Bruneo, “A stochastic model to investigate data center performance
+andqosiniaascloudcomputingsystems,”IEEETransactionsonParallel
+algorithm outperforms two existing workflow scheduling solutions
+and Distributed Systems, vol. 25, no. 3, pp. 560–569, 2014.
+(i.e., IC-PCPD2 and ROSA), in terms of reducing the VM rental [18] M. A. Rodriguez and R. Buyya, “Deadline based resource provi-
+cost and the deadline violation probability, as well as improving sioningand scheduling algorithm for scientific workflows on clouds,”
+the resource utilization efficiency. In our future work, we aim IEEE Transactions on Cloud Computing, vol. 2, no. 2, pp. 222–235,
+2014.
+to investigate the joint optimization of the VM rental cost and
+[19] F. Wu, Q. Wu, Y. Tan, R. Li, and W. Wang, “: Partial critical path budget
+energy efficiency for multi-workflow scheduling in IaaS clouds, balanced scheduling algorithms for scientific workflow applications,”
+considering the different characteristics of heterogeneous VMs Future Generation Computer Systems, vol. 60, pp. 22–34, 2016.
+[20] V. Arabnejad, K. Bubendorfer, and B. Ng, “Scheduling deadline con-
+and the limited number of VMs with fluctuated performance.
+strained scientific workflows on dynamically provisioned cloud re-
+sources,” Future Generation Computer Systems, 2017.
+[21] M. A. Rodriguez and R. Buyya, “Budget-driven scheduling of scientific
+ACKNOWLEDGMENTS workflows in iaas clouds with fine-grained billing periods,” ACM Trans-
+actionsonAutonomousandAdaptiveSystems(TAAS),vol.12,no.2,p.5,
+This work is supported by the Natural Science Foundation of 2017.
+[22] J. Sahni and D. Vidyarthi, “A cost-effective deadline-constrained dy-
+China (No. 61702562), the 111 Project (No. B18059), the Inter-
+namic scheduling algorithm for scientific workflows in a cloud environ-
+national Science & Technology Cooperation Program of China ment,” IEEE Transactions on Cloud Computing, 2015.
+(No. 2013DFB10070) and China Hunan Provincial Science & [23] Y.-R. Wang, K.-C. Huang, and F.-J. Wang, “Scheduling online mixed-
+parallel workflows of rigid tasks in heterogeneous multi-cluster environ-
+Technology Program (No. 2012GK4106).
+ments,” Future Generation Computer Systems, vol. 60, pp. 35–47, 2016.
+[24] H. Chen, X. Zhu, D. Qiu, and L. Liu, “Uncertainty-aware real-time
+workflow scheduling in the cloud,” in Cloud Computing (CLOUD), 2016
+REFERENCES IEEE 9th International Conference on. IEEE, 2016, pp. 577–584.
+[25] H. Chen, X. Zhu, G. Liu, and W. Pedrycz, “Uncertainty-aware online
+scheduling for real-time workflows in cloud service environment,” IEEE
+[1] Y. Zhang, J. Ren, J. Liu, C. Xu, H. Guo, and Y. Liu, “A survey
+Transactions on Services Computing, 2018.
+on emerging computing paradigms for big data,” Chinese Journal of
+[26] X. Peng, J. Ren, L. She, D. Zhang, J. Li, and Y. Zhang, “Boat: A
+Electronics, vol. 26, no. 1, pp. 1–12, 2017.
+block-streamingappexecutionschemeforlightweightiotdevices,”IEEE
+[2] G. Juve, A. Chervenak, E. Deelman, S. Bharathi, G. Mehta, and K. Vahi,
+Internet of Things Journal, vol. 5, no. 3, pp. 1816–1829, 2018.
+“Characterizing and profiling scientific workflows,” Future Generation
+[27] D. Zhang, Z. Chen, L. X. Cai, H. Zhou, S. Duan, J. Ren, X. Shen, and
+Computer Systems, vol. 29, no. 3, pp. 682–692, 2013.
+Y. Zhang, “Resource allocation for green cloud radio access networks
+[3] J. Ren, H. Guo, C. Xu, and Y. Zhang, “Serving at the edge: A scalable
+with hybrid energy supplies,” IEEE Transactions on Vehicular Technol-
+iot architecture based on transparent computing,” IEEE Network, vol. 31,
+ogy, vol. 67, no. 2, pp. 1684–1697, 2018.
+no. 5, pp. 96–105, 2017.
+[28] K. Li, X. Tang, B. Veeravalli, and K. Li, “Scheduling precedence
+[4] L. T. Yang and M. Guo, High-performance computing: paradigm and
+constrained stochastic tasks on heterogeneous cluster systems,” IEEE
+infrastructure. John Wiley & Sons, 2005, vol. 44.
+Transactions on computers, vol. 64, no. 1, pp. 191–204, 2015.
+[5] V. K. Naik, C. Liu, L. Yang, and J. Wagner, “Online resource matching
+[29] L.-C. Canon and E. Jeannot, “Correlation-aware heuristics for evaluating
+for heterogeneous grid environments,” in ccgrid. IEEE, 2005, pp. 607–
+thedistributionofthelongestpathlengthofadagwithrandomweights,”
+614.
+IEEE Transactions on Parallel and Distributed Systems, vol. 27, no. 11,
+[6] Y.-K. Kwok and I. Ahmad, “Static scheduling algorithms for allocat-
+pp. 3158–3171, 2016.
+ing directed task graphs to multiprocessors,” ACM Computing Surveys
+[30] S. Jang, X. Wu, V. Taylor, G. Mehta, K. Vahi, and E. Deelman,
+(CSUR), vol. 31, no. 4, pp. 406–471, 1999. “Using performance prediction to allocate grid resources,” Texas A&M
+[7] D. P. Vidyarthi, B. K. Sarker, A. K. Tripathi, and L. T. Yang, Scheduling University,CollegeStation,TX,GriPhyNTechnicalReport,vol.25,2004.
+indistributedcomputingsystems:Analysis,designandmodels. Springer [31] M. A. Iverson, F. Ozguner, and L. C. Potter, “Statistical prediction of
+Science & Business Media, 2008. task execution times through analytic benchmarking for scheduling in
+[8] M. Lin and L. T. Yang, “Hybrid genetic algorithms for scheduling a heterogeneous environment,” in Heterogeneous Computing Workshop,
+partially ordered tasks in a multi-processor environment,” in Real-Time 1999.(HCW’99) Proceedings. Eighth. IEEE, 1999, pp. 99–111.
+Computing Systems and Applications, 1999. RTCSA’99. Sixth Interna- [32] G. R. Nudd, D. J. Kerbyson, E. Papaefstathiou, S. C. Perry, J. S. Harper,
+tional Conference on. IEEE, 1999, pp. 382–387. and D. V. Wilcox, “Pacea toolset for the performance prediction of
+[9] S.Abrishami,M.Naghibzadeh,andD.H.Epema,“Deadline-constrained parallel and distributed systems,” The International Journal of High
+workflow scheduling algorithms for infrastructure as a service clouds,” Performance Computing Applications, vol. 14, no. 3, pp. 228–251, 2000.
+Future Generation Computer Systems, vol. 29, no. 1, pp. 158–169, 2013. [33] X. Tang, K. Li, G. Liao, K. Fang, and F. Wu, “A stochastic scheduling
+[10] Z. Cai, X. Li, R. Ruiz, and Q. Li, “A delay-based dynamic scheduling algorithm for precedence constrained tasks on grid,” Future Generation
+algorithm for bag-of-task workflows with stochastic task execution times Computer Systems, vol. 27, no. 8, pp. 1083–1091, 2011.
+in clouds,” Future Generation Computer Systems, vol. 71, pp. 57–72, [34] J. Sun and J. Liu, “Synchronization protocols in distributed real-time
+2017. systems,” in Distributed Computing Systems, 1996., Proceedings of the
+[11] Z. Cai, X. Li, and R. Ruiz, “Resource provisioning for task-batch based 16th International Conference on. IEEE, 1996, pp. 38–45.
+workflowswithdeadlinesinpublicclouds,”IEEETransactionsonCloud [35] B. Kao and H. Garcia-Molina, “Deadline assignment in a distributed
+Computing, 2017. soft real-time system,” IEEE Transactions on Parallel and Distributed
+[12] R.N.CalheirosandR.Buyya,“Meetingdeadlinesofscientificworkflows Systems, vol. 8, no. 12, pp. 1268–1274, 1997.
+in public clouds with tasks replication,” IEEE Transactions on Parallel
+and Distributed Systems, vol. 25, no. 7, pp. 1787–1796, 2014.
+[13] H. Chen, X. Zhu, D. Qiu, L. Liu, and Z. Du, “Scheduling for workflows
+with security-sensitive intermediate data by selective tasks duplication in
+clouds,” IEEE Transactions on Parallel and Distributed Systems, 2017.
+2168-7161 (c) 2018 IEEE. Personal use is permitted, but republication/redistribution requires IEEE permission. See http://www.ieee.org/publications_standards/publications/rights/index.html for more information.
+
+This article has been accepted for publication in a future issue of this journal, but has not been fully edited. Content may change prior to final publication. Citation information: DOI 10.1109/TCC.2019.2906300, IEEE
+Transactions on Cloud Computing
+JOURNALOFLATEXCLASSFILES,VOL.*,NO.*,AUGUST* 14
+Jiagang Liu (jiagliu@csu.edu.cn) is currently a Deyu Zhang [S’14, M’17] (zdy876@csu.edu.cn)
+Ph.D student in the School of Information Sci- received the B.Sc. degree (2005) in communi-
+ence and Engineering, Central South University, cation engineering from PLA Information Engi-
+China. He is also an associate professor with neering University, China, and the M.Sc. degree
+the School of Computer and Information Sci- (2012) from Central South University, China,
+ence, Hunan Institute of Technology, China. He also in communication engineering. He received
+received the M.Sc. (2007) degrees in computer his Ph.D. degree in computer science from Cen-
+science from Central South University, China. tral South University, China, in 2016. He is now
+His research interests include task scheduling, an assistant professor with the School of Soft-
+cloud computing, transparent computing. ware and a postdoc fellow with the Transparent
+Computing Lab in the School of Information Sci-
+enceandEngineering,CentralSouthUniversity,China.Hewasavisiting
+scholar with the Department of Electrical and Computer Engineering,
+University of Waterloo, Canada, from 2014 to 2016. He has served as
+the co-chair of workshop SECIoT’1, and the guest editor for special
+issue on IEEE Internet of Things Journal. His research interests include
+stochastic resource allocation transparent computing, edge computing
+and IoT. He is a member of IEEE and CCF.
+Ju Ren [S’13, M’16] (renju@csu.edu.cn) re-
+ceived the B.Sc. (2009), M.Sc. (2012), Ph.D.
+(2016) degrees all in computer science, from
+Central South University, China. From 2013 to
+2015, he was a visiting Ph.D. student in the
+Department of Electrical and Computer Engi-
+neering, University of Waterloo, Canada. Cur-
+rently, he is a professor with the School of
+Yaoxue Zhang (zyx@csu.edu.cn) received his
+Information Science and Engineering, Central
+B.Sc. degree from Northwest Institute of
+South University, China. His research interests
+TelecommunicationEngineering,China,in1982,
+include Internet-of-Things, wireless communica-
+and his Ph.D. degree in computer networking
+tion, transparent computing and cloud computing. Dr. Ren serves as
+from Tohoku University, Japan, in 1989. Cur-
+an associate editor for IEEE Transactions on Vehicular Technology and
+rently, he is a professor in the Department of
+Peer-to-Peer Networking and Applications. He has also served as a
+Computer Science at Central South University,
+leading guest editor for IEEE Network, a track co-chair for IEEE VTC’17
+China,andalsoaprofessorintheDepartmentof
+Fall and IEEE I-SPAN 2018, a poster co-chair of IEEE MASS’18, a
+Computer Science and Technology at Tsinghua
+Technical Program Committee member of many international confer-
+University, China. His research interests include
+ences including IEEE INFOCOM’18/19, Globecom’17, WCNC’17 and
+computer networking, operating systems, ubiq-
+WCSP’16, and an active reviewer for over 20 international journals. He
+uitous/pervasive computing, transparent computing, and big data. He
+is a member of IEEE and ACM.
+has published over 200 technical papers in international journals and
+conferences, as well as 9 monographs and textbooks. Currently, he is
+serving as the Editor-in-Chief of Chinese Journal of Electronics. He is a
+fellow of the Chinese Academy of Engineering.
+Wei Dai (wdai4@wpi.edu)is a Ph.D. Candidate
+inthe Department of InformationScience atUni-
+versity of Arkansas at Little Rock,USA. He has
+worked for IBM China and IBM China Lab as
+a senior data scientist engineer for more than Geyong Min (g.min@exeter.ac.uk) is a profes-
+seven years. His research interests inlcude ma- sor of high performance computing and net-
+chine learning, data quality, IoT and data visual- working at the Department of Mathematics and
+ization. Computer Science University of Exeter, United
+Kingdom. He received the Ph.D. degree in com-
+puting science from the University of Glasgow,
+United Kingdom, in 2003, and the B.Sc. degree
+from Huazhong University of Science and Tech-
+nology, China, in 1995. He has published more
+than 200 research papers in leading interna-
+tional journals including IEEE/ACM Transactions
+on Networking, IEEE Journal on Selected Areas in Communications,
+IEEE Transactions on Communications, IEEE Transactions on Wireless
+Communications, IEEE Transactions on Multimedia, IEEE Transactions
+Pude Zhou (pude.zhou@csu.edu.cn) received
+on Computers, IEEE Transactions on Parallel and Distributed Systems,
+the B.S. Degree from the School of Electronics
+and at reputable international conferences, such as SIGCOMM-IMC,
+Engineering and Computer Science, Lanzhou
+ICDCS, IPDPS, GLOBECOM, and ICC. He is an Associated Editor of
+University of Technology, China, in 2015. He re-
+several international journals, e.g., IEEE Transactions on Computers.
+ceivedtheM.S.DegreeatCollegeofInformation
+He served as the General Chair/Program Chair of a number of inter-
+Science and Engineering, Central South Univer-
+national conferences in the area of Information and Communications
+sity. His research interests include big data and
+Technologies. His research interests include future internet, computer
+cloud computing.
+networks, wireless communications, high performance computing and
+cloud computing.
+2168-7161 (c) 2018 IEEE. Personal use is permitted, but republication/redistribution requires IEEE permission. See http://www.ieee.org/publications_standards/publications/rights/index.html for more information.
+
+This article has been accepted for publication in a future issue of this journal, but has not been fully edited. Content may change prior to final publication. Citation information: DOI 10.1109/TCC.2019.2906300, IEEE
+Transactions on Cloud Computing
+JOURNALOFLATEXCLASSFILES,VOL.*,NO.*,AUGUST* 15
+Noushin Najjari (n.najjari@gmail.com) is a
+postdoc fellow at the Department of Computer
+Science, University of Exeter, UK. She received
+the Ph.D. degree in computer science from Uni-
+versity of Exeter, UK, in 2017, and M.Sc. degree
+in information technology from Sharif University
+of Technology, Iran, in 2010, and the B.Sc. de-
+gree from Alzahra University, Iran, in 2006. Her
+research interests include performance mod-
+elling and analysis of communication networks,
+next generation networking, wireless network
+protocols, energy-efficiency, and cross-layer optimization.
+2168-7161 (c) 2018 IEEE. Personal use is permitted, but republication/redistribution requires IEEE permission. See http://www.ieee.org/publications_standards/publications/rights/index.html for more information.

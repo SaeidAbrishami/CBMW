@@ -13,13 +13,22 @@ final class NOSFTransferModel {
 
     NOSFTransferModel() {
         mode = Mode.valueOf(System.getProperty("nosf.transfer.mode",
-                Mode.COMMON_SHARED_STORAGE.name()).trim().toUpperCase());
+                NOSFConfiguration.defaultTransferMode()).trim().toUpperCase());
         bandwidthMbps = Double.parseDouble(System.getProperty(
                 "nosf.network.bandwidth.mbps", "100.0"));
         if (!Double.isFinite(bandwidthMbps) || bandwidthMbps <= 0.0) {
             throw new IllegalArgumentException(
                     "nosf.network.bandwidth.mbps must be finite and positive");
         }
+    }
+
+    NOSFTransferModel(Mode mode, double bandwidthMbps) {
+        if (mode == null || !Double.isFinite(bandwidthMbps)
+                || bandwidthMbps <= 0.0) {
+            throw new IllegalArgumentException("Invalid NOSF transfer model");
+        }
+        this.mode = mode;
+        this.bandwidthMbps = bandwidthMbps;
     }
 
     Mode getMode() { return mode; }

@@ -1,6 +1,7 @@
 package org.workflowsim.cbmw;
 
 import java.util.List;
+import java.util.Locale;
 import org.cloudbus.cloudsim.Log;
 
 /** Collects and prints per-scenario statistics. */
@@ -86,8 +87,10 @@ public class CBMWResultCollector {
 
     public static String csvHeader() {
         return "scenario,load,deadlineClass,algorithm,arrivalScale,tightness,run,"
+                + "runSeed,nosfProfile,"
                 + "total,accepted,rejected,metDeadline,rejectedNegotiation,"
                 + "rejectedPlanning,acceptanceRate,deadlineRate,overallSuccessRate,"
+                + "countViolation,timeViolation,"
                 + "onDemandCost,spotCost,estimatedRawCost,"
                 + "offeredPrice,brokerRevenue,brokerProfit,reservedCost,"
                 + "totalCost,makespan,simulationStartTime,simulationDuration,"
@@ -100,7 +103,9 @@ public class CBMWResultCollector {
                            double tightness, int run, double onDemandUsageRatio,
                            double spotUsageRatio) {
         return toCsvRow(toScenarioMetrics(scenario, load, deadlineClass, algorithm,
-                arrivalScale, tightness, run, onDemandUsageRatio, spotUsageRatio));
+                arrivalScale, tightness, run, ExperimentRunContext.getSeed(),
+                ExperimentRunContext.getProfile(), onDemandUsageRatio,
+                spotUsageRatio));
     }
 
     public ScenarioMetrics toScenarioMetrics(String scenario, String load,
@@ -109,6 +114,8 @@ public class CBMWResultCollector {
                                              double arrivalScale,
                                              double tightness,
                                              int run,
+                                             long runSeed,
+                                             String nosfProfile,
                                              double onDemandUsageRatio,
                                              double spotUsageRatio) {
         long total = allWorkflows.size();
@@ -119,6 +126,8 @@ public class CBMWResultCollector {
         double deadlineRate = accepted == 0 ? 0.0 : (double) met / accepted;
         double acceptanceRate = total == 0 ? 0.0 : (double) accepted / total;
         double overallSuccessRate = total == 0 ? 0.0 : (double) met / total;
+        double countViolation = total == 0 ? 0.0 : (double) (total - met) / total;
+        double timeViolation = paperTimeViolation();
         long rejectedNegotiation = rejectionCount("NEGOTIATION_DEADLINE_INFEASIBLE");
         long rejectedPlanning = rejectionCount("PLANNING_FAILED");
         double odCost = totalOnDemandCost();
@@ -131,9 +140,10 @@ public class CBMWResultCollector {
         double totalCost = odCost + spotCost + reservedCost;
 
         return new ScenarioMetrics(scenario, load, deadlineClass, algorithm,
-                arrivalScale, tightness, run, total, accepted, rejected, met,
+                arrivalScale, tightness, run, runSeed, nosfProfile,
+                total, accepted, rejected, met,
                 rejectedNegotiation, rejectedPlanning, acceptanceRate,
-                deadlineRate, overallSuccessRate,
+                deadlineRate, overallSuccessRate, countViolation, timeViolation,
                 odCost, spotCost, rawEstimate, offeredPrice,
                 brokerRevenue, brokerProfit, reservedCost,
                 totalCost, makespan(), simulationStartTime(), simulationDuration(),
@@ -144,24 +154,54 @@ public class CBMWResultCollector {
     }
 
     public static String toCsvRow(ScenarioMetrics metrics) {
-        return String.format("%s,%s,%s,%s,%.4f,%.1f,%d,%d,%d,%d,%d,%d,%d,"
-                        + "%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,%.4f,"
-                        + "%.4f,%.4f,%.2f,%.4f,%.2f,%.2f,%.2f,%.4f,%.4f,%.4f,%.4f,%d,%.4f,%d",
+        return String.join(",",
                 metrics.scenario, metrics.load, metrics.deadlineClass,
-                metrics.algorithm, metrics.arrivalScale, metrics.tightness,
-                metrics.run, metrics.total, metrics.accepted, metrics.rejected,
-                metrics.metDeadline, metrics.rejectedNegotiation,
-                metrics.rejectedPlanning, metrics.acceptanceRate,
-                metrics.deadlineRate, metrics.overallSuccessRate,
-                metrics.onDemandCost, metrics.spotCost,
-                metrics.estimatedRawCost, metrics.offeredPrice,
-                metrics.brokerRevenue, metrics.brokerProfit,
-                metrics.reservedCost, metrics.totalCost, metrics.makespan,
-                metrics.simulationStartTime, metrics.simulationDuration,
-                metrics.simulationDurationHours,
-                metrics.reservedUtil, metrics.onDemandUsageRatio,
-                metrics.spotUsageRatio, metrics.provisionedOnDemandVms,
-                metrics.onDemandVmUtilization, metrics.deadlineRiskTasks);
+                metrics.algorithm, f4(metrics.arrivalScale), f1(metrics.tightness),
+                Integer.toString(metrics.run), Long.toString(metrics.runSeed),
+                metrics.nosfProfile,
+                Long.toString(metrics.total), Long.toString(metrics.accepted),
+                Long.toString(metrics.rejected), Long.toString(metrics.metDeadline),
+                Long.toString(metrics.rejectedNegotiation),
+                Long.toString(metrics.rejectedPlanning),
+                f4(metrics.acceptanceRate), f4(metrics.deadlineRate),
+                f4(metrics.overallSuccessRate), f4(metrics.countViolation),
+                f4(metrics.timeViolation), f4(metrics.onDemandCost),
+                f4(metrics.spotCost), f4(metrics.estimatedRawCost),
+                f4(metrics.offeredPrice), f4(metrics.brokerRevenue),
+                f4(metrics.brokerProfit), f2(metrics.reservedCost),
+                f4(metrics.totalCost), f2(metrics.makespan),
+                f2(metrics.simulationStartTime), f2(metrics.simulationDuration),
+                f4(metrics.simulationDurationHours), f4(metrics.reservedUtil),
+                f4(metrics.onDemandUsageRatio), f4(metrics.spotUsageRatio),
+                Integer.toString(metrics.provisionedOnDemandVms),
+                f4(metrics.onDemandVmUtilization),
+                Integer.toString(metrics.deadlineRiskTasks));
+    }
+
+    private static String f1(double value) {
+        return String.format(Locale.US, "%.1f", value);
+    }
+
+    private static String f2(double value) {
+        return String.format(Locale.US, "%.2f", value);
+    }
+
+    private static String f4(double value) {
+        return String.format(Locale.US, "%.4f", value);
+    }
+
+    /** Paper Eq. 20: mean positive normalized deadline overrun. */
+    private double paperTimeViolation() {
+        if (allWorkflows.isEmpty()) return 0.0;
+        double sum = 0.0;
+        for (WorkflowRecord workflow : allWorkflows) {
+            double completion = workflow.getCompletionTime();
+            double span = workflow.getDeadline() - workflow.getArrivalTime();
+            if (completion < Double.MAX_VALUE && span > 0.0) {
+                sum += Math.max(0.0, completion - workflow.getDeadline()) / span;
+            }
+        }
+        return sum / allWorkflows.size();
     }
 
     private double totalOnDemandCost() {
@@ -255,6 +295,8 @@ public class CBMWResultCollector {
         public final double arrivalScale;
         public final double tightness;
         public final int run;
+        public final long runSeed;
+        public final String nosfProfile;
         public final long total;
         public final long accepted;
         public final long rejected;
@@ -264,6 +306,8 @@ public class CBMWResultCollector {
         public final double acceptanceRate;
         public final double deadlineRate;
         public final double overallSuccessRate;
+        public final double countViolation;
+        public final double timeViolation;
         public final double onDemandCost;
         public final double spotCost;
         public final double estimatedRawCost;
@@ -285,11 +329,13 @@ public class CBMWResultCollector {
 
         public ScenarioMetrics(String scenario, String load, String deadlineClass,
                                String algorithm, double arrivalScale,
-                               double tightness, int run, long total,
+                               double tightness, int run, long runSeed,
+                               String nosfProfile, long total,
                                long accepted, long rejected, long metDeadline,
                                long rejectedNegotiation, long rejectedPlanning,
                                double acceptanceRate, double deadlineRate,
                                double overallSuccessRate,
+                               double countViolation, double timeViolation,
                                double onDemandCost, double spotCost,
                                double estimatedRawCost, double offeredPrice,
                                double brokerRevenue, double brokerProfit,
@@ -308,6 +354,8 @@ public class CBMWResultCollector {
             this.arrivalScale = arrivalScale;
             this.tightness = tightness;
             this.run = run;
+            this.runSeed = runSeed;
+            this.nosfProfile = nosfProfile;
             this.total = total;
             this.accepted = accepted;
             this.rejected = rejected;
@@ -317,6 +365,8 @@ public class CBMWResultCollector {
             this.acceptanceRate = acceptanceRate;
             this.deadlineRate = deadlineRate;
             this.overallSuccessRate = overallSuccessRate;
+            this.countViolation = countViolation;
+            this.timeViolation = timeViolation;
             this.onDemandCost = onDemandCost;
             this.spotCost = spotCost;
             this.estimatedRawCost = estimatedRawCost;

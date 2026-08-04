@@ -80,11 +80,15 @@ Useful JVM switches:
 | `-Dcbmw.negotiation.gamma=1.0` | Markup applied to CBMW's post-planning raw execution-cost quote. |
 | `-Dcbmw.preemption.safety.sec=0` | Minimum post-preemption slack required before a running reserved task can be interrupted. |
 | `-Dcbmw.ondemand.delay.sec=90` | Shared CBMW/NOSF on-demand provisioning delay. NOSF deliberately uses this common-market value instead of the paper's 97-second experiment value. |
-| `-Dnosf.billing.quantum.sec=60` | NOSF VM billing quantum in seconds. |
-| `-Dnosf.vm.type.count=1` | Number of NOSF VM types; configure `nosf.vm.type.<i>.{name,cores,ram.mb,mips,price.per.sec}`. |
-| `-Dnosf.runtime.stddev.ratio=0.05` | NOSF sigma/mu used by the paper estimator `w=lambda=mu+sigma`; defaults to `cbmw.runtime.stddev.ratio`. |
+| `-Dnosf.profile=COMMON_MARKET` | NOSF experiment profile. `PAPER_ALIGNED` selects the paper's seven EC2 types, hourly billing, network transfers, and 30 repetitions while retaining the common deadline/workflow/runtime/boot controls. |
+| `-Dcbmw.repetitions=1` | Runs per scenario; defaults to 30 under `PAPER_ALIGNED`. |
+| `-Dcbmw.run.start=0` | First run number for resumable/extended repetition sets. |
+| `-Dcbmw.seed.base=20260716` | Base seed from which a deterministic seed is derived for each run. |
+| `-Dcbmw.runtime.resample=false` | Resample actual task runtimes by run; defaults to true whenever repetitions exceed one. Algorithms receive identical samples within a run. |
+| `-Dnosf.billing.quantum.sec=3600` | NOSF VM billing quantum; defaults to 3600 in both `COMMON_MARKET` and `PAPER_ALIGNED`. |
+| `-Dnosf.vm.type.count=1` | Number of NOSF VM types; defaults to the paper's seven Table 2 types under `PAPER_ALIGNED`. Configure `nosf.vm.type.<i>.{name,cores,ram.mb,mips,price.per.sec}` to override. |
 | `-Dnosf.priority.policy=EST` | Resolve the paper's priority ambiguity; `EST` follows Algorithm 3's operational description and `EFT` enables sensitivity analysis. |
-| `-Dnosf.transfer.mode=COMMON_SHARED_STORAGE` | Use the common project storage model; `PAPER_NETWORK` enables same-VM-zero edge transfers at `nosf.network.bandwidth.mbps` (100 by default). |
+| `-Dnosf.transfer.mode=COMMON_SHARED_STORAGE` | Use the common project storage model; defaults to `PAPER_NETWORK` under `PAPER_ALIGNED`, with same-VM-zero edge transfers at `nosf.network.bandwidth.mbps` (100 by default). |
 | `-Dcbmw.cewb.spot.mtbi.sec=3600` | Override mean time between spot interruptions for every CEWB class. |
 | `-Dcbmw.cewb.spot.max.attempts=3` | Spot attempts before CEWB forces on-demand fallback. |
 | `-Dcbmw.cewb.spot.min.success.prob=0.80` | Minimum predicted probability that a spot attempt survives. |
@@ -154,8 +158,11 @@ Scenario CSVs distinguish admission from execution success: `acceptanceRate`
 is accepted/total, the legacy `deadlineRate` remains met/accepted, and
 `overallSuccessRate` is met/total. They also include rejected workflow counts
 split into negotiation and planning failures.
-They also report provisioned on-demand VM count, aggregate on-demand VM
-utilization, and deadline-risk task count.
+They also report run seed, NOSF profile, paper count/time violation metrics,
+provisioned on-demand VM count, aggregate on-demand VM utilization, and
+deadline-risk task count. Aggregate CSVs include repetition counts and
+min/max/sample-standard-deviation statistics for cost, utilization, and both
+violation metrics.
 Scenario and aggregate CSVs also report broker revenue and broker profit. For
 paper-aligned CEWB these are settled by the selected reconstructed pricing
 policy; other algorithms leave them at zero unless they implement pricing.
@@ -170,10 +177,10 @@ Detailed `.rar-style` outputs, when `cbmw.export.details=true`:
 
 The algorithm-level `task_execution.csv` is always written incrementally after
 each completed scenario, even when detailed XLSX export is disabled. It records
-the scenario and algorithm, workflow disposition, task identity/dependencies,
+the scenario, algorithm, run, seed, NOSF profile, workflow disposition, task identity/dependencies,
 `mu`, `sigma`, paper `cet`, the runtime estimate actually used by the selected
 algorithm, sampled actual runtime, EST/EFT/LST/LFT/SST, planned and actual
-resources, provisioning/ready/submit/start/finish times, derived delays,
+resources (including the actual NOSF VM name), provisioning/ready/submit/start/finish times, derived delays,
 rescheduling classification, execution status, and deadline tightness. Tasks
 from rejected workflows are included with a rejection reason and blank actual
 execution fields.
@@ -467,10 +474,11 @@ scenario also completed.
 - NOSF Algorithms 1-3 are implemented from the original article. The paper is
   internally inconsistent about whether a newly arrived task's original
   priority is EST or EFT; the documented default is EST and the EFT
-  interpretation is available as a sensitivity switch. The default experiment
-  deliberately retains the common CBMW market, including the shared 90-second
-  provisioning delay and one homogeneous configurable VM type, rather than
-  claiming to reproduce the paper's seven-type EC2 environment.
+  interpretation is available as a sensitivity switch. `COMMON_MARKET` retains
+  the common CBMW market. `PAPER_ALIGNED` restores the seven-type EC2 catalog,
+  hourly billing, network model, and 30 repetitions while deliberately keeping
+  the common deadline factors, workflow population, runtime standard deviation,
+  and 90-second provisioning delay required for the comparison.
 - CEWB's resource behavior is now explicit rather than borrowing reserved VMs,
   but its configurable spot-market defaults remain simulation assumptions: the
   external paper's full pseudocode and experimental market constants are not
