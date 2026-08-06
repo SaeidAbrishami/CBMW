@@ -37,6 +37,7 @@ import org.workflowsim.cbmw.HybridVmPool;
 import org.workflowsim.cbmw.PaperRuntimeModel;
 import org.workflowsim.cbmw.WorkflowArrivalData;
 import org.workflowsim.cbmw.WorkflowLoader;
+import org.workflowsim.cbmw.WorkflowLoader.DatasetMode;
 import org.workflowsim.cbmw.baselines.CEWBBroker;
 import org.workflowsim.cbmw.baselines.CEWBPolicyMode;
 import org.workflowsim.cbmw.baselines.DynamicGreedyBroker;
@@ -51,10 +52,9 @@ import org.workflowsim.utils.ReplicaCatalog;
 /**
  * Main simulation driver for CBMW paper experiments.
  *
- * Runs the new experiment matrix: CBMW plus paper and greedy baselines across
- * low/moderate/heavy load and tight/medium/loose
- * deadlines against the same first 50 workflow arrivals selected from the
- * configured 200-arrival source trace.
+ * Runs seven arrival/deadline configurations. All algorithms use the full
+ * 500-workflow trace; CBMW and the two greedy baselines also use the 200 edge
+ * workflows (first_100 + last_100).
  * Arrival times come from poisson_distribution.json; deadlines are
  * arrivalTime + criticalPath * tightness; task runtimes use the perturbed
  * values from the matching .txt files.
@@ -93,7 +93,7 @@ public class CBMWSimulation {
     private static final int MAX_SCENARIOS = Integer.getInteger(
             "cbmw.max.scenarios", Integer.MAX_VALUE);
     private static final int MAX_WORKFLOWS = Integer.getInteger(
-            "cbmw.max.workflows", 50);
+            "cbmw.max.workflows", 500);
     private static final boolean QUIET = Boolean.parseBoolean(
             System.getProperty("cbmw.quiet", "false"));
     private static final int REPETITIONS = Integer.getInteger(
@@ -106,21 +106,16 @@ public class CBMWSimulation {
             System.getProperty("cbmw.runtime.resample",
                     Boolean.toString(REPETITIONS > 1)));
 
-    private static final DeadlineClass[] DEADLINES = {
-            new DeadlineClass("tight", 1.2),
-            new DeadlineClass("medium", 2.0),
-            new DeadlineClass("loose", 4.0)
+    private static final ExperimentScenario[] EXPERIMENTS = {
+            new ExperimentScenario(15.0, 2.0),
+            new ExperimentScenario(30.0, 1.2),
+            new ExperimentScenario(30.0, 2.0),
+            new ExperimentScenario(30.0, 3.0),
+            new ExperimentScenario(30.0, 4.0),
+            new ExperimentScenario(45.0, 2.0),
+            new ExperimentScenario(60.0, 2.0)
     };
-
-    /**
-     * Arrival scale changes only inter-arrival spacing. Smaller scale means
-     * denser arrivals and heavier load.
-     */
-    private static final LoadScenario[] LOADS = {
-            new LoadScenario("low", 2.0),
-            new LoadScenario("moderate", 1.0),
-            new LoadScenario("heavy", 0.5)
-    };
+    private static final List<DatasetMode> DATASET_MODES = configuredDatasetModes();
 
     public static void main(String[] args) throws Exception {
         if (REPETITIONS <= 0) {
@@ -147,6 +142,10 @@ public class CBMWSimulation {
         System.out.println("[run] Workflow source: "
                 + new File(WORKFLOW_DIR).getAbsolutePath());
         System.out.println("[run] Workflow manifest: " + POISSON_FILE);
+        System.out.println("[run] Dataset modes: " + DATASET_MODES
+                + " (NOSF/CEWB full-only)");
+        System.out.println("[run] Experiment configurations: "
+                + EXPERIMENTS.length + " arrival/alpha pairs");
         System.out.println("[run] NOSF profile: " + NOSFConfiguration.profileName());
         System.out.println("[run] Repetitions: " + REPETITIONS
                 + " starting at run " + RUN_START
@@ -173,32 +172,40 @@ public class CBMWSimulation {
         Map<String, StringBuilder> algorithmCsv = new LinkedHashMap<>();
         Map<String, List<CBMWResultCollector.ScenarioMetrics>> algorithmMetrics =
                 new LinkedHashMap<>();
+        Map<String, List<WorkflowArrivalData>> arrivalCache = new LinkedHashMap<>();
         int completedScenarios = 0;
 
         scenarioLoop:
-        for (DeadlineClass deadline : DEADLINES) {
-            List<WorkflowArrivalData> baseArrivals =
-                    WorkflowLoader.load(WORKFLOW_DIR, POISSON_FILE, deadline.tightness);
-            baseArrivals = limitWorkflows(baseArrivals);
-            if (baseArrivals.isEmpty()) {
-                System.out.println("No arrivals loaded. Check "
-                        + WORKFLOW_DIR + File.separator + POISSON_FILE);
-                return;
-            }
+        for (String algo : ALGORITHMS) {
+            for (DatasetMode datasetMode : DATASET_MODES) {
+                if (!shouldRunDatasetMode(algo, datasetMode)) {
+                    System.out.println("[run] Skipping " + datasetMode + " for " + algo);
+                    continue;
+                }
+                for (ExperimentScenario experiment : EXPERIMENTS) {
+                    List<WorkflowArrivalData> fullBase = cachedArrivals(
+                            arrivalCache, experiment.alpha, DatasetMode.FULL_500);
+                    List<WorkflowArrivalData> selectedBase = datasetMode == DatasetMode.FULL_500
+                            ? fullBase : cachedArrivals(
+                                    arrivalCache, experiment.alpha, datasetMode);
+                    double arrivalScale = experiment.targetMeanInterArrivalSeconds
+                            / meanInterArrivalSeconds(fullBase);
+                    List<WorkflowArrivalData> arrivals = limitWorkflows(
+                            scaleArrivals(selectedBase, arrivalScale));
+                    if (arrivals.isEmpty()) {
+                        throw new IllegalStateException("No arrivals loaded for "
+                                + datasetMode + " " + experiment.name);
+                    }
+                    double simDuration = arrivals.get(arrivals.size() - 1)
+                            .getArrivalTime() + SIM_BUFFER_SECS;
 
-            for (LoadScenario load : LOADS) {
-                List<WorkflowArrivalData> arrivals =
-                        scaleArrivals(baseArrivals, load.arrivalScale);
-                double simDuration = arrivals.get(arrivals.size() - 1).getArrivalTime()
-                        + SIM_BUFFER_SECS;
-
-                for (int replicate = 0; replicate < REPETITIONS; replicate++) {
-                    int run = RUN_START + replicate;
-                    long runSeed = ExperimentRunContext.seedForRun(BASE_SEED, run);
-                    for (String algo : ALGORITHMS) {
+                    for (int replicate = 0; replicate < REPETITIONS; replicate++) {
+                        int run = RUN_START + replicate;
+                        long runSeed = ExperimentRunContext.seedForRun(BASE_SEED, run);
                         File algorithmDir = algorithmOutputDir(algo);
                         CBMWResultCollector.ScenarioMetrics row =
-                                runScenario(algo, load, deadline, arrivals, simDuration,
+                                runScenario(algo, experiment, datasetMode,
+                                        arrivalScale, arrivals, simDuration,
                                         algorithmDir, run, runSeed);
 
                         comparisonCsv.append(CBMWResultCollector.toCsvRow(row)).append("\n");
@@ -220,8 +227,8 @@ public class CBMWSimulation {
                         saveCsv(new File(algorithmDir, "results_aggregate.csv").getPath(),
                                 buildAggregateCsv(algoMetrics));
 
-                        System.out.println("Completed: " + load.name + " "
-                                + deadline.name + " " + algo + " run=" + run);
+                        System.out.println("Completed: " + experiment.name + " "
+                                + datasetMode + " " + algo + " run=" + run);
                         completedScenarios++;
                         if (completedScenarios >= MAX_SCENARIOS) {
                             System.out.println("[run] Stopped after " + completedScenarios
@@ -247,8 +254,9 @@ public class CBMWSimulation {
 
     private static CBMWResultCollector.ScenarioMetrics runScenario(
                                       String algorithm,
-                                      LoadScenario load,
-                                      DeadlineClass deadline,
+                                      ExperimentScenario experiment,
+                                      DatasetMode datasetMode,
+                                      double arrivalScale,
                                       List<WorkflowArrivalData> arrivals,
                                       double simDuration,
                                       File algorithmDir,
@@ -257,7 +265,7 @@ public class CBMWSimulation {
         ensureDir(algorithmDir);
         ExperimentRunContext.configure(run, runSeed, RESAMPLE_RUNTIMES,
                 NOSFConfiguration.profileName());
-        Parameters.setTightness(deadline.tightness);
+        Parameters.setTightness(experiment.alpha);
         Parameters.setSimDuration(simDuration);
         Parameters.setCostModel(Parameters.CostModel.VM);
 
@@ -278,8 +286,8 @@ public class CBMWSimulation {
         WorkflowPlanner planner = new WorkflowPlanner("planner_0", 1);
         WorkflowEngine  engine  = planner.getWorkflowEngine();
 
-        String scenario = load.name + "_" + deadline.name;
-        String label = scenario + "_" + algorithm + "_t" + deadline.tightness
+        String scenario = experiment.name + "_" + datasetTag(datasetMode);
+        String label = scenario + "_" + algorithm + "_t" + experiment.alpha
                 + "_r" + run;
         String logFile = new File(algorithmDir, label + "_detail.log").getPath();
         if (DETAIL_LOG) {
@@ -288,7 +296,7 @@ public class CBMWSimulation {
             CBMWLogger.disable(logFile);
         }
 
-        AbstractWorkflowBroker broker = createBroker(algorithm, deadline.tightness);
+        AbstractWorkflowBroker broker = createBroker(algorithm, experiment.alpha);
         engine.replaceScheduler(broker);
         broker.submitVmList(broker.getVmPool().getReservedVms());
         engine.bindSchedulerDatacenter(datacenter.getId(), 0);
@@ -310,8 +318,8 @@ public class CBMWSimulation {
                 broker.getVmPool().getReservedVms().size());
         collector.printReport(label, algorithm);
         CBMWResultCollector.ScenarioMetrics metrics = collector.toScenarioMetrics(
-                scenario, load.name, deadline.name,
-                algorithm, load.arrivalScale, deadline.tightness, run,
+                scenario, experiment.arrivalName, experiment.alphaName,
+                algorithm, arrivalScale, experiment.alpha, run,
                 runSeed, NOSFConfiguration.profileName(),
                 broker.getAccounting().getOnDemandUsageRatio(),
                 broker.getAccounting().getSpotUsageRatio());
@@ -325,7 +333,7 @@ public class CBMWSimulation {
                 run,
                 runSeed,
                 NOSFConfiguration.profileName(),
-                deadline.tightness,
+                experiment.alpha,
                 simDuration);
         detailedExporter.appendTaskCsv(
                 new File(algorithmDir, "task_execution.csv"));
@@ -490,6 +498,34 @@ public class CBMWSimulation {
         return scaled;
     }
 
+    private static List<WorkflowArrivalData> cachedArrivals(
+            Map<String, List<WorkflowArrivalData>> cache,
+            double alpha, DatasetMode datasetMode) throws Exception {
+        String key = Double.toString(alpha) + "|" + datasetMode.name();
+        List<WorkflowArrivalData> cached = cache.get(key);
+        if (cached != null) return cached;
+        List<WorkflowArrivalData> loaded = WorkflowLoader.load(
+                WORKFLOW_DIR, POISSON_FILE, alpha, datasetMode);
+        cache.put(key, loaded);
+        return loaded;
+    }
+
+    private static double meanInterArrivalSeconds(
+            List<WorkflowArrivalData> fullArrivals) {
+        if (fullArrivals.size() < 2) {
+            throw new IllegalArgumentException(
+                    "At least two full-dataset arrivals are required");
+        }
+        double first = fullArrivals.get(0).getArrivalTime();
+        double last = fullArrivals.get(fullArrivals.size() - 1).getArrivalTime();
+        double mean = (last - first) / (fullArrivals.size() - 1);
+        if (!Double.isFinite(mean) || mean <= 0.0) {
+            throw new IllegalArgumentException(
+                    "Full-dataset mean inter-arrival time must be positive");
+        }
+        return mean;
+    }
+
     private static List<WorkflowArrivalData> limitWorkflows(
             List<WorkflowArrivalData> arrivals) {
         if (MAX_WORKFLOWS == Integer.MAX_VALUE || arrivals.size() <= MAX_WORKFLOWS) {
@@ -512,23 +548,65 @@ public class CBMWSimulation {
         return algorithms.isEmpty() ? Arrays.asList(DEFAULT_ALGORITHMS) : algorithms;
     }
 
-    private static class LoadScenario {
-        final String name;
-        final double arrivalScale;
-
-        LoadScenario(String name, double arrivalScale) {
-            this.name = name;
-            this.arrivalScale = arrivalScale;
+    private static List<DatasetMode> configuredDatasetModes() {
+        String configured = System.getProperty(
+                WorkflowLoader.DATASET_MODE_PROPERTY, "").trim();
+        if (!configured.isEmpty()) {
+            return Arrays.asList(DatasetMode.parse(configured));
         }
+        return Arrays.asList(DatasetMode.FULL_500, DatasetMode.EDGE_200);
     }
 
-    private static class DeadlineClass {
-        final String name;
-        final double tightness;
+    static boolean shouldRunDatasetMode(String algorithm, DatasetMode mode) {
+        if (mode == DatasetMode.FULL_500) return true;
+        return !("NOSF".equals(algorithm) || algorithm.startsWith("CEWB"));
+    }
 
-        DeadlineClass(String name, double tightness) {
-            this.name = name;
-            this.tightness = tightness;
+    static int defaultScenarioCountForAlgorithm(String algorithm) {
+        return EXPERIMENTS.length
+                * (shouldRunDatasetMode(algorithm, DatasetMode.EDGE_200) ? 2 : 1);
+    }
+
+    static List<String> defaultExperimentNames() {
+        List<String> names = new ArrayList<>();
+        for (ExperimentScenario experiment : EXPERIMENTS) {
+            names.add(experiment.name);
+        }
+        return names;
+    }
+
+    private static String datasetTag(DatasetMode mode) {
+        return mode == DatasetMode.FULL_500 ? "full500" : "edge200";
+    }
+
+    private static String compactNumber(double value) {
+        if (value == Math.rint(value)) {
+            return Long.toString((long) value);
+        }
+        return Double.toString(value);
+    }
+
+    private static class ExperimentScenario {
+        final double targetMeanInterArrivalSeconds;
+        final double alpha;
+        final String arrivalName;
+        final String alphaName;
+        final String name;
+
+        ExperimentScenario(double targetMeanInterArrivalSeconds, double alpha) {
+            if (!Double.isFinite(targetMeanInterArrivalSeconds)
+                    || targetMeanInterArrivalSeconds <= 0.0) {
+                throw new IllegalArgumentException(
+                        "Target mean inter-arrival time must be positive");
+            }
+            if (!Double.isFinite(alpha) || alpha <= 0.0) {
+                throw new IllegalArgumentException("Alpha must be positive");
+            }
+            this.targetMeanInterArrivalSeconds = targetMeanInterArrivalSeconds;
+            this.alpha = alpha;
+            this.arrivalName = "arrival" + compactNumber(targetMeanInterArrivalSeconds);
+            this.alphaName = "alpha" + compactNumber(alpha);
+            this.name = arrivalName + "_" + alphaName;
         }
     }
 
