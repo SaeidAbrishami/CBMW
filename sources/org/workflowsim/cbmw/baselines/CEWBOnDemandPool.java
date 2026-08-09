@@ -103,6 +103,7 @@ final class CEWBOnDemandPool {
     private boolean costsSettled;
     private double settledPhysicalCost;
     private double settledCapacityCoreSeconds;
+    private double settledCapacityRamMbSeconds;
 
     CEWBOnDemandPool() {
         requirePositive("VM cores", VM_CORES);
@@ -274,12 +275,14 @@ final class CEWBOnDemandPool {
         double totalWeight = 0.0;
         double totalCost = 0.0;
         double capacityCoreSeconds = 0.0;
+        double capacityRamMbSeconds = 0.0;
         for (Instance instance : instances) {
             if (!instance.launched || !Double.isFinite(instance.destroyAt)) continue;
             double uptime = Math.max(MIN_BILLING_SECONDS,
                     instance.destroyAt - instance.readyAt);
             totalCost += uptime * VM_PRICE_PER_SECOND;
             capacityCoreSeconds += uptime * VM_CORES;
+            capacityRamMbSeconds += uptime * VM_RAM_MB;
             for (Map.Entry<Integer, Double> entry
                     : instance.workflowCoreSeconds.entrySet()) {
                 weights.merge(entry.getKey(), entry.getValue(), Double::sum);
@@ -288,6 +291,7 @@ final class CEWBOnDemandPool {
         }
         settledPhysicalCost = totalCost;
         settledCapacityCoreSeconds = capacityCoreSeconds;
+        settledCapacityRamMbSeconds = capacityRamMbSeconds;
         Map<Integer, Double> allocated = new HashMap<>();
         if (totalWeight > 0.0) {
             for (Map.Entry<Integer, Double> entry : weights.entrySet()) {
@@ -331,6 +335,41 @@ final class CEWBOnDemandPool {
 
     double getSettledPhysicalCost() { return settledPhysicalCost; }
     double getSettledCapacityCoreSeconds() { return settledCapacityCoreSeconds; }
+    double getSettledCapacityRamMbSeconds() {
+        return settledCapacityRamMbSeconds;
+    }
+
+    int getActiveCoreCapacity() {
+        int total = 0;
+        for (Instance instance : instances) {
+            if (instance.active && instance.launched) total += VM_CORES;
+        }
+        return total;
+    }
+
+    int getActiveRamMbCapacity() {
+        int total = 0;
+        for (Instance instance : instances) {
+            if (instance.active && instance.launched) total += VM_RAM_MB;
+        }
+        return total;
+    }
+
+    int getUsedCores() {
+        int total = 0;
+        for (Instance instance : instances) {
+            if (instance.active && instance.launched) total += instance.usedCores;
+        }
+        return total;
+    }
+
+    int getUsedRamMb() {
+        int total = 0;
+        for (Instance instance : instances) {
+            if (instance.active && instance.launched) total += instance.usedRamMb;
+        }
+        return total;
+    }
 
     String configurationSummary() {
         return "onDemandVm=" + VM_CORES + "core/" + VM_RAM_MB + "MB"

@@ -18,6 +18,7 @@ import org.workflowsim.cbmw.AbstractWorkflowBroker;
 import org.workflowsim.cbmw.CBMWLogger;
 import org.workflowsim.cbmw.HybridVmPool;
 import org.workflowsim.cbmw.TaskExecutionRecord;
+import org.workflowsim.cbmw.UtilizationSnapshot;
 import org.workflowsim.cbmw.WorkflowRecord;
 import org.workflowsim.utils.Parameters;
 
@@ -249,6 +250,7 @@ public class CEWBBroker extends AbstractWorkflowBroker {
                 : onDemandPool.initialize(CloudSim.clock())) {
             recordOnDemandInstance(instance);
         }
+        snapshotPhysicalPools();
         onDemandCapacityChanged = true;
     }
 
@@ -380,6 +382,7 @@ public class CEWBBroker extends AbstractWorkflowBroker {
                     : onDemandPool.provisionFor(requiredCores, requiredRamMb, now)) {
                 recordOnDemandInstance(instance);
             }
+            snapshotPhysicalPools();
         }
 
         boolean queuedDemand = false;
@@ -416,6 +419,7 @@ public class CEWBBroker extends AbstractWorkflowBroker {
                         "vm=%d destroyAt=%.2f", instance.getId(),
                         instance.getDestroyAt());
             }
+            snapshotPhysicalPools();
         }
     }
 
@@ -452,6 +456,7 @@ public class CEWBBroker extends AbstractWorkflowBroker {
         OnDemandAttempt attempt = new OnDemandAttempt(job, offer,
                 executionSeconds);
         activeOnDemandAttempts.put(job.getCloudletId(), attempt);
+        snapshotPhysicalPools();
         schedule(getId(), containerDelay + executionSeconds,
                 WorkflowSimTags.CEWB_ON_DEMAND_TASK_COMPLETE, attempt);
 
@@ -470,6 +475,7 @@ public class CEWBBroker extends AbstractWorkflowBroker {
         remainingEstimatedRuntimeByJob.remove(job.getCloudletId());
         onDemandPool.release(attempt.offer, CloudSim.clock());
         onDemandCapacityChanged = true;
+        snapshotPhysicalPools();
         job.setExecParam(attempt.offer.getContainerDelaySeconds()
                         + attempt.executionSeconds,
                 attempt.executionSeconds);
@@ -532,11 +538,13 @@ public class CEWBBroker extends AbstractWorkflowBroker {
             CBMWLogger.logf("CEWB-ON-DEMAND-READY",
                     "vm=%d readyAt=%.2f", instance.getId(), CloudSim.clock());
         }
+        if (!activated.isEmpty()) snapshotPhysicalPools();
     }
 
     private void recordOnDemandInstance(CEWBOnDemandPool.Instance instance) {
-        accounting.markOnDemandOrdered(instance.getId(), instance.getOrderedAt(),
-                instance.getReadyAt());
+        accounting.markOnDemandOrdered(instance.getId(),
+                CEWBOnDemandPool.VM_CORES, CEWBOnDemandPool.VM_RAM_MB,
+                instance.getOrderedAt(), instance.getReadyAt());
         if (instance.isLaunched()) {
             accounting.markOnDemandLaunched(instance.getId(), instance.getReadyAt());
         } else {
@@ -631,6 +639,7 @@ public class CEWBBroker extends AbstractWorkflowBroker {
 
         SpotAttempt attempt = new SpotAttempt(job, offer);
         activeSpotAttempts.put(job.getCloudletId(), attempt);
+        snapshotPhysicalPools();
         spotAttemptCounts.merge(job.getCloudletId(), 1, Integer::sum);
         int tag = offer.willBeInterrupted()
                 ? WorkflowSimTags.CEWB_SPOT_TASK_INTERRUPTED
@@ -652,6 +661,7 @@ public class CEWBBroker extends AbstractWorkflowBroker {
         activeSpotAttempts.remove(job.getCloudletId());
         remainingEstimatedRuntimeByJob.remove(job.getCloudletId());
         spotMarket.release(attempt.offer);
+        snapshotPhysicalPools();
 
         double cost = attempt.offer.getAttemptCost();
         WorkflowRecord wfr = activeWorkflows.get(workflowIdForJob(job));
@@ -687,6 +697,7 @@ public class CEWBBroker extends AbstractWorkflowBroker {
         SpotAttempt active = activeSpotAttempts.get(attempt.job.getCloudletId());
         if (active != attempt) return;
         spotMarket.revoke(attempt.offer);
+        snapshotPhysicalPools();
         List<SpotAttempt> revokedAttempts = new ArrayList<>();
         for (SpotAttempt candidate : activeSpotAttempts.values()) {
             if (candidate.offer.getInstanceId() == attempt.offer.getInstanceId()) {
@@ -830,6 +841,7 @@ public class CEWBBroker extends AbstractWorkflowBroker {
         System.out.println("[CEWB-SUMMARY] " + summary);
         CBMWLogger.log("CEWB-SUMMARY", summary);
         spotMarket.terminateAll();
+        snapshotPhysicalPools();
         assert spotMarket.getActiveInstances() == 0
                 : "CEWB simulation ended with active spot instances: "
                         + spotMarket.getActiveInstances();
@@ -861,6 +873,8 @@ public class CEWBBroker extends AbstractWorkflowBroker {
         }
         accounting.setOnDemandCapacityCoreSeconds(
                 onDemandPool.getSettledCapacityCoreSeconds());
+        accounting.setOnDemandCapacityRamMbSeconds(
+                onDemandPool.getSettledCapacityRamMbSeconds());
         if (policyMode.usesPaperPricing()) {
             for (WorkflowRecord workflow : allWorkflows) {
                 if (workflow.isAccepted() && workflow.isComplete()) {
@@ -869,5 +883,17 @@ public class CEWBBroker extends AbstractWorkflowBroker {
             }
         }
         onDemandCostsSettled = true;
+    }
+
+    /** Captures CEWB physical capacity and allocated container resources. */
+    private void snapshotPhysicalPools() {
+        accounting.recordUtilizationSnapshot(new UtilizationSnapshot(
+                CloudSim.clock(),
+                0, onDemandPool.getActiveCoreCapacity(),
+                spotMarket.getActiveCores(),
+                0, onDemandPool.getActiveRamMbCapacity(),
+                spotMarket.getActiveRamMb(),
+                0, onDemandPool.getUsedCores(), spotMarket.getUsedCores(),
+                0, onDemandPool.getUsedRamMb(), spotMarket.getUsedRamMb()));
     }
 }

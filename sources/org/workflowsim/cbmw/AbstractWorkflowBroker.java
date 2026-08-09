@@ -674,7 +674,8 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         double orderedAt = CloudSim.clock();
         double readyAt = projectedOnDemandReadyTime(orderedAt);
         pendingVmCreations.put(vmId, readyAt);
-        accounting.markOnDemandOrdered(vmId, orderedAt, readyAt);
+        accounting.markOnDemandOrdered(vmId, vm.getNumberOfPes(), vm.getRam(),
+                orderedAt, readyAt);
         accounting.markTaskProvisioningOrdered(taskId, orderedAt, readyAt);
         schedule(getId(), Math.max(0.0, readyAt - orderedAt),
                 WorkflowSimTags.CLOUDLET_UPDATE);

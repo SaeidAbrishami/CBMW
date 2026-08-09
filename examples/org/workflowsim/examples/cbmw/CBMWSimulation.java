@@ -166,10 +166,7 @@ public class CBMWSimulation {
             System.out.println("[run] Max workflows per scenario: " + MAX_WORKFLOWS);
         }
 
-        StringBuilder comparisonCsv =
-                new StringBuilder(CBMWResultCollector.csvHeader()).append("\n");
         List<CBMWResultCollector.ScenarioMetrics> comparisonMetrics = new ArrayList<>();
-        Map<String, StringBuilder> algorithmCsv = new LinkedHashMap<>();
         Map<String, List<CBMWResultCollector.ScenarioMetrics>> algorithmMetrics =
                 new LinkedHashMap<>();
         Map<String, List<WorkflowArrivalData>> arrivalCache = new LinkedHashMap<>();
@@ -208,22 +205,18 @@ public class CBMWSimulation {
                                         arrivalScale, arrivals, simDuration,
                                         algorithmDir, run, runSeed);
 
-                        comparisonCsv.append(CBMWResultCollector.toCsvRow(row)).append("\n");
                         comparisonMetrics.add(row);
-                        saveCsv(COMPARISON_CSV_OUTPUT, comparisonCsv.toString());
+                        saveCsv(COMPARISON_CSV_OUTPUT,
+                                buildScenarioCsv(comparisonMetrics));
                         saveCsv(COMPARISON_AGGREGATE_CSV_OUTPUT,
                                 buildAggregateCsv(comparisonMetrics));
 
-                        StringBuilder algoCsv = algorithmCsv.computeIfAbsent(algo,
-                                unused -> new StringBuilder(CBMWResultCollector.csvHeader())
-                                        .append("\n"));
                         List<CBMWResultCollector.ScenarioMetrics> algoMetrics =
                                 algorithmMetrics.computeIfAbsent(algo,
                                         unused -> new ArrayList<>());
-                        algoCsv.append(CBMWResultCollector.toCsvRow(row)).append("\n");
                         algoMetrics.add(row);
                         saveCsv(new File(algorithmDir, "results.csv").getPath(),
-                                algoCsv.toString());
+                                buildScenarioCsv(algoMetrics));
                         saveCsv(new File(algorithmDir, "results_aggregate.csv").getPath(),
                                 buildAggregateCsv(algoMetrics));
 
@@ -241,7 +234,7 @@ public class CBMWSimulation {
             }
         }
 
-        saveCsv(COMPARISON_CSV_OUTPUT, comparisonCsv.toString());
+        saveCsv(COMPARISON_CSV_OUTPUT, buildScenarioCsv(comparisonMetrics));
         saveCsv(COMPARISON_AGGREGATE_CSV_OUTPUT, buildAggregateCsv(comparisonMetrics));
         if (GENERATE_COMPARISON) {
             generateComparisonCharts();
@@ -421,6 +414,17 @@ public class CBMWSimulation {
         }
     }
 
+    private static String buildScenarioCsv(
+            List<CBMWResultCollector.ScenarioMetrics> rows) {
+        CBMWResultCollector.applyPairedMarginalCosts(rows);
+        StringBuilder csv = new StringBuilder(CBMWResultCollector.csvHeader())
+                .append("\n");
+        for (CBMWResultCollector.ScenarioMetrics row : rows) {
+            csv.append(CBMWResultCollector.toCsvRow(row)).append("\n");
+        }
+        return csv.toString();
+    }
+
     private static void generateGanttChart(String label, File algorithmDir) {
         runPython("plot_gantt.py",
                 CBMWLogger.getLogFile(),
@@ -469,12 +473,24 @@ public class CBMWSimulation {
                 .append("avgOnDemandCost,")
                 .append("avgSpotCost,avgEstimatedRawCost,avgOfferedPrice,")
                 .append("avgBrokerRevenue,avgBrokerProfit,")
-                .append("avgReservedCost,avgTotalCost,avgMakespan,")
+                .append("avgReservedCost,avgTotalCost,avgMarginalCost,avgMakespan,")
                 .append("avgSimulationStartTime,avgSimulationDuration,")
                 .append("avgSimulationDurationHours,")
                 .append("avgReservedUtil,avgOnDemandUsageRatio,avgSpotUsageRatio,")
                 .append("avgProvisionedOnDemandVms,avgOnDemandVmUtilization,")
                 .append("avgDeadlineRiskTasks,")
+                .append("avgReservedInstanceCount,avgReservedCoresPerInstance,")
+                .append("avgReservedRamMbPerInstance,avgReservedTotalCores,")
+                .append("avgReservedTotalRamMb,avgReservedCoreSeconds,")
+                .append("avgReservedRamMbSeconds,avgReservedMeanCoreUtil,")
+                .append("avgReservedMinCoreUtil,avgReservedMaxCoreUtil,")
+                .append("avgReservedMeanRamUtil,avgReservedMinRamUtil,")
+                .append("avgReservedMaxRamUtil,avgOnDemandAverageUptime,")
+                .append("avgOnDemandTotalCores,avgOnDemandTotalRamMb,")
+                .append("avgOnDemandCoreSeconds,avgOnDemandRamMbSeconds,")
+                .append("avgMeanUtilizedCores,avgMinUtilizedCores,")
+                .append("avgMaxUtilizedCores,avgMeanUtilizedRamMb,")
+                .append("avgMinUtilizedRamMb,avgMaxUtilizedRamMb,")
                 .append("minTotalCost,maxTotalCost,stddevTotalCost,")
                 .append("minOnDemandVmUtilization,maxOnDemandVmUtilization,")
                 .append("stddevOnDemandVmUtilization,")
@@ -638,6 +654,8 @@ public class CBMWSimulation {
         private double brokerProfit;
         private double reservedCost;
         private double totalCost;
+        private double marginalCost;
+        private int marginalCostRuns;
         private double makespan;
         private double simulationStartTime;
         private double simulationDuration;
@@ -648,6 +666,30 @@ public class CBMWSimulation {
         private double provisionedOnDemandVms;
         private double onDemandVmUtilization;
         private double deadlineRiskTasks;
+        private double reservedInstanceCount;
+        private double reservedCoresPerInstance;
+        private double reservedRamMbPerInstance;
+        private double reservedTotalCores;
+        private double reservedTotalRamMb;
+        private double reservedCoreSeconds;
+        private double reservedRamMbSeconds;
+        private double reservedMeanCoreUtil;
+        private double reservedMinCoreUtil;
+        private double reservedMaxCoreUtil;
+        private double reservedMeanRamUtil;
+        private double reservedMinRamUtil;
+        private double reservedMaxRamUtil;
+        private double onDemandAverageUptime;
+        private double onDemandTotalCores;
+        private double onDemandTotalRamMb;
+        private double onDemandCoreSeconds;
+        private double onDemandRamMbSeconds;
+        private double meanUtilizedCores;
+        private double minUtilizedCores;
+        private double maxUtilizedCores;
+        private double meanUtilizedRamMb;
+        private double minUtilizedRamMb;
+        private double maxUtilizedRamMb;
         private final RunningStats totalCostStats = new RunningStats();
         private final RunningStats onDemandUtilStats = new RunningStats();
         private final RunningStats countViolationStats = new RunningStats();
@@ -684,6 +726,10 @@ public class CBMWSimulation {
             brokerProfit += row.brokerProfit;
             reservedCost += row.reservedCost;
             totalCost += row.totalCost;
+            if (Double.isFinite(row.marginalCost)) {
+                marginalCost += row.marginalCost;
+                marginalCostRuns++;
+            }
             makespan += row.makespan;
             simulationStartTime += row.simulationStartTime;
             simulationDuration += row.simulationDuration;
@@ -694,6 +740,30 @@ public class CBMWSimulation {
             provisionedOnDemandVms += row.provisionedOnDemandVms;
             onDemandVmUtilization += row.onDemandVmUtilization;
             deadlineRiskTasks += row.deadlineRiskTasks;
+            reservedInstanceCount += row.reservedInstanceCount;
+            reservedCoresPerInstance += row.reservedCoresPerInstance;
+            reservedRamMbPerInstance += row.reservedRamMbPerInstance;
+            reservedTotalCores += row.reservedTotalCores;
+            reservedTotalRamMb += row.reservedTotalRamMb;
+            reservedCoreSeconds += row.reservedCoreSeconds;
+            reservedRamMbSeconds += row.reservedRamMbSeconds;
+            reservedMeanCoreUtil += row.reservedMeanCoreUtil;
+            reservedMinCoreUtil += row.reservedMinCoreUtil;
+            reservedMaxCoreUtil += row.reservedMaxCoreUtil;
+            reservedMeanRamUtil += row.reservedMeanRamUtil;
+            reservedMinRamUtil += row.reservedMinRamUtil;
+            reservedMaxRamUtil += row.reservedMaxRamUtil;
+            onDemandAverageUptime += row.onDemandAverageUptime;
+            onDemandTotalCores += row.onDemandTotalCores;
+            onDemandTotalRamMb += row.onDemandTotalRamMb;
+            onDemandCoreSeconds += row.onDemandCoreSeconds;
+            onDemandRamMbSeconds += row.onDemandRamMbSeconds;
+            meanUtilizedCores += row.meanUtilizedCores;
+            minUtilizedCores += row.minUtilizedCores;
+            maxUtilizedCores += row.maxUtilizedCores;
+            meanUtilizedRamMb += row.meanUtilizedRamMb;
+            minUtilizedRamMb += row.minUtilizedRamMb;
+            maxUtilizedRamMb += row.maxUtilizedRamMb;
             totalCostStats.add(row.totalCost);
             onDemandUtilStats.add(row.onDemandVmUtilization);
             countViolationStats.add(row.countViolation);
@@ -713,12 +783,37 @@ public class CBMWSimulation {
                     f4(estimatedRawCost / runs), f4(offeredPrice / runs),
                     f4(brokerRevenue / runs), f4(brokerProfit / runs),
                     f2(reservedCost / runs), f4(totalCost / runs),
+                    marginalCostRuns == 0 ? "" : f4(marginalCost / marginalCostRuns),
                     f2(makespan / runs), f2(simulationStartTime / runs),
                     f2(simulationDuration / runs),
                     f4(simulationDurationHours / runs), f4(reservedUtil / runs),
                     f4(onDemandUsageRatio / runs), f4(spotUsageRatio / runs),
                     f4(provisionedOnDemandVms / runs),
                     f4(onDemandVmUtilization / runs), f2(deadlineRiskTasks / runs),
+                    f4(reservedInstanceCount / runs),
+                    f4(reservedCoresPerInstance / runs),
+                    f4(reservedRamMbPerInstance / runs),
+                    f4(reservedTotalCores / runs),
+                    f4(reservedTotalRamMb / runs),
+                    f4(reservedCoreSeconds / runs),
+                    f4(reservedRamMbSeconds / runs),
+                    f4(reservedMeanCoreUtil / runs),
+                    f4(reservedMinCoreUtil / runs),
+                    f4(reservedMaxCoreUtil / runs),
+                    f4(reservedMeanRamUtil / runs),
+                    f4(reservedMinRamUtil / runs),
+                    f4(reservedMaxRamUtil / runs),
+                    f4(onDemandAverageUptime / runs),
+                    f4(onDemandTotalCores / runs),
+                    f4(onDemandTotalRamMb / runs),
+                    f4(onDemandCoreSeconds / runs),
+                    f4(onDemandRamMbSeconds / runs),
+                    f4(meanUtilizedCores / runs),
+                    f4(minUtilizedCores / runs),
+                    f4(maxUtilizedCores / runs),
+                    f4(meanUtilizedRamMb / runs),
+                    f4(minUtilizedRamMb / runs),
+                    f4(maxUtilizedRamMb / runs),
                     f4(totalCostStats.min()), f4(totalCostStats.max()),
                     f4(totalCostStats.stddev()), f4(onDemandUtilStats.min()),
                     f4(onDemandUtilStats.max()), f4(onDemandUtilStats.stddev()),

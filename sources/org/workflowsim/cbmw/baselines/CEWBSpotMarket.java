@@ -347,6 +347,27 @@ final class CEWBSpotMarket {
 
     int getActiveInstances() { return activeInstances; }
     int getActiveCores() { return activeCores; }
+    int getActiveRamMb() {
+        int total = 0;
+        for (SpotInstance instance : instances.values()) {
+            if (instance.active) total += instance.type.ramMb;
+        }
+        return total;
+    }
+    int getUsedCores() {
+        int total = 0;
+        for (SpotInstance instance : instances.values()) {
+            if (instance.active) total += instance.usedCores;
+        }
+        return total;
+    }
+    int getUsedRamMb() {
+        int total = 0;
+        for (SpotInstance instance : instances.values()) {
+            if (instance.active) total += instance.usedRamMb;
+        }
+        return total;
+    }
     int getPeakActiveInstances() { return peakActiveInstances; }
     int getPeakActiveCores() { return peakActiveCores; }
     long getAcquireCalls() { return acquireCalls; }

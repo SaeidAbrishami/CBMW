@@ -24,6 +24,7 @@ public class CBMWAccounting {
     private final Set<Integer> deadlineRiskTasks = new HashSet<>();
     private final Map<Integer, List<Integer>> childrenByParentTask = new HashMap<>();
     private double onDemandCapacityCoreSecondsOverride = Double.NaN;
+    private double onDemandCapacityRamMbSecondsOverride = Double.NaN;
 
     public void registerWorkflowTasks(WorkflowRecord wfr, List<Task> tasks,
                                       double deadlineTightness,
@@ -171,9 +172,7 @@ public class CBMWAccounting {
         for (TaskExecutionRecord record : taskRecords.values()) {
             if ("On-Demand".equals(record.getVmType())
                     && Double.isFinite(record.getExecutionTime())) {
-                busy += record.getExecutionTime()
-                        * (Double.isFinite(onDemandCapacityCoreSecondsOverride)
-                                ? record.getTaskCores() : 1);
+                busy += record.getExecutionTime() * record.getTaskCores();
             }
         }
         if (Double.isFinite(onDemandCapacityCoreSecondsOverride)) {
@@ -183,7 +182,15 @@ public class CBMWAccounting {
         double active = 0.0;
         for (OnDemandInstanceRecord record : onDemandRecords.values()) {
             double uptime = record.getUptime();
-            if (Double.isFinite(uptime)) active += uptime;
+            if (Double.isFinite(uptime)) active += uptime * record.getCores();
+        }
+        if (active <= 0.0) {
+            // Backward-compatible fallback for algorithm adapters that have not
+            // yet supplied physical VM capacity.
+            for (OnDemandInstanceRecord record : onDemandRecords.values()) {
+                double uptime = record.getUptime();
+                if (Double.isFinite(uptime)) active += uptime;
+            }
         }
         return active > 0.0 ? busy / active : 0.0;
     }
@@ -195,6 +202,20 @@ public class CBMWAccounting {
                     "On-demand capacity core-seconds must be finite and non-negative");
         }
         this.onDemandCapacityCoreSecondsOverride = capacityCoreSeconds;
+    }
+
+    public void setOnDemandCapacityRamMbSeconds(double capacityRamMbSeconds) {
+        if (!Double.isFinite(capacityRamMbSeconds) || capacityRamMbSeconds < 0.0) {
+            throw new IllegalArgumentException(
+                    "On-demand capacity RAM-seconds must be finite and non-negative");
+        }
+        this.onDemandCapacityRamMbSecondsOverride = capacityRamMbSeconds;
+    }
+
+    public void setOnDemandCapacitySeconds(double capacityCoreSeconds,
+                                           double capacityRamMbSeconds) {
+        setOnDemandCapacityCoreSeconds(capacityCoreSeconds);
+        setOnDemandCapacityRamMbSeconds(capacityRamMbSeconds);
     }
 
     public void markTaskProvisioningOrdered(Cloudlet cl, double orderTime,
@@ -224,6 +245,20 @@ public class CBMWAccounting {
                 .markOrdered(orderTime, readyTime);
     }
 
+    public void markOnDemandOrdered(int vmId, int cores, int ramMb,
+                                    double orderTime, double readyTime) {
+        OnDemandInstanceRecord record = onDemandRecords.computeIfAbsent(
+                vmId, unused -> new OnDemandInstanceRecord(vmId, cores, ramMb));
+        record.setCapacity(cores, ramMb);
+        record.markOrdered(orderTime, readyTime);
+    }
+
+    public void registerOnDemandCapacity(int vmId, int cores, int ramMb) {
+        OnDemandInstanceRecord record = onDemandRecords.computeIfAbsent(
+                vmId, unused -> new OnDemandInstanceRecord(vmId, cores, ramMb));
+        record.setCapacity(cores, ramMb);
+    }
+
     public void markOnDemandLaunched(int vmId, double launchTime) {
         onDemandRecords.computeIfAbsent(vmId, OnDemandInstanceRecord::new)
                 .markLaunched(launchTime);
@@ -249,7 +284,7 @@ public class CBMWAccounting {
     }
 
     public void snapshotUtilization(HybridVmPool pool) {
-        utilizationSnapshots.add(new UtilizationSnapshot(
+        recordUtilizationSnapshot(new UtilizationSnapshot(
                 CloudSim.clock(),
                 pool.getReservedVms().size() * HybridVmPool.RESERVED_CORES,
                 pool.getActiveOnDemandCores(),
@@ -259,6 +294,31 @@ public class CBMWAccounting {
                 pool.getTotalRunningCores(true),
                 pool.getTotalRunningRamMb(false),
                 pool.getTotalRunningRamMb(true)));
+    }
+
+    /** Adds a generic resource state for shared or algorithm-specific pools. */
+    public void recordUtilizationSnapshot(UtilizationSnapshot snapshot) {
+        if (snapshot == null) {
+            throw new IllegalArgumentException("Utilization snapshot is required");
+        }
+        if (!utilizationSnapshots.isEmpty()) {
+            double previous = utilizationSnapshots
+                    .get(utilizationSnapshots.size() - 1).getTime();
+            if (snapshot.getTime() < previous) {
+                throw new IllegalArgumentException(
+                        "Utilization snapshots must be chronological");
+            }
+        }
+        utilizationSnapshots.add(snapshot);
+    }
+
+    public ResourceAccountingSummary summarizeResources(double measurementStart,
+                                                        double measurementEnd) {
+        return ResourceAccountingSummary.from(utilizationSnapshots,
+                new ArrayList<>(onDemandRecords.values()),
+                measurementStart, measurementEnd,
+                onDemandCapacityCoreSecondsOverride,
+                onDemandCapacityRamMbSecondsOverride);
     }
 
     public List<TaskExecutionRecord> getTaskRecords() {

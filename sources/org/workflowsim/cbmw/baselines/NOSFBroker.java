@@ -156,7 +156,8 @@ public class NOSFBroker extends AbstractWorkflowBroker {
         NOSFVmState state = new NOSFVmState(vm, type, now, ready);
         vmStates.add(state);
         stateByVmId.put(vm.getId(), state);
-        accounting.markOnDemandOrdered(vm.getId(), now, ready);
+        accounting.markOnDemandOrdered(vm.getId(), type.cores, type.ramMb,
+                now, ready);
         accounting.markTaskProvisioningOrdered(taskId, now, ready);
         if (PROVISIONING_DELAY > 0.0) {
             schedule(getId(), PROVISIONING_DELAY,
@@ -204,6 +205,7 @@ public class NOSFBroker extends AbstractWorkflowBroker {
                 state.vm.setState(WorkflowSimTags.VM_STATUS_IDLE);
                 vmPool.activateOnDemandContainer(state.vm.getId());
                 accounting.markOnDemandLaunched(state.vm.getId(), now);
+                accounting.snapshotUtilization(vmPool);
             }
             startWaitingIfReady(state, now);
         }
@@ -305,6 +307,7 @@ public class NOSFBroker extends AbstractWorkflowBroker {
             state.released = true;
             accounting.markOnDemandDestroyed(state.vm.getId(), state.releaseAt);
             vmPool.terminateOnDemandVm(state.vm.getId());
+            accounting.snapshotUtilization(vmPool);
             stateByVmId.remove(state.vm.getId());
             iterator.remove();
             CBMWLogger.logf("NOSF-RELEASE",
@@ -312,6 +315,29 @@ public class NOSFBroker extends AbstractWorkflowBroker {
                     state.vm.getId(), state.orderTime, state.releaseAt,
                     state.chargedCost);
         }
+    }
+
+    /** Finalize reusable VM lifecycles if WorkflowSim stops before a billing boundary. */
+    @Override
+    public void shutdownEntity() {
+        double now = CloudSim.clock();
+        for (NOSFVmState state : new ArrayList<>(vmStates)) {
+            if (state.released) continue;
+            if (state.running != null || state.waiting != null) {
+                throw new IllegalStateException(
+                        "NOSF simulation ended with work on VM " + state.vm.getId());
+            }
+            double releaseAt = state.launched
+                    ? state.currentBillingBoundary(now, BILLING_QUANTUM)
+                    : now;
+            state.released = true;
+            accounting.markOnDemandDestroyed(state.vm.getId(), releaseAt);
+            vmPool.terminateOnDemandVm(state.vm.getId());
+            stateByVmId.remove(state.vm.getId());
+        }
+        vmStates.clear();
+        accounting.snapshotUtilization(vmPool);
+        super.shutdownEntity();
     }
 
     @Override

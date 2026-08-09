@@ -1,7 +1,9 @@
 package org.workflowsim.cbmw;
 
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import org.cloudbus.cloudsim.Log;
 
 /** Collects and prints per-scenario statistics. */
@@ -54,7 +56,12 @@ public class CBMWResultCollector {
         double overallSuccessRate = total == 0 ? 0.0 : (double) met / total;
         double reservedCost = reservedCost(algorithm);
         double totalCost = odCost + spotCost + reservedCost;
-        double reservedUtil = reservedUtilization();
+        double measurementStart = simulationStartTime();
+        double measurementEnd = Math.max(measurementStart, makespan);
+        ResourceAccountingSummary resources = accounting.summarizeResources(
+                measurementStart, measurementEnd);
+        double reservedUtil = includesReservedLeaseCost(algorithm)
+                ? resources.getReservedCoreUtilization().getMean() : 0.0;
 
         Log.printLine("\n========== RESULTS: " + scenario + " ==========");
         Log.printLine(String.format("Workflows total/accepted : %d / %d", total, accepted));
@@ -79,6 +86,7 @@ public class CBMWResultCollector {
                 includesReservedLeaseCost(algorithm) ? "" : " (excluded)"));
         Log.printLine(String.format("Total cost ($)           : %.4f",
                 totalCost));
+        Log.printLine("Marginal cost ($)        : pending paired 200-workflow result");
         Log.printLine(String.format("Makespan (sim s)         : %.2f", makespan));
         Log.printLine(String.format("Simulation start (sim s) : %.2f", simulationStartTime));
         Log.printLine(String.format("Simulation duration      : %.2f s (%.2f h)",
@@ -93,9 +101,18 @@ public class CBMWResultCollector {
                 + "countViolation,timeViolation,"
                 + "onDemandCost,spotCost,estimatedRawCost,"
                 + "offeredPrice,brokerRevenue,brokerProfit,reservedCost,"
-                + "totalCost,makespan,simulationStartTime,simulationDuration,"
+                + "totalCost,marginalCost,makespan,simulationStartTime,simulationDuration,"
                 + "simulationDurationHours,reservedUtil,onDemandUsageRatio,spotUsageRatio,"
-                + "provisionedOnDemandVms,onDemandVmUtilization,deadlineRiskTasks";
+                + "provisionedOnDemandVms,onDemandVmUtilization,deadlineRiskTasks,"
+                + "reservedInstanceCount,reservedCoresPerInstance,"
+                + "reservedRamMbPerInstance,reservedTotalCores,reservedTotalRamMb,"
+                + "reservedCoreSeconds,reservedRamMbSeconds,"
+                + "reservedMeanCoreUtil,reservedMinCoreUtil,reservedMaxCoreUtil,"
+                + "reservedMeanRamUtil,reservedMinRamUtil,reservedMaxRamUtil,"
+                + "onDemandAverageUptime,onDemandTotalCores,onDemandTotalRamMb,"
+                + "onDemandCoreSeconds,onDemandRamMbSeconds,"
+                + "meanUtilizedCores,minUtilizedCores,maxUtilizedCores,"
+                + "meanUtilizedRamMb,minUtilizedRamMb,maxUtilizedRamMb";
     }
 
     public String toCsvRow(String scenario, String load, String deadlineClass,
@@ -138,6 +155,11 @@ public class CBMWResultCollector {
         double brokerProfit = totalBrokerProfit();
         double reservedCost = reservedCost(algorithm);
         double totalCost = odCost + spotCost + reservedCost;
+        double start = simulationStartTime();
+        double end = Math.max(start, makespan());
+        ResourceAccountingSummary resources = accounting.summarizeResources(start, end);
+        int reportReservedVmCount = includesReservedLeaseCost(algorithm)
+                ? Math.max(0, reservedVmCount) : 0;
 
         return new ScenarioMetrics(scenario, load, deadlineClass, algorithm,
                 arrivalScale, tightness, run, runSeed, nosfProfile,
@@ -146,9 +168,9 @@ public class CBMWResultCollector {
                 deadlineRate, overallSuccessRate, countViolation, timeViolation,
                 odCost, spotCost, rawEstimate, offeredPrice,
                 brokerRevenue, brokerProfit, reservedCost,
-                totalCost, makespan(), simulationStartTime(), simulationDuration(),
-                reservedUtilization(), onDemandUsageRatio, spotUsageRatio,
-                accounting.getProvisionedOnDemandVmCount(),
+                totalCost, Double.NaN, makespan(), start, simulationDuration(),
+                onDemandUsageRatio, spotUsageRatio,
+                resources, reportReservedVmCount,
                 accounting.getOnDemandVmUtilization(),
                 accounting.getDeadlineRiskTaskCount());
     }
@@ -169,13 +191,72 @@ public class CBMWResultCollector {
                 f4(metrics.spotCost), f4(metrics.estimatedRawCost),
                 f4(metrics.offeredPrice), f4(metrics.brokerRevenue),
                 f4(metrics.brokerProfit), f2(metrics.reservedCost),
-                f4(metrics.totalCost), f2(metrics.makespan),
+                f4(metrics.totalCost), optionalF4(metrics.marginalCost),
+                f2(metrics.makespan),
                 f2(metrics.simulationStartTime), f2(metrics.simulationDuration),
                 f4(metrics.simulationDurationHours), f4(metrics.reservedUtil),
                 f4(metrics.onDemandUsageRatio), f4(metrics.spotUsageRatio),
                 Integer.toString(metrics.provisionedOnDemandVms),
                 f4(metrics.onDemandVmUtilization),
-                Integer.toString(metrics.deadlineRiskTasks));
+                Integer.toString(metrics.deadlineRiskTasks),
+                Integer.toString(metrics.reservedInstanceCount),
+                Integer.toString(metrics.reservedCoresPerInstance),
+                Integer.toString(metrics.reservedRamMbPerInstance),
+                Integer.toString(metrics.reservedTotalCores),
+                Long.toString(metrics.reservedTotalRamMb),
+                f4(metrics.reservedCoreSeconds),
+                f4(metrics.reservedRamMbSeconds),
+                f4(metrics.reservedMeanCoreUtil),
+                f4(metrics.reservedMinCoreUtil),
+                f4(metrics.reservedMaxCoreUtil),
+                f4(metrics.reservedMeanRamUtil),
+                f4(metrics.reservedMinRamUtil),
+                f4(metrics.reservedMaxRamUtil),
+                f4(metrics.onDemandAverageUptime),
+                Long.toString(metrics.onDemandTotalCores),
+                Long.toString(metrics.onDemandTotalRamMb),
+                f4(metrics.onDemandCoreSeconds),
+                f4(metrics.onDemandRamMbSeconds),
+                f4(metrics.meanUtilizedCores),
+                f4(metrics.minUtilizedCores),
+                f4(metrics.maxUtilizedCores),
+                f4(metrics.meanUtilizedRamMb),
+                f4(metrics.minUtilizedRamMb),
+                f4(metrics.maxUtilizedRamMb));
+    }
+
+    /**
+     * Applies the report definition marginalCost = totalCost(full500) -
+     * totalCost(edge200). Only the full-500 row receives a value. Rows remain
+     * blank (NaN) until an exact algorithm/scenario/run/seed pair exists.
+     */
+    public static void applyPairedMarginalCosts(List<ScenarioMetrics> rows) {
+        Map<String, ScenarioMetrics> fullRows = new HashMap<>();
+        Map<String, ScenarioMetrics> edgeRows = new HashMap<>();
+        for (ScenarioMetrics row : rows) {
+            row.marginalCost = Double.NaN;
+            if (row.total == 500 && row.scenario.endsWith("_full500")) {
+                fullRows.put(marginalPairKey(row, "_full500"), row);
+            } else if (row.total == 200 && row.scenario.endsWith("_edge200")) {
+                edgeRows.put(marginalPairKey(row, "_edge200"), row);
+            }
+        }
+        for (Map.Entry<String, ScenarioMetrics> entry : fullRows.entrySet()) {
+            ScenarioMetrics edge = edgeRows.get(entry.getKey());
+            if (edge != null) {
+                ScenarioMetrics full = entry.getValue();
+                full.marginalCost = full.totalCost - edge.totalCost;
+            }
+        }
+    }
+
+    private static String marginalPairKey(ScenarioMetrics row, String suffix) {
+        String baseScenario = row.scenario.substring(
+                0, row.scenario.length() - suffix.length());
+        return String.join("|", baseScenario, row.load, row.deadlineClass,
+                row.algorithm, Double.toString(row.arrivalScale),
+                Double.toString(row.tightness), Integer.toString(row.run),
+                Long.toString(row.runSeed), row.nosfProfile);
     }
 
     private static String f1(double value) {
@@ -188,6 +269,10 @@ public class CBMWResultCollector {
 
     private static String f4(double value) {
         return String.format(Locale.US, "%.4f", value);
+    }
+
+    private static String optionalF4(double value) {
+        return Double.isFinite(value) ? f4(value) : "";
     }
 
     /** Paper Eq. 20: mean positive normalized deadline overrun. */
@@ -278,14 +363,6 @@ public class CBMWResultCollector {
         return Math.max(0.0, makespan() - simulationStartTime());
     }
 
-    private double reservedUtilization() {
-        double totalCpu = allWorkflows.stream()
-                .mapToDouble(WorkflowRecord::getTotalReservedCpuTime).sum();
-        double capacity = HybridVmPool.NUM_RESERVED * HybridVmPool.RESERVED_CORES
-                * makespan();
-        return capacity > 0 ? totalCpu / capacity : 0.0;
-    }
-
     /** Raw per-run metrics that can be aggregated after the experiment. */
     public static class ScenarioMetrics {
         public final String scenario;
@@ -316,6 +393,7 @@ public class CBMWResultCollector {
         public final double brokerProfit;
         public final double reservedCost;
         public final double totalCost;
+        public double marginalCost;
         public final double makespan;
         public final double simulationStartTime;
         public final double simulationDuration;
@@ -326,6 +404,31 @@ public class CBMWResultCollector {
         public final int provisionedOnDemandVms;
         public final double onDemandVmUtilization;
         public final int deadlineRiskTasks;
+        public final ResourceAccountingSummary resourceSummary;
+        public final int reservedInstanceCount;
+        public final int reservedCoresPerInstance;
+        public final int reservedRamMbPerInstance;
+        public final int reservedTotalCores;
+        public final long reservedTotalRamMb;
+        public final double reservedCoreSeconds;
+        public final double reservedRamMbSeconds;
+        public final double reservedMeanCoreUtil;
+        public final double reservedMinCoreUtil;
+        public final double reservedMaxCoreUtil;
+        public final double reservedMeanRamUtil;
+        public final double reservedMinRamUtil;
+        public final double reservedMaxRamUtil;
+        public final double onDemandAverageUptime;
+        public final long onDemandTotalCores;
+        public final long onDemandTotalRamMb;
+        public final double onDemandCoreSeconds;
+        public final double onDemandRamMbSeconds;
+        public final double meanUtilizedCores;
+        public final double minUtilizedCores;
+        public final double maxUtilizedCores;
+        public final double meanUtilizedRamMb;
+        public final double minUtilizedRamMb;
+        public final double maxUtilizedRamMb;
 
         public ScenarioMetrics(String scenario, String load, String deadlineClass,
                                String algorithm, double arrivalScale,
@@ -340,13 +443,15 @@ public class CBMWResultCollector {
                                double estimatedRawCost, double offeredPrice,
                                double brokerRevenue, double brokerProfit,
                                double reservedCost, double totalCost,
+                               double marginalCost,
                                double makespan, double simulationStartTime,
-                               double simulationDuration, double reservedUtil,
-                                double onDemandUsageRatio,
-                                double spotUsageRatio,
-                                int provisionedOnDemandVms,
-                                double onDemandVmUtilization,
-                                int deadlineRiskTasks) {
+                               double simulationDuration,
+                               double onDemandUsageRatio,
+                               double spotUsageRatio,
+                               ResourceAccountingSummary resourceSummary,
+                               int reservedInstanceCount,
+                               double onDemandVmUtilization,
+                               int deadlineRiskTasks) {
             this.scenario = scenario;
             this.load = load;
             this.deadlineClass = deadlineClass;
@@ -375,16 +480,54 @@ public class CBMWResultCollector {
             this.brokerProfit = brokerProfit;
             this.reservedCost = reservedCost;
             this.totalCost = totalCost;
+            this.marginalCost = marginalCost;
             this.makespan = makespan;
             this.simulationStartTime = simulationStartTime;
             this.simulationDuration = simulationDuration;
             this.simulationDurationHours = simulationDuration / 3600.0;
-            this.reservedUtil = reservedUtil;
             this.onDemandUsageRatio = onDemandUsageRatio;
             this.spotUsageRatio = spotUsageRatio;
-            this.provisionedOnDemandVms = provisionedOnDemandVms;
+            this.resourceSummary = resourceSummary;
+            this.reservedInstanceCount = reservedInstanceCount;
+            this.reservedCoresPerInstance = reservedInstanceCount > 0
+                    ? HybridVmPool.RESERVED_CORES : 0;
+            this.reservedRamMbPerInstance = reservedInstanceCount > 0
+                    ? HybridVmPool.RESERVED_RAM_MB : 0;
+            this.reservedTotalCores = reservedInstanceCount
+                    * reservedCoresPerInstance;
+            this.reservedTotalRamMb = (long) reservedInstanceCount
+                    * reservedRamMbPerInstance;
+            this.reservedCoreSeconds = reservedTotalCores * simulationDuration;
+            this.reservedRamMbSeconds = reservedTotalRamMb * simulationDuration;
+            this.reservedMeanCoreUtil = reservedInstanceCount > 0
+                    ? resourceSummary.getReservedCoreUtilization().getMean() : 0.0;
+            this.reservedMinCoreUtil = reservedInstanceCount > 0
+                    ? resourceSummary.getReservedCoreUtilization().getMin() : 0.0;
+            this.reservedMaxCoreUtil = reservedInstanceCount > 0
+                    ? resourceSummary.getReservedCoreUtilization().getMax() : 0.0;
+            this.reservedMeanRamUtil = reservedInstanceCount > 0
+                    ? resourceSummary.getReservedRamUtilization().getMean() : 0.0;
+            this.reservedMinRamUtil = reservedInstanceCount > 0
+                    ? resourceSummary.getReservedRamUtilization().getMin() : 0.0;
+            this.reservedMaxRamUtil = reservedInstanceCount > 0
+                    ? resourceSummary.getReservedRamUtilization().getMax() : 0.0;
+            this.reservedUtil = reservedMeanCoreUtil;
+            this.provisionedOnDemandVms = resourceSummary.getOnDemandInstanceCount();
             this.onDemandVmUtilization = onDemandVmUtilization;
             this.deadlineRiskTasks = deadlineRiskTasks;
+            this.onDemandAverageUptime = resourceSummary.getAverageOnDemandUptime();
+            this.onDemandTotalCores = resourceSummary.getTotalOnDemandCores();
+            this.onDemandTotalRamMb = resourceSummary.getTotalOnDemandRamMb();
+            this.onDemandCoreSeconds = resourceSummary
+                    .getOnDemandCapacityCoreSeconds();
+            this.onDemandRamMbSeconds = resourceSummary
+                    .getOnDemandCapacityRamMbSeconds();
+            this.meanUtilizedCores = resourceSummary.getUtilizedCores().getMean();
+            this.minUtilizedCores = resourceSummary.getUtilizedCores().getMin();
+            this.maxUtilizedCores = resourceSummary.getUtilizedCores().getMax();
+            this.meanUtilizedRamMb = resourceSummary.getUtilizedRamMb().getMean();
+            this.minUtilizedRamMb = resourceSummary.getUtilizedRamMb().getMin();
+            this.maxUtilizedRamMb = resourceSummary.getUtilizedRamMb().getMax();
         }
     }
 }

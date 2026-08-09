@@ -92,6 +92,9 @@ public final class CEWBValidationTest {
         List<CEWBOnDemandPool.Instance> initial = pool.initialize(0.0);
         check(initial.size() == 1 && initial.get(0).isLaunched(),
                 "CEWB must start with one configured warm physical VM");
+        check(pool.getActiveCoreCapacity() == 32
+                        && pool.getActiveRamMbCapacity() == 65536,
+                "warm on-demand physical capacity must be observable");
 
         List<CEWBOnDemandPool.Offer> offers = new ArrayList<>();
         for (int i = 0; i < 32; i++) {
@@ -105,7 +108,11 @@ public final class CEWBValidationTest {
         }
         check(pool.acquire(33, 1, 1, 0.0) == null,
                 "physical core capacity must be enforced");
+        check(pool.getUsedCores() == 32 && pool.getUsedRamMb() == 32,
+                "container allocations must be observable");
         for (CEWBOnDemandPool.Offer offer : offers) pool.release(offer, 10.0);
+        check(pool.getUsedCores() == 0 && pool.getUsedRamMb() == 0,
+                "released container resources must leave utilization");
 
         List<CEWBOnDemandPool.Instance> ordered = pool.provisionFor(
                 64, 64, 100.0);
@@ -115,6 +122,9 @@ public final class CEWBValidationTest {
                 "cold physical VM must respect VM provisioning delay");
         check(pool.activateReady(190.0).size() == 1,
                 "cold physical VM must activate at its exact ready time");
+        check(pool.getActiveCoreCapacity() == 64
+                        && pool.getActiveRamMbCapacity() == 131072,
+                "activated physical VMs must increase observable capacity");
 
         check(pool.maintainIdle(200.0, false).isEmpty(),
                 "idle VM must survive its first idle interval");
@@ -127,6 +137,11 @@ public final class CEWBValidationTest {
                 "physical rental cost must be allocated to using workflows");
         check(pool.getSettledPhysicalCost() > 0.0,
                 "shared physical VM rental cost must be positive");
+        check(pool.getSettledCapacityCoreSeconds() > 0.0,
+                "settlement must publish on-demand core-seconds");
+        checkClose(pool.getSettledCapacityCoreSeconds() * 2048.0,
+                pool.getSettledCapacityRamMbSeconds(),
+                "settlement must publish on-demand RAM-seconds");
     }
 
     private static void testCapacityMatchedMarket() {
@@ -147,6 +162,10 @@ public final class CEWBValidationTest {
                 "active instance count must equal configured capacity");
         check(market.getActiveCores() == 960,
                 "active core count must equal matched capacity");
+        check(market.getActiveRamMb() > 0,
+                "active spot RAM capacity must be observable");
+        check(market.getUsedCores() == 960 && market.getUsedRamMb() == 960,
+                "spot allocations must be observable");
         check(market.getPeakActiveCores() == 960,
                 "peak core telemetry must record saturation");
         check(market.acquire(1, 1, 10.0, 10_000L,
@@ -156,6 +175,8 @@ public final class CEWBValidationTest {
                 "saturation telemetry must count the rejected request");
 
         for (CEWBSpotMarket.Offer offer : offers) market.release(offer);
+        check(market.getUsedCores() == 0 && market.getUsedRamMb() == 0,
+                "released spot allocations must leave utilization");
         check(market.getActiveInstances() == 560,
                 "idle shared spot instances must remain provisioned");
         check(market.getActiveCores() == 960,
