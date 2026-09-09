@@ -9,7 +9,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Stream;
 
-/** Focused validation for recursive partitioned-dataset loading. */
+/** Focused validation for flat dataset loading and arrival-ordered views. */
 public final class WorkflowLoaderValidationTest {
 
     private WorkflowLoaderValidationTest() {}
@@ -22,6 +22,7 @@ public final class WorkflowLoaderValidationTest {
             validateEdgeDataset(root);
             validateConfiguredMode(root);
             validateDuplicateDetection(root);
+            validateMalformedManifest(root);
             validateMissingPairDetection(root);
             System.out.println("WorkflowLoaderValidationTest: PASS");
         } finally {
@@ -30,26 +31,30 @@ public final class WorkflowLoaderValidationTest {
     }
 
     private static void createDataset(Path root) throws Exception {
-        Files.createDirectories(root.resolve("first_100"));
-        Files.createDirectories(root.resolve("middle_300"));
-        Files.createDirectories(root.resolve("last_100"));
-
         StringBuilder manifest = new StringBuilder("{\n");
-        for (int i = 0; i < 500; i++) {
-            String partition = i < 100 ? "first_100"
-                    : i < 400 ? "middle_300" : "last_100";
+        for (int i = 499; i >= 0; i--) {
             String name = String.format("Workflow_%03d", i);
-            Path directory = root.resolve(partition);
-            Files.write(directory.resolve(name + ".xml"),
+            Files.write(root.resolve(name + ".xml"),
                     ("<adag><job id=\"ID000\" runtime=\"1.0\"/></adag>\n")
                             .getBytes(StandardCharsets.UTF_8));
-            Files.write(directory.resolve(name + ".txt"),
+            Files.write(root.resolve(name + ".txt"),
                     "1.0\n".getBytes(StandardCharsets.UTF_8));
             manifest.append("  \"").append(name).append("\": ")
                     .append(10.0 + i * 3.25);
-            manifest.append(i == 499 ? "\n" : ",\n");
+            manifest.append(i == 0 ? "\n" : ",\n");
         }
         manifest.append("}\n");
+        StringBuilder edge = new StringBuilder("[\n");
+        for (int i = 199; i >= 0; i--) {
+            int id = i < 100 ? i : i + 300;
+            edge.append("{\"workflow_name\":\"Workflow_")
+                    .append(String.format("%03d", id))
+                    .append(".xml\",\"arrival_time_seconds\":")
+                    .append(10.0 + i * 3.25).append("}")
+                    .append(i == 0 ? "\n" : ",\n");
+        }
+        edge.append("]");
+        Files.write(root.resolve("edge.json"), edge.toString().getBytes(StandardCharsets.UTF_8));
         Files.write(root.resolve("poisson_distribution.json"),
                 manifest.toString().getBytes(StandardCharsets.UTF_8));
     }
@@ -63,23 +68,38 @@ public final class WorkflowLoaderValidationTest {
                 : "Full dataset must preserve the first absolute arrival";
         assert arrivals.get(499).getArrivalTime() == 10.0 + 499 * 3.25
                 : "Full dataset must preserve the last absolute arrival";
+        assert arrivals.get(0).getDaxPath().endsWith("Workflow_000.xml")
+                : "FULL_500 must be ordered by arrival time, not manifest order";
     }
 
     private static void validateEdgeDataset(Path root) throws Exception {
         List<WorkflowArrivalData> arrivals = WorkflowLoader.load(
-                root.toString(), "poisson_distribution.json", 2.0,
+                root.toString(), "edge.json", 2.0,
                 WorkflowLoader.DatasetMode.EDGE_200);
         assert arrivals.size() == 200 : "EDGE_200 must load 200 workflows";
-        for (WorkflowArrivalData arrival : arrivals) {
-            String normalized = arrival.getDaxPath().replace('\\', '/');
-            assert normalized.contains("/first_100/")
-                    || normalized.contains("/last_100/")
-                    : "EDGE_200 included a middle workflow: " + normalized;
-        }
         assert arrivals.get(0).getArrivalTime() == 10.0
-                : "Edge dataset must preserve first_100 arrival times";
-        assert arrivals.get(199).getArrivalTime() == 10.0 + 499 * 3.25
-                : "Edge dataset must preserve last_100 arrival times";
+                : "Edge dataset must preserve the earliest arrivals";
+        assert arrivals.get(99).getArrivalTime() == 10.0 + 99 * 3.25
+                : "Edge dataset must preserve workflow 100's arrival";
+        assert arrivals.get(100).getArrivalTime() == 10.0 + 100 * 3.25
+                : "The first late workflow must be rebased to workflow 101's arrival";
+        assert arrivals.get(199).getArrivalTime() == 10.0 + 199 * 3.25
+                : "The late block must preserve its internal inter-arrival times";
+        assert arrivals.get(99).getDaxPath().endsWith("Workflow_099.xml")
+                : "EDGE_200 must include the earliest 100 workflows";
+        assert arrivals.get(100).getDaxPath().endsWith("Workflow_400.xml")
+                : "EDGE_200 must include the latest 100 workflows";
+        assert arrivals.get(199).getDaxPath().endsWith("Workflow_499.xml")
+                : "EDGE_200 must end with the latest workflow";
+        assert arrivals.get(100).getUserDeadline()
+                    - arrivals.get(100).getArrivalTime() == 2.0
+                : "Rebasing must preserve deadline slack";
+
+        List<WorkflowArrivalData> fullAfterEdge = WorkflowLoader.load(
+                root.toString(), "poisson_distribution.json", 2.0,
+                WorkflowLoader.DatasetMode.FULL_500);
+        assert fullAfterEdge.get(499).getArrivalTime() == 10.0 + 499 * 3.25
+                : "EDGE_200 loading must not mutate FULL_500 arrivals";
     }
 
     private static void validateConfiguredMode(Path root) throws Exception {
@@ -87,7 +107,7 @@ public final class WorkflowLoaderValidationTest {
         try {
             System.setProperty(WorkflowLoader.DATASET_MODE_PROPERTY, "EDGE_200");
             List<WorkflowArrivalData> arrivals = WorkflowLoader.load(
-                    root.toString(), "poisson_distribution.json", 2.0);
+                    root.toString(), "edge.json", 2.0);
             assert arrivals.size() == 200
                     : "Configured dataset mode must affect the legacy load API";
         } finally {
@@ -100,9 +120,9 @@ public final class WorkflowLoaderValidationTest {
     }
 
     private static void validateDuplicateDetection(Path root) throws Exception {
-        Path duplicateDirectory = root.resolve("middle_300").resolve("duplicate");
+        Path duplicateDirectory = root.resolve("duplicate");
         Files.createDirectories(duplicateDirectory);
-        Path original = root.resolve("middle_300").resolve("Workflow_100.xml");
+        Path original = root.resolve("Workflow_100.xml");
         Path duplicate = duplicateDirectory.resolve("Workflow_100.xml");
         Files.copy(original, duplicate, StandardCopyOption.REPLACE_EXISTING);
         try {
@@ -113,8 +133,24 @@ public final class WorkflowLoaderValidationTest {
         }
     }
 
+    private static void validateMalformedManifest(Path root) throws Exception {
+        String valid = new String(Files.readAllBytes(root.resolve("edge.json")), StandardCharsets.UTF_8);
+        for (String invalid : new String[] {
+                valid.replace("Workflow_499.xml", "Workflow_498.xml"),
+                valid.replace("656.75", "-1"),
+                valid.substring(0, valid.length() - 1),
+                valid.replace("arrival_time_seconds", "unknown")}) {
+            Files.write(root.resolve("invalid.json"), invalid.getBytes(StandardCharsets.UTF_8));
+            boolean rejected = false;
+            try {
+                WorkflowLoader.load(root.toString(), "invalid.json", 2.0, WorkflowLoader.DatasetMode.EDGE_200);
+            } catch (IllegalArgumentException expected) { rejected = true; }
+            assert rejected : "Invalid manifest must fail";
+        }
+    }
+
     private static void validateMissingPairDetection(Path root) throws Exception {
-        Path txt = root.resolve("last_100").resolve("Workflow_499.txt");
+        Path txt = root.resolve("Workflow_499.txt");
         Files.delete(txt);
         expectFailure(root, "exactly one .txt");
     }

@@ -231,11 +231,8 @@ public class CBMWDetailedResultExporter {
             writer.write(String.format(Locale.US, "Scheduling Algorithm: %s%n", algorithm));
             if ("CBMW".equals(algorithm)) {
                 writer.write(String.format(Locale.US,
-                        "Planning Runtime Quantile (alpha): %.3f%n",
-                        PaperRuntimeModel.QUANTILE));
-                writer.write(String.format(Locale.US,
-                        "Runtime Stddev Ratio (sigma/mu): %.3f%n",
-                        PaperRuntimeModel.STDDEV_RATIO));
+                        "Planning Runtime Margin (alpha): %.3f%n",
+                        PaperRuntimeModel.PLANNING_ALPHA));
                 writer.write(String.format(Locale.US,
                         "Conservative Runtime Multiplier (cet/mu): %.4f%n",
                         PaperRuntimeModel.conservativeEstimate(1.0)));

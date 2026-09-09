@@ -43,30 +43,34 @@ Entry point:
 
 ## Current Experiment Driver
 
-`CBMWSimulation` now supports the new experiment matrix:
+`CBMWSimulation` supports 24 scenarios per algorithm: mean arrival gaps
+15/30/45/60 seconds x tightness 1.2/2/4 x FULL_500/EDGE_200.
+All five algorithms support both modes (120 scenarios per repetition).
 
-- Deadline classes: `tight=1.2`, `medium=2.0`, `loose=4.0`
-- Load classes: `low=2.0`, `moderate=1.0`, `heavy=0.5`
-- Algorithms: `CBMW`, `NOSF`, `CEWB`, `StaticGreedy`, `DynamicGreedy`
-- Optional common-market CEWB comparisons: `CEWB-ReferencePolicy` uses the
-  PCP/absolute-slack policy with full-restart escalation;
-  `CEWB-ReferenceAdapted` preserves partial work. Default `CEWB` now combines
-  PCP/absolute-slack classification, the paper-style shared on-demand pool,
-  and progress-preserving recovery. The reference variants are not part of the
-  default 45-scenario matrix.
-- Default workflow source: `Output/generated_datasets/test_workflows_sigma005_seed20260716/poisson_distribution.json`
-- Default workflow count per scenario: 50 (selected from the 200-arrival source trace)
-- Full default run size: 3 deadlines x 3 loads x 5 algorithms = 45 scenarios
+- Default workflow directory: `test_workflows/workflows` (500 XML/TXT pairs).
+- Eight manifests: `dax_poisson_arrivals_mean{15,30,45,60}s_{500workflows,edge200}.json`.
+- Each record contains `workflow_name` (XML basename including extension) and
+  `arrival_time_seconds`. The loader preserves these times exactly.
+- EDGE_200 manifests already contain positions 1-100 and 401-500, with
+  `arrival(401)-arrival(101)` subtracted from the latter block. No runtime
+  rescaling, selection, or rebasing occurs.
+- TXT samples use `ceil(mu + uniform(-0.20*mu, +0.20*mu))`, generation seed
+  20260909. Runtime resampling defaults to false even across repetitions.
+- Deadline = manifest arrival + XML critical path * tightness. The planning
+  uncertainty settings (quantile 0.99, sigma/mu 0.05) remain separate controls.
+- `scripts/run_results_workbook.ps1` runs CBMW once across all 24 scenarios and
+  fills the results workbook using `scripts/fill_results_workbook.mjs`.
 
 Useful JVM switches:
 
 | Switch | Purpose |
 |--------|---------|
-| `-Dcbmw.workflow.dir=Output/generated_datasets/test_workflows_sigma005_seed20260716` | Directory containing the workflow XML/TXT datasets and manifest. |
-| `-Dcbmw.workflow.manifest=poisson_distribution.json` | Arrival manifest filename within the workflow directory. |
+| `-Dcbmw.workflow.dir=test_workflows/workflows` | Flat directory containing all 500 workflow XML/TXT pairs and the manifest. |
+| `-Dcbmw.workflow.manifest.15.FULL_500=custom.json` | Override the manifest for one arrival/mode combination. |
+| `-Dcbmw.workflow.dataset.mode=FULL_500` | Restrict execution to one dataset mode: `FULL_500` or `EDGE_200`. With no override, all algorithms run both modes. |
 | `-Dcbmw.algorithms=CBMW` | Run only selected algorithms, comma-separated. |
 | `-Dcbmw.output.dir=Output` | Root output folder; algorithm and comparison subfolders are created inside it. |
-| `-Dcbmw.max.workflows=5` | Override the default 50-workflow cap per scenario. |
+| `-Dcbmw.max.workflows=5` | Override the default 500-workflow cap per scenario. |
 | `-Dcbmw.max.scenarios=1` | Stop after N completed scenarios. |
 | `-Dcbmw.export.details=false` | Skip `.rar-style` detailed export folders. |
 | `-Dcbmw.detail.log=false` | Disable `_detail.log` event logging. |
@@ -74,8 +78,8 @@ Useful JVM switches:
 | `-Dcbmw.generate.gantt=true` | Generate Gantt charts; normally keep false for speed. |
 | `-Dcbmw.generate.comparison=false` | Skip comparison chart generation during per-VM runs. |
 | `-Dcbmw.python=python3` | Python executable used for optional chart generation. |
-| `-Dcbmw.runtime.quantile=0.99` | Paper alpha quantile used to derive conservative CBMW task durations. |
-| `-Dcbmw.runtime.stddev.ratio=0.05` | Paper runtime uncertainty, sigma divided by mean runtime. |
+| `-Dcbmw.runtime.planning.alpha=0.20` | CBMW planning margin; conservative duration is `mu + alpha * mu`. |
+| `-Dcbmw.runtime.stddev.ratio=0.05` | Runtime uncertainty used for normal resampling and NOSF; it does not affect CBMW's planning duration. |
 | `-Dcbmw.negotiation.beta=1.0` | Workflow-level safety factor applied to the conservative critical path. |
 | `-Dcbmw.negotiation.gamma=1.0` | Markup applied to CBMW's post-planning raw execution-cost quote. |
 | `-Dcbmw.preemption.safety.sec=0` | Minimum post-preemption slack required before a running reserved task can be interrupted. |
@@ -84,7 +88,7 @@ Useful JVM switches:
 | `-Dcbmw.repetitions=1` | Runs per scenario; defaults to 30 under `PAPER_ALIGNED`. |
 | `-Dcbmw.run.start=0` | First run number for resumable/extended repetition sets. |
 | `-Dcbmw.seed.base=20260716` | Base seed from which a deterministic seed is derived for each run. |
-| `-Dcbmw.runtime.resample=false` | Resample actual task runtimes by run; defaults to true whenever repetitions exceed one. Algorithms receive identical samples within a run. |
+| `-Dcbmw.runtime.resample=false` | Resample actual task runtimes by run; defaults to false (use TXT samples). Algorithms receive identical samples within a run. |
 | `-Dnosf.billing.quantum.sec=3600` | NOSF VM billing quantum; defaults to 3600 in both `COMMON_MARKET` and `PAPER_ALIGNED`. |
 | `-Dnosf.vm.type.count=1` | Number of NOSF VM types; defaults to the paper's seven Table 2 types under `PAPER_ALIGNED`. Configure `nosf.vm.type.<i>.{name,cores,ram.mb,mips,price.per.sec}` to override. |
 | `-Dnosf.priority.policy=EST` | Resolve the paper's priority ambiguity; `EST` follows Algorithm 3's operational description and `EFT` enables sensitivity analysis. |
@@ -239,12 +243,15 @@ test_workflows/
 
 ### Workflow Input
 
-- `WorkflowLoader` reads `Output/generated_datasets/test_workflows_sigma005_seed20260716/poisson_distribution.json`
-  by default; `cbmw.workflow.dir` and `cbmw.workflow.manifest` can override it.
+- `WorkflowLoader` reads scenario-specific manifests from `test_workflows/workflows`.
+  `cbmw.workflow.dir` and `cbmw.workflow.manifest.<mean>.<mode>` override inputs.
+- FULL_500 requires 500 manifest entries; EDGE_200 requires 200. Selected XML/TXT
+  pairs must be directly in the directory. Extra files are allowed in edge mode.
+- Arrival times are used exactly as stored in the chosen manifest.
 - Each entry parses the matching DAX XML and computes critical path.
 - Deadline is `arrivalTime + criticalPath * tightness`.
-- CBMW computes `cet = mu + z(alpha) * sigma` from the DAX mean runtime,
-  with default `alpha=0.99` and `sigma=0.05*mu`, for negotiation and planning.
+- CBMW computes `cet = mu + alpha * mu` from the DAX mean runtime, with default
+  `alpha=0.20`, for negotiation and planning.
 - After CBMW static planning, price negotiation sums each task's estimated
   duration multiplied by its planned reserved/on-demand price, applies
   `gamma`, and automatically accepts the quote because no user is simulated.
@@ -294,20 +301,19 @@ Current configurable defaults in `HybridVmPool`:
 | `cbmw.reserved.ram.mb` | 384000 |
 | `cbmw.task.cores` | 1 |
 | `cbmw.task.ram.mb` | 1 |
-| `cbmw.reserved.hourly.cost` | 3.26 |
-| `cbmw.ondemand.per.sec` | 0.000340 |
+| `cbmw.reserved.per.sec` | 0.0017 |
+| `cbmw.ondemand.per.sec` | 0.00001 |
 | `cbmw.ondemand.cpu.per.core.sec` | Value of `cbmw.ondemand.per.sec` |
-| `cbmw.ondemand.memory.per.gb.sec` | 0.0 |
+| `cbmw.ondemand.memory.per.gb.sec` | 0.000001 |
 | `cbmw.ondemand.delay.sec` | 90.0 |
 | `cbmw.scheduling.period.sec` | 5.0 |
 | `cbmw.ondemand.min.billing.sec` | 60.0 |
 
-Following Section 3.3 and Equation 1 of the paper, reserved capacity is treated
-as prepaid and excluded from each run's scheduling cost. Reported `totalCost`
-is therefore on-demand cost plus spot cost (spot is nonzero only for CEWB).
-NOSF is consequently charged only for its on-demand execution and is not
-charged for the CBMW reserved pool. This metric is scheduling cost, not full
-operational expenditure including prepaid reservations.
+Current report accounting includes reserved rental cost for CBMW and the greedy
+baselines: instance count * per-second price * simulated workload duration.
+`totalCost = reservedCost + onDemandCost + spotCost`. NOSF and CEWB are not
+charged for a reserved pool they do not use. Marginal cost is the matched
+FULL_500 total minus EDGE_200 total, written on FULL_500 rows only.
 On-demand cost is based on instance uptime. CBMW and the container-based
 baselines create a dedicated logical container per on-demand assignment. NOSF
 instead owns reusable logical VMs so it can minimize incremental billing cost.
@@ -381,8 +387,8 @@ saturation, fallback, predicted-miss, wake, and partial-progress diagnostics.
 
 ## Latest Run Findings
 
-The CBMW planner now uses the paper's alpha-quantile conservative execution
-times for negotiation and static planning, then applies the `.txt` perturbed
+The CBMW planner uses a 20% additive runtime margin (`cet = 1.20 * mu` by
+default) for negotiation and static planning, then applies the `.txt` perturbed
 runtimes only for actual execution. Detailed exports are aligned with the
 reference archive shape:
 `results.txt`, `TASK_EXECUTION_SUMMARY.xlsx`,
@@ -391,9 +397,9 @@ reference archive shape:
 The last distributed Ferdowsi run is stored under `Output/remote_full_paper/`.
 All five algorithms completed all 9 scenarios (10 `results.csv` lines including
 the header), and VM1 through VM5 were shut down after completion. This run was
-performed before the alpha-quantile runtime correction and the latest
-paper-alignment changes, so it is historical performance data, not validation
-of the current implementation. A new full distributed run requires provisioning
+performed before the current additive runtime-margin and latest paper-alignment
+changes, so it is historical performance data, not validation of the current
+implementation. A new full distributed run requires provisioning
 additional Ferdowsi VMs; the current inventory has only one 6-core VM.
 
 Validation smoke run:
@@ -465,7 +471,7 @@ scenario also completed.
 ## Known Remaining Issues
 
 - Full 200-workflow scenarios should be rebenchmarked after the latest planner
-  and runtime-quantile changes and the current-cycle replacement policy.
+  and runtime-margin changes and the current-cycle replacement policy.
 - The paper does not state a precise experimental beta value; the default is
   the minimum valid value `1.0` and must be reported with each experiment.
 - The paper does not state a precise experimental gamma value; the price-markup

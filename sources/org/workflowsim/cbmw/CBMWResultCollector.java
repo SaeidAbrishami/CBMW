@@ -335,8 +335,8 @@ public class CBMWResultCollector {
             return 0.0;
         }
         return Math.max(0, reservedVmCount)
-                * (uptimeSeconds / 3600.0)
-                * HybridVmPool.RESERVED_HOURLY_COST;
+                * uptimeSeconds
+                * HybridVmPool.RESERVED_PER_SEC;
     }
 
     public static boolean includesReservedLeaseCost(String algorithm) {

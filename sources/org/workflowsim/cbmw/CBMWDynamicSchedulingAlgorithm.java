@@ -2,7 +2,6 @@ package org.workflowsim.cbmw;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -69,12 +68,11 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
         Map<Integer, Integer> pendingCores = new HashMap<>();
         Map<Integer, Integer> pendingRamMb = new HashMap<>();
 
-        // Paper §4.3: sorted by sstji ascending.
+        // The broker supplies the paper §4.3 sstji-ascending stable order.
         List<Cloudlet> readyJobs = new ArrayList<>((List<Cloudlet>) getCloudletList());
-        readyJobs.sort(Comparator.comparingDouble(cl -> getScheduledStartForJob((Job) cl)));
 
         List<Cloudlet> toSchedule = new ArrayList<>();
-        List<Cloudlet> futureJobs = new ArrayList<>();
+        int firstFutureIndex = readyJobs.size();
 
         if (!readyJobs.isEmpty()) {
             CBMWLogger.log("SCHED-TICK",
@@ -83,7 +81,8 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
 
         // ---- First loop (Algorithm 3, lines 3–15) ----------------------------
         // Dispatch every task whose sstji has been reached.
-        for (Cloudlet cl : readyJobs) {
+        for (int readyIndex = 0; readyIndex < readyJobs.size(); readyIndex++) {
+            Cloudlet cl = readyJobs.get(readyIndex);
             Job job    = (Job) cl;
             int wfId   = getWorkflowId(job);
             int taskId = getPrimaryTaskId(job);
@@ -91,8 +90,8 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
             double sst = (wfr != null) ? wfr.getScheduledStart(taskId) : 0.0;
 
             if (sst > now) {
-                futureJobs.add(cl);  // handled in second loop
-                continue;
+                firstFutureIndex = readyIndex;
+                break;
             }
 
             if (wfr == null) {
@@ -188,7 +187,9 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
         // ---- Second loop (Algorithm 3, lines 16–27) --------------------------
         // Advance future tasks early onto idle reserved VMs.
         // Break on the first task CheckReserved cannot serve.
-        for (Cloudlet cl : futureJobs) {
+        for (int readyIndex = firstFutureIndex;
+                readyIndex < readyJobs.size(); readyIndex++) {
+            Cloudlet cl = readyJobs.get(readyIndex);
             Job job    = (Job) cl;
             int wfId   = getWorkflowId(job);
             int taskId = getPrimaryTaskId(job);

@@ -32,8 +32,8 @@ public final class RequestedReportFieldsValidationTest {
                 "full500_arrival15_alpha1.2", "arrival15", "alpha1.2",
                 "CBMW", 1.0, 1.2, 0, 123L, "COMMON_MARKET", 0.5, 0.1);
 
-        double expectedReservedCost = 2 * (12.0 / 3600.0)
-                * HybridVmPool.RESERVED_HOURLY_COST;
+        double expectedReservedCost = 2 * 12.0
+                * HybridVmPool.RESERVED_PER_SEC;
         assert metrics.metDeadline == 1;
         assertClose(metrics.overallSuccessRate, 0.5);
         assertClose(metrics.simulationDuration, 12.0);

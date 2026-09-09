@@ -70,8 +70,7 @@ public class NegotiationModule {
     public double quoteExecutionPrice(WorkflowRecord wfr) {
         double reservedCost = 0.0;
         double onDemandCost = 0.0;
-        double reservedPricePerSecond =
-                HybridVmPool.RESERVED_HOURLY_COST / 3600.0;
+        double reservedPricePerSecond = HybridVmPool.RESERVED_PER_SEC;
 
         for (Task task : wfr.getTaskList()) {
             int taskId = task.getCloudletId();

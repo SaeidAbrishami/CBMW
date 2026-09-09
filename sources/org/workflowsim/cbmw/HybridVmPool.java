@@ -31,15 +31,15 @@ public class HybridVmPool {
     public static final int    ON_DEMAND_CORES = TASK_CORES;
     public static final int    ON_DEMAND_RAM_MB = TASK_RAM_MB;
     public static final double RESERVED_MIPS        = 1000.0;
-    public static final double RESERVED_HOURLY_COST = Double.parseDouble(
-            System.getProperty("cbmw.reserved.hourly.cost", "3.26"));
+    public static final double RESERVED_PER_SEC = reservedPricePerSecond();
+    public static final double RESERVED_HOURLY_COST = RESERVED_PER_SEC * 3600.0;
     public static final double ON_DEMAND_PER_SEC    = Double.parseDouble(
-            System.getProperty("cbmw.ondemand.per.sec", "0.000340"));
+            System.getProperty("cbmw.ondemand.per.sec", "0.00001"));
     public static final double ON_DEMAND_CPU_PER_CORE_SEC = Double.parseDouble(
             System.getProperty("cbmw.ondemand.cpu.per.core.sec",
                     Double.toString(ON_DEMAND_PER_SEC)));
     public static final double ON_DEMAND_MEMORY_PER_GB_SEC = Double.parseDouble(
-            System.getProperty("cbmw.ondemand.memory.per.gb.sec", "0.0"));
+            System.getProperty("cbmw.ondemand.memory.per.gb.sec", "0.000001"));
     /** Modelled on-demand provisioning delay (seconds). sstji = lstji - OPD. */
     public static final double ON_DEMAND_PROVISIONING_DELAY = Double.parseDouble(
             System.getProperty("cbmw.ondemand.delay.sec", "90.0"));
@@ -47,6 +47,17 @@ public class HybridVmPool {
             System.getProperty("cbmw.scheduling.period.sec", "5.0"));
     public static final double ON_DEMAND_MIN_BILLING_SECONDS = Double.parseDouble(
             System.getProperty("cbmw.ondemand.min.billing.sec", "60.0"));
+
+    private static double reservedPricePerSecond() {
+        String perSecond = System.getProperty("cbmw.reserved.per.sec");
+        if (perSecond != null) {
+            return Double.parseDouble(perSecond);
+        }
+        String legacyHourly = System.getProperty("cbmw.reserved.hourly.cost");
+        return legacyHourly == null
+                ? 0.0017
+                : Double.parseDouble(legacyHourly) / 3600.0;
+    }
 
     private final List<CondorVM> reservedVms  = new ArrayList<>();
     private final List<CondorVM> onDemandVms  = new ArrayList<>();
@@ -68,6 +79,12 @@ public class HybridVmPool {
     private final Map<Integer, Integer> runningTasksByVm = new HashMap<>();
     private final Map<Integer, Integer> taskCoresById = new HashMap<>();
     private final Map<Integer, Integer> taskRamById = new HashMap<>();
+    private long totalRunningReservedCores;
+    private long totalRunningReservedRamMb;
+    private long totalRunningOnDemandCores;
+    private long totalRunningOnDemandRamMb;
+    private long activeOnDemandCores;
+    private long activeOnDemandRamMb;
 
     public HybridVmPool(int userId) {
         for (int i = 0; i < NUM_RESERVED; i++) {
@@ -136,6 +153,10 @@ public class HybridVmPool {
      * planner and scheduler never attempt to use it again.
      */
     public void removeReservedVm(int vmId) {
+        totalRunningReservedCores = Math.max(0L,
+                totalRunningReservedCores - runningCoresByVm.getOrDefault(vmId, 0));
+        totalRunningReservedRamMb = Math.max(0L,
+                totalRunningReservedRamMb - runningRamByVm.getOrDefault(vmId, 0));
         reservedVms.removeIf(vm -> vm.getId() == vmId);
         vmsById.remove(vmId);
         reservedBookings.remove(vmId);
@@ -144,6 +165,7 @@ public class HybridVmPool {
         runningCoresByVm.remove(vmId);
         runningRamByVm.remove(vmId);
         runningTasksByVm.remove(vmId);
+        assert aggregateCountersMatch();
         CBMWLogger.log("VM-REMOVE",
                 String.format("reserved vm=%d removed from pool remainingReserved=%d",
                         vmId, reservedVms.size()));
@@ -209,7 +231,17 @@ public class HybridVmPool {
     }
 
     public void terminateOnDemandVm(int vmId) {
-        activeOnDemandIds.remove(vmId);
+        CondorVM vm = getVmById(vmId);
+        if (activeOnDemandIds.remove(vmId) && vm != null) {
+            activeOnDemandCores = Math.max(0L,
+                    activeOnDemandCores - vm.getNumberOfPes());
+            activeOnDemandRamMb = Math.max(0L,
+                    activeOnDemandRamMb - vm.getRam());
+        }
+        totalRunningOnDemandCores = Math.max(0L,
+                totalRunningOnDemandCores - runningCoresByVm.getOrDefault(vmId, 0));
+        totalRunningOnDemandRamMb = Math.max(0L,
+                totalRunningOnDemandRamMb - runningRamByVm.getOrDefault(vmId, 0));
         Integer index = onDemandIndexById.remove(vmId);
         if (index != null) {
             int lastIndex = onDemandVms.size() - 1;
@@ -223,6 +255,7 @@ public class HybridVmPool {
         runningCoresByVm.remove(vmId);
         runningRamByVm.remove(vmId);
         runningTasksByVm.remove(vmId);
+        assert aggregateCountersMatch();
         CBMWLogger.logf("VM-TERMINATE",
                 "on-demand vmId=%d terminated remainingOnDemand=%d", vmId, onDemandVms.size());
     }
@@ -268,24 +301,52 @@ public class HybridVmPool {
     }
 
     public void taskStarted(int vmId, int taskId) {
-        runningCoresByVm.merge(vmId, getTaskCores(taskId), Integer::sum);
-        runningRamByVm.merge(vmId, getTaskRamMb(taskId), Integer::sum);
+        int taskCores = getTaskCores(taskId);
+        int taskRamMb = getTaskRamMb(taskId);
+        runningCoresByVm.merge(vmId, taskCores, Integer::sum);
+        runningRamByVm.merge(vmId, taskRamMb, Integer::sum);
         runningTasksByVm.merge(vmId, 1, Integer::sum);
         CondorVM vm = getVmById(vmId);
-        if (vm != null) vm.setState(WorkflowSimTags.VM_STATUS_BUSY);
+        if (vm != null) {
+            if (isReserved(vmId)) {
+                totalRunningReservedCores += taskCores;
+                totalRunningReservedRamMb += taskRamMb;
+            } else {
+                totalRunningOnDemandCores += taskCores;
+                totalRunningOnDemandRamMb += taskRamMb;
+            }
+            vm.setState(WorkflowSimTags.VM_STATUS_BUSY);
+        }
+        assert aggregateCountersMatch();
     }
 
     public void taskFinished(int vmId, int taskId) {
-        int runningCores = Math.max(0, runningCoresByVm.getOrDefault(vmId, 0)
-                - getTaskCores(taskId));
-        int runningRam = Math.max(0, runningRamByVm.getOrDefault(vmId, 0)
-                - getTaskRamMb(taskId));
+        int previousCores = runningCoresByVm.getOrDefault(vmId, 0);
+        int previousRam = runningRamByVm.getOrDefault(vmId, 0);
+        int runningCores = Math.max(0, previousCores - getTaskCores(taskId));
+        int runningRam = Math.max(0, previousRam - getTaskRamMb(taskId));
         runningCoresByVm.put(vmId, runningCores);
         runningRamByVm.put(vmId, runningRam);
         runningTasksByVm.put(vmId,
                 Math.max(0, runningTasksByVm.getOrDefault(vmId, 0) - 1));
         CondorVM vm = getVmById(vmId);
-        if (vm != null && runningCores == 0) vm.setState(WorkflowSimTags.VM_STATUS_IDLE);
+        if (vm != null) {
+            int removedCores = previousCores - runningCores;
+            int removedRam = previousRam - runningRam;
+            if (isReserved(vmId)) {
+                totalRunningReservedCores = Math.max(0L,
+                        totalRunningReservedCores - removedCores);
+                totalRunningReservedRamMb = Math.max(0L,
+                        totalRunningReservedRamMb - removedRam);
+            } else {
+                totalRunningOnDemandCores = Math.max(0L,
+                        totalRunningOnDemandCores - removedCores);
+                totalRunningOnDemandRamMb = Math.max(0L,
+                        totalRunningOnDemandRamMb - removedRam);
+            }
+            if (runningCores == 0) vm.setState(WorkflowSimTags.VM_STATUS_IDLE);
+        }
+        assert aggregateCountersMatch();
     }
 
     public int getRunningTaskCount(int vmId) {
@@ -301,25 +362,24 @@ public class HybridVmPool {
     }
 
     public int getTotalRunningCores(boolean onDemand) {
-        int total = 0;
-        for (CondorVM vm : onDemand ? onDemandVms : reservedVms) {
-            total += getRunningCores(vm.getId());
-        }
-        return total;
+        return toIntCapacity(onDemand
+                ? totalRunningOnDemandCores : totalRunningReservedCores);
     }
 
     public int getTotalRunningRamMb(boolean onDemand) {
-        int total = 0;
-        for (CondorVM vm : onDemand ? onDemandVms : reservedVms) {
-            total += getRunningRamMb(vm.getId());
-        }
-        return total;
+        return toIntCapacity(onDemand
+                ? totalRunningOnDemandRamMb : totalRunningReservedRamMb);
     }
 
     public void activateOnDemandContainer(int vmId) {
         if (vmsById.containsKey(vmId) && !isReserved(vmId)) {
-            activeOnDemandIds.add(vmId);
+            CondorVM vm = getVmById(vmId);
+            if (activeOnDemandIds.add(vmId) && vm != null) {
+                activeOnDemandCores += vm.getNumberOfPes();
+                activeOnDemandRamMb += vm.getRam();
+            }
         }
+        assert aggregateCountersMatch();
     }
 
     public int getActiveOnDemandCount() {
@@ -331,21 +391,45 @@ public class HybridVmPool {
     }
 
     public int getActiveOnDemandCores() {
-        int total = 0;
-        for (Integer vmId : activeOnDemandIds) {
-            CondorVM vm = getVmById(vmId);
-            if (vm != null) total += vm.getNumberOfPes();
-        }
-        return total;
+        return toIntCapacity(activeOnDemandCores);
     }
 
     public int getActiveOnDemandRamMb() {
-        int total = 0;
+        return toIntCapacity(activeOnDemandRamMb);
+    }
+
+    private boolean aggregateCountersMatch() {
+        long scannedReservedCores = 0L;
+        long scannedReservedRamMb = 0L;
+        for (CondorVM vm : reservedVms) {
+            scannedReservedCores += runningCoresByVm.getOrDefault(vm.getId(), 0);
+            scannedReservedRamMb += runningRamByVm.getOrDefault(vm.getId(), 0);
+        }
+        long scannedOnDemandCores = 0L;
+        long scannedOnDemandRamMb = 0L;
+        for (CondorVM vm : onDemandVms) {
+            scannedOnDemandCores += runningCoresByVm.getOrDefault(vm.getId(), 0);
+            scannedOnDemandRamMb += runningRamByVm.getOrDefault(vm.getId(), 0);
+        }
+        long scannedActiveCores = 0L;
+        long scannedActiveRamMb = 0L;
         for (Integer vmId : activeOnDemandIds) {
             CondorVM vm = getVmById(vmId);
-            if (vm != null) total += vm.getRam();
+            if (vm != null) {
+                scannedActiveCores += vm.getNumberOfPes();
+                scannedActiveRamMb += vm.getRam();
+            }
         }
-        return total;
+        return totalRunningReservedCores == scannedReservedCores
+                && totalRunningReservedRamMb == scannedReservedRamMb
+                && totalRunningOnDemandCores == scannedOnDemandCores
+                && totalRunningOnDemandRamMb == scannedOnDemandRamMb
+                && activeOnDemandCores == scannedActiveCores
+                && activeOnDemandRamMb == scannedActiveRamMb;
+    }
+
+    private int toIntCapacity(long value) {
+        return (int) Math.min(Integer.MAX_VALUE, Math.max(0L, value));
     }
 
     public int overlapCount(int vmId, double start, double end) {

@@ -77,11 +77,14 @@ public class CBMWAccounting {
     }
 
     public void markReadyQueue(List<Cloudlet> readyJobs) {
-        double now = CloudSim.clock();
         for (Cloudlet cl : readyJobs) {
-            TaskExecutionRecord record = taskRecords.get(primaryTaskId(cl));
-            if (record != null) record.markReady(now);
+            markTaskReady(cl);
         }
+    }
+
+    public void markTaskReady(Cloudlet cloudlet) {
+        TaskExecutionRecord record = taskRecords.get(primaryTaskId(cloudlet));
+        if (record != null) record.markReady(CloudSim.clock());
     }
 
     public void markTaskSubmitted(Cloudlet cl, boolean onDemand) {

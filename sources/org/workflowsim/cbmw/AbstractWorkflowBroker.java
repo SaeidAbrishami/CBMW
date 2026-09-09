@@ -141,13 +141,21 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
             case CloudSimTags.VM_DESTROY_ACK:
                 break; // on-demand VM destroyed in datacenter; PE slot freed
             case WorkflowSimTags.CLOUDLET_UPDATE:
+                CBMWPerformanceMetrics.recordCloudletUpdateEvent();
                 // Block scheduling until every reserved VM has received a
                 // creation response (success or failure). This prevents the
                 // scheduler from setting a VM BUSY before the datacenter has
                 // registered it, which would permanently strand that VM.
-                if (reservedVmsAcknowledged < HybridVmPool.NUM_RESERVED) return;
+                if (reservedVmsAcknowledged < HybridVmPool.NUM_RESERVED) {
+                    CBMWPerformanceMetrics.recordBlockedBeforeVmAck();
+                    return;
+                }
                 processPendingVmCreations();
-                if (usesPeriodicScheduling() && !isSchedulingMoment()) return;
+                if (usesPeriodicScheduling() && !isSchedulingMoment()) {
+                    CBMWPerformanceMetrics.recordPeriodicDeferral();
+                    return;
+                }
+                CBMWPerformanceMetrics.recordSchedulingPass(getCloudletList().size());
                 super.processEvent(ev);
                 break;
             default:
@@ -255,6 +263,12 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
     /** Called for every returned task before resource-specific cleanup. */
     protected void onTaskReturned(Cloudlet cl, boolean onDemand) {}
 
+    /** Called after a task has been added to the submitted-task list. */
+    protected void onTaskSubmitted(Cloudlet cl, boolean onDemand) {}
+
+    /** Called after every task in one dispatch batch has been submitted. */
+    protected void onSubmissionBatchComplete() {}
+
     protected boolean terminateOnDemandWhenIdle() { return true; }
 
     /**
@@ -355,9 +369,16 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
                     workflowIdForJob((Job) cl), cl.getCloudletId(), cl.getVmId());
         }
 
-        getCloudletList().removeAll(actuallySubmitted);
+        if (!actuallySubmitted.isEmpty()) {
+            Set<Cloudlet> submitted = new HashSet<>(actuallySubmitted);
+            getCloudletList().removeIf(submitted::contains);
+        }
         getCloudletSubmittedList().addAll(actuallySubmitted);
         cloudletsSubmitted += actuallySubmitted.size();
+        for (Cloudlet cl : actuallySubmitted) {
+            onTaskSubmitted(cl, provisioner.isOnDemandVm(cl.getVmId()));
+        }
+        onSubmissionBatchComplete();
     }
 
     private void submitToLogicalOnDemandContainer(Cloudlet cl) {
@@ -705,6 +726,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         double nextTick = Math.ceil((now - EPS) / period) * period;
         if (nextTick > now + EPS) {
             schedule(getId(), nextTick - now, WorkflowSimTags.CLOUDLET_UPDATE);
+            CBMWPerformanceMetrics.recordPeriodicWakeScheduled();
             return false;
         }
         return true;

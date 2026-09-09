@@ -61,14 +61,14 @@ test_workflows/                   ← real scientific workflow DAX files
 ## Simulation design
 
 ### Workflow input
-- `WorkflowLoader` reads `Output/generated_datasets/test_workflows_sigma005_seed20260716/poisson_distribution.json`
-  by default for arrival timestamps. The `cbmw.workflow.dir` and
-  `cbmw.workflow.manifest` JVM properties can override the source.
-- For each entry it parses the matching `.xml` (Pegasus DAX 2.1 format) to compute the critical path, then sets `deadline = arrivalTime + CP × TIGHTNESS`.
-- After `WorkflowParser` creates task objects, `applyPerturbedRuntimes()` replaces each task's `cloudletLength` with the value from the matching `.txt` file (Normal(nominal, nominal/10) distribution), making the 25 variants genuinely distinct.
+- Inputs: `test_workflows/workflows`, with 500 XML/TXT pairs and eight full/edge
+  arrival manifests. Scenario timestamps are used exactly, without rescaling.
+- JSON records contain `workflow_name` and `arrival_time_seconds`.
+- Deadlines are arrival + XML critical path * tightness.
+- TXT runtimes are rounded-up uniform +/-20% samples; resampling defaults false.
 
 ### VM model
-- **50 reserved VMs**, MIPS = 1000, cost $3.26/hr (fixed regardless of utilisation).
+- **50 reserved VMs**, MIPS = 1000, cost $0.0017/s (fixed regardless of utilisation).
 - **On-demand VMs**, MIPS = 1000, cost $0.000905/sec (pay per task CPU time).
 - `cloudletLength = runtime_seconds × 1000` so `execTime = cloudletLength / MIPS = runtime_seconds`.
 
@@ -86,7 +86,9 @@ All three brokers extend `AbstractWorkflowBroker`, which provides:
 | DynamicGreedy | None (workflow ID stamp only) | First idle reserved → on-demand FCFS |
 
 ### Current experiment
-Single scenario: `TIGHTNESS = 2.0`, all three algorithms, one run.
+All algorithms run 24 scenarios: four mean arrival gaps (15/30/45/60) x three
+tightness factors (1.2/2/4) x FULL_500/EDGE_200 (120 algorithm runs total).
+`run_results_workbook.ps1` selects CBMW only, one repetition, and exports 24 rows.
 Sim duration = `max(arrivalTime from JSON) + 5000s`.
 Output per algorithm: `Output/algorithms/<algorithm>/results.csv`,
 `results_aggregate.csv`, `task_execution.csv`, scenario detail logs, optional
@@ -101,8 +103,9 @@ Gantt charts, and optional detail folders. Combined comparison files go under
 |----------|----------|-------|
 | `NUM_RESERVED` | `HybridVmPool` | 50 |
 | `RESERVED_MIPS` | `HybridVmPool` | 1000.0 |
-| `ON_DEMAND_PER_SEC` | `HybridVmPool` | $0.000905 |
-| `RESERVED_HOURLY_COST` | `HybridVmPool` | $3.26 |
+| `ON_DEMAND_PER_SEC` | `HybridVmPool` | $0.00001 per core-second |
+| `ON_DEMAND_MEMORY_PER_GB_SEC` | `HybridVmPool` | $0.000001 per GB-second |
+| `RESERVED_PER_SEC` | `HybridVmPool` | $0.0017 |
 | `BETA` (negotiation safety factor) | `NegotiationModule` | 1.1 |
 | `TIGHTNESS` | `CBMWSimulation` | 2.0 |
 | `SIM_BUFFER_SECS` | `CBMWSimulation` | 5000.0 |

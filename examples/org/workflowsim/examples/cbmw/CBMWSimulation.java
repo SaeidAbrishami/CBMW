@@ -31,6 +31,7 @@ import org.workflowsim.cbmw.AbstractWorkflowBroker;
 import org.workflowsim.cbmw.CBMWBroker;
 import org.workflowsim.cbmw.CBMWDetailedResultExporter;
 import org.workflowsim.cbmw.CBMWLogger;
+import org.workflowsim.cbmw.CBMWPerformanceMetrics;
 import org.workflowsim.cbmw.CBMWResultCollector;
 import org.workflowsim.cbmw.ExperimentRunContext;
 import org.workflowsim.cbmw.HybridVmPool;
@@ -52,12 +53,9 @@ import org.workflowsim.utils.ReplicaCatalog;
 /**
  * Main simulation driver for CBMW paper experiments.
  *
- * Runs seven arrival/deadline configurations. All algorithms use the full
- * 500-workflow trace; CBMW and the two greedy baselines also use the 200 edge
- * workflows (first_100 + last_100).
- * Arrival times come from poisson_distribution.json; deadlines are
- * arrivalTime + criticalPath * tightness; task runtimes use the perturbed
- * values from the matching .txt files.
+ * Runs 24 scenarios per algorithm: four arrival manifests, three tightness
+ * values, and FULL_500/EDGE_200. Manifest timestamps are used without scaling
+ * or rebasing; actual task runtimes come from matching TXT files by default.
  */
 public class CBMWSimulation {
 
@@ -77,9 +75,7 @@ public class CBMWSimulation {
 
     private static final String WORKFLOW_DIR = System.getProperty(
             "cbmw.workflow.dir",
-            "Output/generated_datasets/test_workflows_sigma005_seed20260716");
-    private static final String POISSON_FILE = System.getProperty(
-            "cbmw.workflow.manifest", "poisson_distribution.json");
+            "test_workflows/workflows");
     private static final double SIM_BUFFER_SECS = 5000.0;
     private static final boolean GENERATE_GANTT = Boolean.parseBoolean(
             System.getProperty("cbmw.generate.gantt", "false"));
@@ -103,17 +99,21 @@ public class CBMWSimulation {
     private static final long BASE_SEED = Long.getLong(
             "cbmw.seed.base", 20260716L);
     private static final boolean RESAMPLE_RUNTIMES = Boolean.parseBoolean(
-            System.getProperty("cbmw.runtime.resample",
-                    Boolean.toString(REPETITIONS > 1)));
+            System.getProperty("cbmw.runtime.resample", "false"));
 
     private static final ExperimentScenario[] EXPERIMENTS = {
+            new ExperimentScenario(15.0, 1.2),
             new ExperimentScenario(15.0, 2.0),
+            new ExperimentScenario(15.0, 4.0),
             new ExperimentScenario(30.0, 1.2),
             new ExperimentScenario(30.0, 2.0),
-            new ExperimentScenario(30.0, 3.0),
             new ExperimentScenario(30.0, 4.0),
+            new ExperimentScenario(45.0, 1.2),
             new ExperimentScenario(45.0, 2.0),
-            new ExperimentScenario(60.0, 2.0)
+            new ExperimentScenario(45.0, 4.0),
+            new ExperimentScenario(60.0, 1.2),
+            new ExperimentScenario(60.0, 2.0),
+            new ExperimentScenario(60.0, 4.0)
     };
     private static final List<DatasetMode> DATASET_MODES = configuredDatasetModes();
 
@@ -141,9 +141,8 @@ public class CBMWSimulation {
                 + new File(COMPARISON_OUTPUT_DIR).getAbsolutePath());
         System.out.println("[run] Workflow source: "
                 + new File(WORKFLOW_DIR).getAbsolutePath());
-        System.out.println("[run] Workflow manifest: " + POISSON_FILE);
-        System.out.println("[run] Dataset modes: " + DATASET_MODES
-                + " (NOSF/CEWB full-only)");
+        System.out.println("[run] Using exact scenario-specific manifest timestamps");
+        System.out.println("[run] Dataset modes: " + DATASET_MODES);
         System.out.println("[run] Experiment configurations: "
                 + EXPERIMENTS.length + " arrival/alpha pairs");
         System.out.println("[run] NOSF profile: " + NOSFConfiguration.profileName());
@@ -154,11 +153,9 @@ public class CBMWSimulation {
         if (ALGORITHMS.contains("CBMW")) {
             double multiplier = PaperRuntimeModel.conservativeEstimate(1.0);
             System.out.println(String.format(Locale.US,
-                    "[run] CBMW runtime model: alpha=%.3f sigma/mu=%.3f"
-                            + " z=%.4f cet/mu=%.4f beta=%.3f gamma=%.3f",
-                    PaperRuntimeModel.QUANTILE,
-                    PaperRuntimeModel.STDDEV_RATIO,
-                    PaperRuntimeModel.getQuantileZ(), multiplier,
+                    "[run] CBMW runtime model: planningAlpha=%.3f"
+                            + " cet/mu=%.4f beta=%.3f gamma=%.3f",
+                    PaperRuntimeModel.PLANNING_ALPHA, multiplier,
                     PaperRuntimeModel.NEGOTIATION_BETA,
                     PaperRuntimeModel.NEGOTIATION_GAMMA));
         }
@@ -180,15 +177,12 @@ public class CBMWSimulation {
                     continue;
                 }
                 for (ExperimentScenario experiment : EXPERIMENTS) {
-                    List<WorkflowArrivalData> fullBase = cachedArrivals(
-                            arrivalCache, experiment.alpha, DatasetMode.FULL_500);
-                    List<WorkflowArrivalData> selectedBase = datasetMode == DatasetMode.FULL_500
-                            ? fullBase : cachedArrivals(
-                                    arrivalCache, experiment.alpha, datasetMode);
-                    double arrivalScale = experiment.targetMeanInterArrivalSeconds
-                            / meanInterArrivalSeconds(fullBase);
+                    String selected = System.getProperty("cbmw.scenarios", "").trim();
+                    String scenarioName = experiment.name + "_" + datasetTag(datasetMode);
+                    if (!selected.isEmpty() && !Arrays.asList(selected.split(",")).contains(scenarioName)) continue;
+                    double arrivalScale = 1.0;
                     List<WorkflowArrivalData> arrivals = limitWorkflows(
-                            scaleArrivals(selectedBase, arrivalScale));
+                            cachedArrivals(arrivalCache, experiment, datasetMode));
                     if (arrivals.isEmpty()) {
                         throw new IllegalStateException("No arrivals loaded for "
                                 + datasetMode + " " + experiment.name);
@@ -301,8 +295,11 @@ public class CBMWSimulation {
         }
         broker.setSimEndTime(simDuration);
 
+        CBMWPerformanceMetrics.beginScenario(
+                scenario, algorithm, arrivals.size(), run);
         CloudSim.startSimulation();
         CloudSim.stopSimulation();
+        CBMWPerformanceMetrics.finishScenario();
         CBMWLogger.close();
 
         CBMWResultCollector collector = new CBMWResultCollector(
@@ -502,44 +499,25 @@ public class CBMWSimulation {
         return csv.toString();
     }
 
-    private static List<WorkflowArrivalData> scaleArrivals(
-            List<WorkflowArrivalData> arrivals, double arrivalScale) {
-        List<WorkflowArrivalData> scaled = new ArrayList<>();
-        for (WorkflowArrivalData arrival : arrivals) {
-            double deadlineSlack = arrival.getUserDeadline() - arrival.getArrivalTime();
-            double scaledArrival = arrival.getArrivalTime() * arrivalScale;
-            scaled.add(new WorkflowArrivalData(arrival.getDaxPath(),
-                    scaledArrival, scaledArrival + deadlineSlack));
-        }
-        return scaled;
+    static String manifestFor(double mean, DatasetMode mode) {
+        String tag = mode == DatasetMode.FULL_500 ? "500workflows" : "edge200";
+        String property = "cbmw.workflow.manifest." + compactNumber(mean) + "." + mode.name();
+        return System.getProperty(property, "dax_poisson_arrivals_mean"
+                + compactNumber(mean) + "s_" + tag + ".json");
     }
 
     private static List<WorkflowArrivalData> cachedArrivals(
             Map<String, List<WorkflowArrivalData>> cache,
-            double alpha, DatasetMode datasetMode) throws Exception {
-        String key = Double.toString(alpha) + "|" + datasetMode.name();
+            ExperimentScenario experiment, DatasetMode datasetMode) throws Exception {
+        String manifest = manifestFor(experiment.targetMeanInterArrivalSeconds, datasetMode);
+        String key = manifest + "|" + experiment.alpha + "|" + datasetMode;
         List<WorkflowArrivalData> cached = cache.get(key);
         if (cached != null) return cached;
+        System.out.println("[run] Loading " + manifest + " tightness=" + experiment.alpha);
         List<WorkflowArrivalData> loaded = WorkflowLoader.load(
-                WORKFLOW_DIR, POISSON_FILE, alpha, datasetMode);
+                WORKFLOW_DIR, manifest, experiment.alpha, datasetMode);
         cache.put(key, loaded);
         return loaded;
-    }
-
-    private static double meanInterArrivalSeconds(
-            List<WorkflowArrivalData> fullArrivals) {
-        if (fullArrivals.size() < 2) {
-            throw new IllegalArgumentException(
-                    "At least two full-dataset arrivals are required");
-        }
-        double first = fullArrivals.get(0).getArrivalTime();
-        double last = fullArrivals.get(fullArrivals.size() - 1).getArrivalTime();
-        double mean = (last - first) / (fullArrivals.size() - 1);
-        if (!Double.isFinite(mean) || mean <= 0.0) {
-            throw new IllegalArgumentException(
-                    "Full-dataset mean inter-arrival time must be positive");
-        }
-        return mean;
     }
 
     private static List<WorkflowArrivalData> limitWorkflows(
@@ -574,8 +552,7 @@ public class CBMWSimulation {
     }
 
     static boolean shouldRunDatasetMode(String algorithm, DatasetMode mode) {
-        if (mode == DatasetMode.FULL_500) return true;
-        return !("NOSF".equals(algorithm) || algorithm.startsWith("CEWB"));
+        return true;
     }
 
     static int defaultScenarioCountForAlgorithm(String algorithm) {

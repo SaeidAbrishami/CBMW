@@ -3,6 +3,10 @@ package org.workflowsim.cbmw;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -19,7 +23,7 @@ import org.w3c.dom.Element;
 import org.w3c.dom.NodeList;
 
 /**
- * Loads workflow arrivals from a pre-computed poisson_distribution.json file.
+ * Loads exact workflow arrivals from a scenario-specific JSON manifest.
  *
  * For each entry in the JSON it:
  *   1. Resolves exactly one matching .xml/.txt pair recursively
@@ -32,11 +36,11 @@ public class WorkflowLoader {
 
     public static final String DATASET_MODE_PROPERTY = "cbmw.workflow.dataset.mode";
 
-    /** Supported views of the partitioned 500-workflow dataset. */
+    /** Supported views of the flat 500-workflow dataset. */
     public enum DatasetMode {
-        /** first_100 + middle_300 + last_100. */
+        /** All workflows, preserving the manifest arrival times. */
         FULL_500,
-        /** first_100 + last_100, preserving their original manifest times. */
+        /** 200 workflows with their already-adjusted manifest arrival times. */
         EDGE_200;
 
         public static DatasetMode parse(String value) {
@@ -49,18 +53,9 @@ public class WorkflowLoader {
             }
         }
 
-        private boolean includes(String partition) {
-            return this == FULL_500
-                    || FIRST_PARTITION.equals(partition)
-                    || LAST_PARTITION.equals(partition);
-        }
     }
 
-    private static final String FIRST_PARTITION = "first_100";
-    private static final String MIDDLE_PARTITION = "middle_300";
-    private static final String LAST_PARTITION = "last_100";
-    private static final Map<String, Integer> EXPECTED_PARTITION_COUNTS =
-            expectedPartitionCounts();
+    private static final int FULL_DATASET_SIZE = 500;
 
     public static List<WorkflowArrivalData> load(String workflowDir, double tightness) throws Exception {
         return load(workflowDir, "poisson_distribution.json", tightness);
@@ -95,30 +90,23 @@ public class WorkflowLoader {
         Map<String, Double> arrivalMap = parseJson(manifest.getPath());
         DatasetFiles datasetFiles = DatasetFiles.index(root);
         Map<String, File> xmlByName = validateDataset(
-                root, arrivalMap.keySet(), datasetFiles);
+                root, arrivalMap.keySet(), datasetFiles, mode);
 
-        List<WorkflowArrivalData> result = new ArrayList<>();
+        List<WorkflowArrivalData> fullDataset = new ArrayList<>();
         for (Map.Entry<String, Double> entry : arrivalMap.entrySet()) {
             String name        = entry.getKey();
             double arrivalTime = entry.getValue();
             File xmlFile       = xmlByName.get(name);
-            String partition   = partitionOf(root, xmlFile);
-            if (!mode.includes(partition)) continue;
             String xmlPath     = xmlFile.getPath();
 
             double cp       = computeCriticalPath(xmlPath);
             double deadline = arrivalTime + cp * tightness;
-            result.add(new WorkflowArrivalData(xmlPath, arrivalTime, deadline));
+            fullDataset.add(new WorkflowArrivalData(xmlPath, arrivalTime, deadline));
         }
 
-        int expected = mode == DatasetMode.FULL_500 ? 500 : 200;
-        if (result.size() != expected) {
-            throw new IllegalStateException("Dataset mode " + mode + " resolved "
-                    + result.size() + " workflows; expected " + expected);
-        }
-
-        result.sort(Comparator.comparingDouble(WorkflowArrivalData::getArrivalTime)
+        fullDataset.sort(Comparator.comparingDouble(WorkflowArrivalData::getArrivalTime)
                 .thenComparing(WorkflowArrivalData::getDaxPath));
+        List<WorkflowArrivalData> result = fullDataset;
         System.out.println("[WorkflowLoader] Loaded " + result.size()
                 + " workflow arrivals mode=" + mode
                 + " (span: " + String.format("%.0f", result.isEmpty() ? 0
@@ -126,25 +114,18 @@ public class WorkflowLoader {
         return result;
     }
 
-    private static Map<String, Integer> expectedPartitionCounts() {
-        Map<String, Integer> counts = new LinkedHashMap<>();
-        counts.put(FIRST_PARTITION, 100);
-        counts.put(MIDDLE_PARTITION, 300);
-        counts.put(LAST_PARTITION, 100);
-        return Collections.unmodifiableMap(counts);
-    }
-
     private static Map<String, File> validateDataset(File root,
                                                       Set<String> manifestNames,
-                                                      DatasetFiles files)
+                                                      DatasetFiles files, DatasetMode mode)
             throws Exception {
-        if (manifestNames.size() != 500) {
+        int expectedCount = mode == DatasetMode.FULL_500 ? FULL_DATASET_SIZE : 200;
+        if (manifestNames.size() != expectedCount) {
             throw new IllegalArgumentException("Arrival manifest must contain exactly"
-                    + " 500 unique workflows, found " + manifestNames.size());
+                    + " " + expectedCount + " unique workflows, found "
+                    + manifestNames.size());
         }
 
         Map<String, File> xmlByName = new HashMap<>();
-        Map<String, Integer> partitionCounts = new HashMap<>();
         for (String name : manifestNames) {
             File xml = exactlyOne(files.xmlByName.get(name), name, ".xml");
             File txt = exactlyOne(files.txtByName.get(name), name, ".txt");
@@ -153,25 +134,16 @@ public class WorkflowLoader {
                 throw new IllegalArgumentException("Workflow XML/TXT pair must be in"
                         + " the same directory: " + name);
             }
-            String partition = partitionOf(root, xml);
-            if (!EXPECTED_PARTITION_COUNTS.containsKey(partition)) {
-                throw new IllegalArgumentException("Workflow " + name
-                        + " is outside first_100, middle_300, or last_100: " + xml);
+            if (!xml.getParentFile().getCanonicalFile().equals(root)) {
+                throw new IllegalArgumentException("Workflow XML/TXT pair must be"
+                        + " stored directly in the workflow directory: " + name);
             }
-            partitionCounts.merge(partition, 1, Integer::sum);
             xmlByName.put(name, xml);
         }
 
-        rejectUnlisted(files.xmlByName.keySet(), manifestNames, ".xml");
-        rejectUnlisted(files.txtByName.keySet(), manifestNames, ".txt");
-        for (Map.Entry<String, Integer> expected
-                : EXPECTED_PARTITION_COUNTS.entrySet()) {
-            int actual = partitionCounts.getOrDefault(expected.getKey(), 0);
-            if (actual != expected.getValue()) {
-                throw new IllegalArgumentException("Partition " + expected.getKey()
-                        + " contains " + actual + " manifest workflows; expected "
-                        + expected.getValue());
-            }
+        if (mode == DatasetMode.FULL_500) {
+            rejectUnlisted(files.xmlByName.keySet(), manifestNames, ".xml");
+            rejectUnlisted(files.txtByName.keySet(), manifestNames, ".txt");
         }
         return xmlByName;
     }
@@ -197,17 +169,6 @@ public class WorkflowLoader {
             throw new IllegalArgumentException("Found " + extension
                     + " files not listed in the manifest: " + sorted);
         }
-    }
-
-    private static String partitionOf(File root, File file) throws Exception {
-        String rootPath = root.getCanonicalPath();
-        String filePath = file.getCanonicalPath();
-        String prefix = rootPath.endsWith(File.separator)
-                ? rootPath : rootPath + File.separator;
-        if (!filePath.startsWith(prefix)) return "";
-        String relative = filePath.substring(prefix.length());
-        int separator = relative.indexOf(File.separatorChar);
-        return separator < 0 ? "" : relative.substring(0, separator);
     }
 
     private static final class DatasetFiles {
@@ -255,6 +216,9 @@ public class WorkflowLoader {
     // -----------------------------------------------------------------------
 
     private static Map<String, Double> parseJson(String path) throws Exception {
+        String json = new String(Files.readAllBytes(new File(path).toPath()),
+                StandardCharsets.UTF_8).trim();
+        if (json.startsWith("[")) return parseArrivalArray(json);
         Map<String, Double> map = new LinkedHashMap<>();
         try (BufferedReader br = new BufferedReader(new FileReader(path))) {
             String line;
@@ -283,6 +247,54 @@ public class WorkflowLoader {
             throw new IllegalArgumentException("Arrival manifest is empty: " + path);
         }
         return map;
+    }
+
+    /** Strict parser for arrays of workflow_name/arrival_time_seconds records.
+     * Filenames are local basenames; escapes and nested paths are intentionally rejected.
+     */
+    private static Map<String, Double> parseArrivalArray(String json) {
+        if (!json.endsWith("]")) throw new IllegalArgumentException("Malformed arrival array");
+        String body = json.substring(1, json.length() - 1).trim();
+        Map<String, Double> arrivals = new LinkedHashMap<>();
+        Pattern object = Pattern.compile("\\{([^{}]*)\\}");
+        Pattern field = Pattern.compile("\\s*\"(workflow_name|arrival_time_seconds)\"\\s*:\\s*(\"[^\"\\\\]*\"|-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?)\\s*");
+        Matcher objects = object.matcher(body);
+        int end = 0;
+        while (objects.find()) {
+            String separator = body.substring(end, objects.start()).trim();
+            if (!separator.equals(arrivals.isEmpty() ? "" : ","))
+                throw new IllegalArgumentException("Malformed arrival array separator");
+            String[] fields = objects.group(1).split(",", -1);
+            if (fields.length != 2) throw new IllegalArgumentException("Expected two arrival fields");
+            String name = null;
+            Double time = null;
+            for (String item : fields) {
+                Matcher match = field.matcher(item);
+                if (!match.matches()) throw new IllegalArgumentException("Invalid arrival field: " + item);
+                String value = match.group(2);
+                if (match.group(1).equals("workflow_name")) {
+                    if (name != null || !value.startsWith("\""))
+                        throw new IllegalArgumentException("Invalid workflow_name");
+                    name = value.substring(1, value.length() - 1);
+                } else {
+                    if (time != null || value.startsWith("\""))
+                        throw new IllegalArgumentException("Invalid arrival_time_seconds");
+                    time = Double.parseDouble(value);
+                }
+            }
+            if (name == null || !name.endsWith(".xml") || name.contains("/")
+                    || name.contains("\\") || name.contains(":") || name.length() <= 4)
+                throw new IllegalArgumentException("Expected local XML workflow_name: " + name);
+            if (time == null || !Double.isFinite(time) || time < 0.0)
+                throw new IllegalArgumentException("Arrival time must be finite and non-negative for " + name);
+            String key = name.substring(0, name.length() - 4);
+            if (arrivals.put(key, time) != null)
+                throw new IllegalArgumentException("Duplicate workflow in arrival manifest: " + name);
+            end = objects.end();
+        }
+        if (arrivals.isEmpty() || !body.substring(end).trim().isEmpty())
+            throw new IllegalArgumentException("Empty or malformed arrival array");
+        return arrivals;
     }
 
     // -----------------------------------------------------------------------

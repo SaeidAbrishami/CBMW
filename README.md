@@ -13,69 +13,55 @@ mu = computation time + shared-storage input/output access time
 ```
 
 The simulator therefore does not add a separate shared-storage or dependency
-file-transfer delay. The conservative planning duration `cet` is derived from
-this combined `mu`, and the matching `.txt` value is the perturbed sample of the
-same combined runtime used for actual execution.
+file-transfer delay. CBMW's conservative planning duration is
+`cet = mu + alpha * mu`, with `alpha=0.20` by default. The matching `.txt` value
+is the perturbed sample of the same combined runtime used for actual execution.
 
 Queue waiting, scheduler delay, and on-demand provisioning delay (`OPD`) are
 separate from task runtime. Reserved-container startup is currently not added
 separately; it is represented only when it is already included in the supplied
 DAX/runtime measurement.
 
-### Generating Reproducible Perturbed Runtimes
+### Current dataset and results workbook
 
-`test_workflows/duplicate_and_process.py` creates a separate, self-contained
-workflow dataset from every entry in an arrival manifest. It copies the
-referenced XML files and manifest, generates one normally distributed runtime
-sample per task, and writes `runtime_generation_metadata.json` with the seed,
-configuration, empirical standard deviation, and CET exceedance rate. The
-source dataset is never modified, and the destination must be new or empty.
+The default `test_workflows/workflows` folder contains 500 XML/TXT pairs and
+8 arrival manifests. TXT task runtimes are `ceil(mu + uniform(-0.2*mu, 0.2*mu))`
+in XML job order, generated with seed 20260909. All four full manifests share
+one shuffled workflow order (seed 20260909); exponential inter-arrival gaps
+use seeds `20260909 + mean`, with target means 15, 30, 45, and 60 seconds.
+The observed means need not equal those targets. Edge manifests preserve the
+first 100 and last 100 workflows, shifting the last block by arrival(401)-arrival(101).
+The simulator never rescales or rebases these JSON timestamps.
 
-Generate the paper-aligned dataset with `sigma/mu = 0.05`, `alpha = 0.99`, and
-a fixed seed:
-
-```powershell
-python test_workflows/duplicate_and_process.py `
-  --source-dir test_workflows `
-  --manifest poisson_distribution.json `
-  --output-dir Output/generated_datasets/test_workflows_sigma005_seed20260716 `
-  --stddev-ratio 0.05 `
-  --quantile 0.99 `
-  --seed 20260716
-```
-
-The generator processes all 200 manifest workflows rather than only a subset
-of filename variants. It validates that every XML exists, every job has a
-finite runtime, and every generated runtime is positive. For the current
-109,125-task manifest, a 99th-percentile CET should be exceeded by about 1,091
-tasks; the approximate 95% binomial count interval is 1,027-1,156. Sampling
-variation means the result is not required to equal exactly 1%.
-
-The generated directory is the experiment driver's default workflow source.
-The explicit workflow property below is optional, but shown to make the input
-dataset unambiguous in recorded experiment commands:
+Run all 24 CBMW scenarios and fill the supplied template:
 
 ```powershell
-java `
-  '-Dcbmw.workflow.dir=Output/generated_datasets/test_workflows_sigma005_seed20260716' `
-  '-Dcbmw.workflow.manifest=poisson_distribution.json' `
-  '-Dcbmw.runtime.quantile=0.99' `
-  '-Dcbmw.runtime.stddev.ratio=0.05' `
-  '-Dcbmw.algorithms=CBMW' `
-  '-Dcbmw.output.dir=Output/validation_sigma005_seed20260716' `
-  '-Dcbmw.export.details=false' `
-  '-Dcbmw.detail.log=false' `
-  '-Dcbmw.quiet=true' `
-  -cp 'bin;lib/*' `
-  org.workflowsim.examples.cbmw.CBMWSimulation
+.\scripts\run_results_workbook.ps1 -Template 'C:\Users\AsiaLapTop.Com\OneDrive\Desktop\results.xlsx'
 ```
 
-Existing `.txt` files are intentionally not updated in place. Changing the
-generator does not alter an old dataset; a new output directory must be
-generated before running the default configuration. A different dataset can be
-selected with `cbmw.workflow.dir`.
+This runs one repetition with TXT runtime samples in four independent JVMs
+(configurable with `-Workers`), saves scenario CSVs and
+`run_config.json` under a fresh `Output/results_24_<timestamp>` directory, and
+writes `outputs/results_24_<timestamp>/results.xlsx`. The original template
+is preserved. Task and aggregate CSVs remain under each scenario subfolder;
+the combined 24-row CSV is `algorithms/CBMW/results.csv`. The exporter rejects missing, duplicate, capped, mixed-algorithm,
+or multi-repetition inputs. To export an already completed run, pass
+`-SkipSimulation -OutputRoot <run-directory>`.
 
----
+Workbook definitions: success is met-deadline/total; time is elapsed simulated
+seconds from first arrival to final completion; Fun. Cost is on-demand cost;
+total cost includes reserved rental; marginal cost is full cost minus matching
+edge cost, on the full row only. RAM is MB; capacity integrals are core-seconds
+and MB-seconds. Utilization means are time-weighted over the workload window.
+Reserved integrals are available capacity, not consumed capacity. On-demand
+counts/capacities sum provisioned instances across their lifecycles, not peaks.
+The exported sheet contains formulas for success rate, total and marginal cost.
+
+The CBMW planning margin is controlled by
+`cbmw.runtime.planning.alpha` (default `0.20`), so the default planning runtime
+is `1.20 * mu`. It is separate from the 20% uniform uncertainty used to
+generate the supplied actual runtimes and from `cbmw.runtime.stddev.ratio`,
+which remains available for normal runtime resampling and NOSF.
 
 ## Algorithm Overview
 
@@ -344,15 +330,17 @@ with `:` as the classpath separator.
 java -cp "bin;lib/*" org.workflowsim.examples.cbmw.CBMWSimulation
 ```
 
-By default this runs the full 45-scenario matrix: three load classes, three
-deadline classes, and five algorithms, using 50 workflows per scenario for
-every algorithm. Workflow inputs are read from
-`Output/generated_datasets/test_workflows_sigma005_seed20260716` by default.
+By default all five algorithms run 24 scenarios each (120 total): four arrival
+rates (15/30/45/60), three tightness values (1.2/2/4), and FULL_500/EDGE_200.
+Inputs default to `test_workflows/workflows`. Each scenario selects its
+`dax_poisson_arrivals_mean<mean>s_500workflows.json` or `_edge200.json` file
+and uses the manifest arrival times without modification.
 Use JVM properties such as
 `-Dcbmw.algorithms=CBMW`, `-Dcbmw.max.workflows=5`, and
 `-Dcbmw.max.scenarios=1` to restrict smoke or diagnostic runs.
 
-Run the nine NOSF scenarios with the paper-aligned market and 30 repetitions:
+Run the twelve full-dataset NOSF scenarios with the paper-aligned market and 30
+repetitions:
 
 ```powershell
 java '-Dcbmw.algorithms=NOSF' '-Dnosf.profile=PAPER_ALIGNED' `
@@ -367,23 +355,27 @@ java '-Dcbmw.algorithms=NOSF' '-Dnosf.profile=PAPER_ALIGNED' `
 
 | Property / scenario | Default | Description |
 |---------------------|---------|-------------|
-| Load classes | low `2.0`, moderate `1.0`, heavy `0.5` | Multipliers applied to arrival times |
-| Deadline classes | tight `1.2`, medium `2.0`, loose `4.0` | Deadline = arrival + CP × tightness |
-| `cbmw.workflow.dir` | `Output/generated_datasets/test_workflows_sigma005_seed20260716` | Directory containing the workflow XML/TXT datasets and arrival manifest |
-| `cbmw.workflow.manifest` | `poisson_distribution.json` | Arrival manifest filename within `cbmw.workflow.dir` |
+| Arrival/deadline configurations | `15/30/45/60` x `1.2/2/4` | `(target mean inter-arrival seconds, deadline multiplier alpha)` |
+| Dataset modes | `FULL_500`, `EDGE_200` | Both modes for all algorithms |
+| `cbmw.workflow.dir` | `test_workflows/workflows` | Flat directory containing all 500 XML/TXT pairs and the arrival manifest |
+| `cbmw.scenarios` | all 24 | Comma-separated scenario IDs for isolated/resumable runs |
+| `cbmw.workflow.manifest.<mean>.<mode>` | scenario-specific filename | Arrival manifest filename within `cbmw.workflow.dir` |
+| `cbmw.workflow.dataset.mode` | both modes when unset | Restrict execution to `FULL_500` or `EDGE_200` |
 | `cbmw.reserved.instances` | `5` | Reserved VM count |
 | `cbmw.reserved.cores` | `192` | Cores per reserved VM |
 | `cbmw.reserved.ram.mb` | `384000` | RAM per reserved VM |
-| `cbmw.reserved.hourly.cost` | `3.26` | Prepaid reference price; excluded from scheduling cost |
-| `cbmw.ondemand.per.sec` | `0.000340` | Default CPU price per core-second |
-| `cbmw.ondemand.memory.per.gb.sec` | `0.0` | Default memory price per GB-second |
+| `cbmw.reserved.per.sec` | `0.0017` | Reserved rental price included in report cost |
+| `cbmw.ondemand.per.sec` | `0.00001` | Default CPU price per core-second |
+| `cbmw.ondemand.memory.per.gb.sec` | `0.000001` | Default memory price per GB-second |
 | `cbmw.ondemand.delay.sec` | `90.0` | On-demand provisioning delay (`opd`) |
 | `cbmw.ondemand.min.billing.sec` | `60.0` | Minimum on-demand billing duration |
 | `nosf.profile` | `COMMON_MARKET` | `PAPER_ALIGNED` selects the paper NOSF market and repetition defaults |
 | `cbmw.repetitions` | profile default: `1` or `30` | Independent repetitions of every scenario/algorithm |
 | `cbmw.run.start` | `0` | First exported run number, useful when extending an experiment |
 | `cbmw.seed.base` | `20260716` | Base seed used to derive a deterministic seed per repetition |
-| `cbmw.runtime.resample` | true when repetitions > 1 | Resample task runtimes per run; algorithms share samples within a run |
+| `cbmw.runtime.planning.alpha` | `0.20` | CBMW additive planning margin; `cet = mu + alpha * mu` |
+| `cbmw.runtime.stddev.ratio` | `0.05` | Normal-resampling and NOSF sigma/mu; does not affect CBMW planning |
+| `cbmw.runtime.resample` | false (use matching TXT files) | Resample task runtimes per run; algorithms share samples within a run |
 | `nosf.billing.quantum.sec` | profile default: `60` or `3600` | Reusable NOSF VM billing quantum |
 | `nosf.transfer.mode` | profile default | `COMMON_SHARED_STORAGE` or `PAPER_NETWORK` |
 | `nosf.vm.type.count` | profile default: `1` or `7` | Explicit value overrides the profile VM catalog |
@@ -422,11 +414,10 @@ Total cost ($)           : 23.0717
 Makespan (sim s)         : 8652.25
 ```
 
-Following paper Section 3.3 and Equation 1, `reservedCost` is reported as zero
-because reserved capacity is prepaid and outside the scheduler's optimization
-objective. `totalCost` is therefore `onDemandCost + spotCost`; NOSF is not
-charged for a reserved pool it does not use. This is a scheduling-cost metric,
-not full operational expenditure including prepaid reservations.
+Current report accounting includes reserved lease cost for CBMW and greedy
+baselines. `totalCost = reservedCost + onDemandCost + spotCost`. NOSF/CEWB have
+no reserved lease charge. The console example above is historical; the current
+report includes reserved rental over the simulated workload duration.
 
 ### CSV
 

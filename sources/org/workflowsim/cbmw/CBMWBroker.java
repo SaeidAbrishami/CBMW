@@ -1,8 +1,10 @@
 package org.workflowsim.cbmw;
 
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -36,6 +38,8 @@ public class CBMWBroker extends AbstractWorkflowBroker {
             new HashMap<>();
     private final Map<Integer, Double> remainingPlanningDurations =
             new HashMap<>();
+    private final List<Cloudlet> newlyReadyJobs = new ArrayList<>();
+    private final Set<Job> runningReservedJobs = new LinkedHashSet<>();
     private final Set<Integer> waitingForPlannedReservedVm =
             new HashSet<>();
     private boolean immediateReservedCapacityWake;
@@ -115,9 +119,21 @@ public class CBMWBroker extends AbstractWorkflowBroker {
 
     @Override
     @SuppressWarnings("unchecked")
+    protected void processCloudletSubmit(SimEvent ev) {
+        newlyReadyJobs.addAll((List<Cloudlet>) ev.getData());
+        super.processCloudletSubmit(ev);
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
     protected void processCloudletUpdate(SimEvent ev) {
         immediateReservedCapacityWake = false;
-        recordReadyQueue((List<Cloudlet>) getCloudletList());
+        CBMWPerformanceMetrics.recordReadyQueueScan(newlyReadyJobs.size());
+        recordReadyQueue(newlyReadyJobs);
+        newlyReadyJobs.clear();
+        List<Cloudlet> ready = (List<Cloudlet>) getCloudletList();
+        CBMWPerformanceMetrics.recordPreemptionSort(ready.size());
+        ready.sort(Comparator.comparingDouble(this::scheduledStart));
 
         // A replacement cannot be submitted until the datacenter confirms
         // that the selected victim has stopped and released its PEs.
@@ -154,9 +170,10 @@ public class CBMWBroker extends AbstractWorkflowBroker {
     @SuppressWarnings("unchecked")
     private boolean requestReservedPreemption() {
         List<Cloudlet> ready = (List<Cloudlet>) getCloudletList();
-        ready.sort(Comparator.comparingDouble(this::scheduledStart));
 
+        double now = CloudSim.clock();
         for (Cloudlet cloudlet : ready) {
+            if (scheduledStart(cloudlet) > now) break;
             Job waiting = (Job) cloudlet;
             if (requestReservedPreemption(waiting)) return true;
         }
@@ -259,22 +276,22 @@ public class CBMWBroker extends AbstractWorkflowBroker {
         }
         int requiredCores = vmPool.getTaskCores(waitingTaskId);
         int requiredRam = vmPool.getTaskRamMb(waitingTaskId);
+        assert runningReservedIndexMatchesSubmittedList();
 
-        return getCloudletSubmittedList().stream()
-                .filter(cl -> cl instanceof Job)
-                .map(cl -> (Job) cl)
-                .filter(job -> vmPool.isReserved(job.getVmId()))
-                .filter(job -> isCurrentlyPreRunning(
-                        now, scheduledStart(job)))
-                .filter(job -> getVmsToDatacentersMap().containsKey(job.getVmId()))
-                .filter(job -> vmPool.getTaskCores(primaryTaskId(job)) >= requiredCores)
-                .filter(job -> vmPool.getTaskRamMb(primaryTaskId(job)) >= requiredRam)
-                .filter(job -> capacityAfterRemoving(job, waitingTaskId))
-                .filter(job -> isDeadlineSafeVictim(
-                        job, now, expectedInterruption))
-                .max((left, right) -> compareVictimPriority(
-                        left, right, now, expectedInterruption))
-                .orElse(null);
+        Job best = null;
+        for (Job job : runningReservedJobs) {
+            if (!isCurrentlyPreRunning(now, scheduledStart(job))) continue;
+            if (!getVmsToDatacentersMap().containsKey(job.getVmId())) continue;
+            if (vmPool.getTaskCores(primaryTaskId(job)) < requiredCores) continue;
+            if (vmPool.getTaskRamMb(primaryTaskId(job)) < requiredRam) continue;
+            if (!capacityAfterRemoving(job, waitingTaskId)) continue;
+            if (!isDeadlineSafeVictim(job, now, expectedInterruption)) continue;
+            if (best == null || compareVictimPriority(
+                    job, best, now, expectedInterruption) > 0) {
+                best = job;
+            }
+        }
+        return best;
     }
 
     private boolean isDeadlineSafeVictim(Job job, double now,
@@ -447,6 +464,7 @@ public class CBMWBroker extends AbstractWorkflowBroker {
 
         getCloudletSubmittedList().remove(canceled);
         cloudletsSubmitted = Math.max(0, cloudletsSubmitted - 1);
+        runningReservedJobs.remove(canceledJob);
         vmPool.taskFinished(preemption.vmId, victimTaskId);
         vmPool.releaseSlot(victimTaskId);
         accounting.markReservedTaskPreempted(canceled);
@@ -457,6 +475,7 @@ public class CBMWBroker extends AbstractWorkflowBroker {
                 workflowIdForJob(preemption.victim), victimTaskId,
                 preemption.vmId, remainingLength, preemption.replacementTaskId);
         sendNow(getId(), WorkflowSimTags.CLOUDLET_UPDATE);
+        assert runningReservedIndexMatchesSubmittedList();
     }
 
     @Override
@@ -469,8 +488,32 @@ public class CBMWBroker extends AbstractWorkflowBroker {
 
     @Override
     protected void onTaskReturned(Cloudlet cl, boolean onDemand) {
+        runningReservedJobs.remove(cl);
         int taskId = primaryTaskId((Job) cl);
         remainingPlanningDurations.remove(taskId);
         waitingForPlannedReservedVm.remove(taskId);
+        assert runningReservedIndexMatchesSubmittedList();
+    }
+
+    @Override
+    protected void onTaskSubmitted(Cloudlet cl, boolean onDemand) {
+        if (!onDemand && cl instanceof Job && vmPool.isReserved(cl.getVmId())) {
+            runningReservedJobs.add((Job) cl);
+        }
+    }
+
+    @Override
+    protected void onSubmissionBatchComplete() {
+        assert runningReservedIndexMatchesSubmittedList();
+    }
+
+    private boolean runningReservedIndexMatchesSubmittedList() {
+        Set<Job> expected = new LinkedHashSet<>();
+        for (Cloudlet cloudlet : getCloudletSubmittedList()) {
+            if (cloudlet instanceof Job && vmPool.isReserved(cloudlet.getVmId())) {
+                expected.add((Job) cloudlet);
+            }
+        }
+        return runningReservedJobs.equals(expected);
     }
 }
