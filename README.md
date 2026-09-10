@@ -150,7 +150,7 @@ NOSF has two explicit experiment profiles:
 
 The paper-aligned profile deliberately retains the common comparison controls:
 the project's three deadline factors, the same workflow population, the shared
-`cbmw.runtime.stddev.ratio`, and `cbmw.ondemand.delay.sec=90` rather than the
+`cbmw.runtime.stddev.ratio`, and `cbmw.ondemand.delay.sec=60` rather than the
 paper's 97-second boot time. Explicit NOSF VM, billing, transfer, or repetition
 properties can still override profile defaults for sensitivity experiments.
 
@@ -198,7 +198,7 @@ Paper-style on-demand pool properties include
 `cbmw.cewb.ondemand.{initial.ready.instances,min.ready.instances,max.instances}`,
 `cbmw.cewb.snapshot.delay.sec`, `cbmw.cewb.resume.progress`, and
 `cbmw.cewb.admission.min.cp.multiplier`.
-The default physical-VM provisioning delay is 90 seconds; the independent
+The default physical-VM provisioning delay is 60 seconds; the independent
 Algorithm 2 capacity-adjustment interval remains 100 seconds.
 Results also include `brokerRevenue` and `brokerProfit`. The reconstructed
 pricing families are selected by `cbmw.cewb.pricing.policy` with values
@@ -367,7 +367,7 @@ java '-Dcbmw.algorithms=NOSF' '-Dnosf.profile=PAPER_ALIGNED' `
 | `cbmw.reserved.per.sec` | `0.0017` | Reserved rental price included in report cost |
 | `cbmw.ondemand.per.sec` | `0.00001` | Default CPU price per core-second |
 | `cbmw.ondemand.memory.per.gb.sec` | `0.000001` | Default memory price per GB-second |
-| `cbmw.ondemand.delay.sec` | `90.0` | On-demand provisioning delay (`opd`) |
+| `cbmw.ondemand.delay.sec` | `60.0` | On-demand provisioning delay (`opd`) |
 | `cbmw.ondemand.min.billing.sec` | `60.0` | Minimum on-demand billing duration |
 | `nosf.profile` | `COMMON_MARKET` | `PAPER_ALIGNED` selects the paper NOSF market and repetition defaults |
 | `cbmw.repetitions` | profile default: `1` or `30` | Independent repetitions of every scenario/algorithm |

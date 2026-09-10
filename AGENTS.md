@@ -83,7 +83,7 @@ Useful JVM switches:
 | `-Dcbmw.negotiation.beta=1.0` | Workflow-level safety factor applied to the conservative critical path. |
 | `-Dcbmw.negotiation.gamma=1.0` | Markup applied to CBMW's post-planning raw execution-cost quote. |
 | `-Dcbmw.preemption.safety.sec=0` | Minimum post-preemption slack required before a running reserved task can be interrupted. |
-| `-Dcbmw.ondemand.delay.sec=90` | Shared CBMW/NOSF on-demand provisioning delay. NOSF deliberately uses this common-market value instead of the paper's 97-second experiment value. |
+| `-Dcbmw.ondemand.delay.sec=60` | Shared CBMW/NOSF on-demand provisioning delay. NOSF deliberately uses this common-market value instead of the paper's 97-second experiment value. |
 | `-Dnosf.profile=COMMON_MARKET` | NOSF experiment profile. `PAPER_ALIGNED` selects the paper's seven EC2 types, hourly billing, network transfers, and 30 repetitions while retaining the common deadline/workflow/runtime/boot controls. |
 | `-Dcbmw.repetitions=1` | Runs per scenario; defaults to 30 under `PAPER_ALIGNED`. |
 | `-Dcbmw.run.start=0` | First run number for resumable/extended repetition sets. |
@@ -103,7 +103,7 @@ Useful JVM switches:
 | `-Dcbmw.cewb.reference.resume.progress=true` | Enable partial-progress recovery in `CEWB-ReferenceAdapted`; false retains its reference timing/classification but uses current escalation recovery. |
 | `-Dcbmw.cewb.ondemand.vm.cores=32` | Cores in each reusable physical CEWB on-demand VM. |
 | `-Dcbmw.cewb.ondemand.vm.ram.mb=65536` | RAM in each reusable physical CEWB on-demand VM. |
-| `-Dcbmw.cewb.ondemand.vm.provisioning.sec=90` | Physical VM cold-start delay, paid once per physical VM. |
+| `-Dcbmw.cewb.ondemand.vm.provisioning.sec=60` | Physical VM cold-start delay, paid once per physical VM. |
 | `-Dcbmw.cewb.container.delay.sec=0.4` | Paper container deployment delay for a task placed on a running VM. |
 | `-Dcbmw.cewb.provisioning.interval.sec=100` | Period for paper Algorithm 2 capacity adjustment and idle-VM lifecycle. |
 | `-Dcbmw.cewb.ondemand.initial.ready.instances=1` | Warm physical on-demand VMs available at simulation start. |
@@ -279,10 +279,10 @@ test_workflows/
 - Following Algorithm 1 literally, a task that cannot be placed on reserved
   capacity is assigned to dummy resource `o0` at `SST = LST - OPD`. This value
   is not clamped to workflow arrival; Algorithm 3 provisions immediately when
-  SST is past. For an entry task assigned to `o0`, planning includes the
-  on-demand provisioning delay from workflow arrival. The workflow is rejected
-  if that entry task would finish after its derived LFT, because its downstream
-  path would then miss the workflow deadline.
+  SST is past. If an entry task is assigned to `o0`, the workflow deadline is
+  extended once by OPD. Planning then recomputes EST/EFT/LST/LFT and resource
+  assignments against the adjusted deadline while preserving that entry task's
+  on-demand assignment; the workflow is not rejected for this delay.
 - `applyPerturbedRuntimes()` replaces each task runtime from the matching
   `.txt` file.
 - `cloudletLength = runtime_seconds * 1000`.
@@ -305,7 +305,7 @@ Current configurable defaults in `HybridVmPool`:
 | `cbmw.ondemand.per.sec` | 0.00001 |
 | `cbmw.ondemand.cpu.per.core.sec` | Value of `cbmw.ondemand.per.sec` |
 | `cbmw.ondemand.memory.per.gb.sec` | 0.000001 |
-| `cbmw.ondemand.delay.sec` | 90.0 |
+| `cbmw.ondemand.delay.sec` | 60.0 |
 | `cbmw.scheduling.period.sec` | 5.0 |
 | `cbmw.ondemand.min.billing.sec` | 60.0 |
 
@@ -364,7 +364,7 @@ instance definitions. `CEWB-ReferenceAdapted` is the exception to full-restart
 recovery: it reduces the logical cloudlet to its remaining work after a
 revocation, then retries or falls back after reclassification.
 CEWB also owns a paper-style physical on-demand pool. By default it uses
-reusable 32-core VMs, a 90-second physical cold start, 0.4-second containers,
+reusable 32-core VMs, a 60-second physical cold start, 0.4-second containers,
 and 100-second provisioning cycles. Algorithm 2 provisions aggregate core/RAM
 deficits; best-fit placement multiplexes containers, and fully idle VMs survive
 one cycle before termination. Physical rental cost is allocated to workflows
@@ -484,7 +484,7 @@ scenario also completed.
   the common CBMW market. `PAPER_ALIGNED` restores the seven-type EC2 catalog,
   hourly billing, network model, and 30 repetitions while deliberately keeping
   the common deadline factors, workflow population, runtime standard deviation,
-  and 90-second provisioning delay required for the comparison.
+  and 60-second provisioning delay required for the comparison.
 - CEWB's resource behavior is now explicit rather than borrowing reserved VMs,
   but its configurable spot-market defaults remain simulation assumptions: the
   external paper's full pseudocode and experimental market constants are not

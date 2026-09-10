@@ -80,7 +80,7 @@ public final class CEWBValidationTest {
         System.setProperty("cbmw.cewb.spot.mtbi.sec", "1000000000");
         System.setProperty("cbmw.cewb.ondemand.vm.cores", "32");
         System.setProperty("cbmw.cewb.ondemand.vm.ram.mb", "65536");
-        System.setProperty("cbmw.cewb.ondemand.vm.provisioning.sec", "90");
+        System.setProperty("cbmw.cewb.ondemand.vm.provisioning.sec", "60");
         System.setProperty("cbmw.cewb.container.delay.sec", "0.4");
         System.setProperty("cbmw.cewb.provisioning.interval.sec", "100");
         System.setProperty("cbmw.cewb.ondemand.initial.ready.instances", "1");
@@ -118,9 +118,9 @@ public final class CEWBValidationTest {
                 64, 64, 100.0);
         check(ordered.size() == 1 && !ordered.get(0).isLaunched(),
                 "Algorithm 2 must provision only the core deficit");
-        check(pool.activateReady(189.9).isEmpty(),
+        check(pool.activateReady(159.9).isEmpty(),
                 "cold physical VM must respect VM provisioning delay");
-        check(pool.activateReady(190.0).size() == 1,
+        check(pool.activateReady(160.0).size() == 1,
                 "cold physical VM must activate at its exact ready time");
         check(pool.getActiveCoreCapacity() == 64
                         && pool.getActiveRamMbCapacity() == 131072,

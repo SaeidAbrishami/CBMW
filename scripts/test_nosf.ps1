@@ -51,7 +51,7 @@ try {
     if ($logText -notmatch 'reused=yes') { throw 'NOSF smoke did not demonstrate VM reuse' }
     if ($logText -notmatch 'estimator=MU_PLUS_SIGMA') { throw 'NOSF did not log the paper runtime estimator' }
     if ($logText -notmatch 'priority=EST') { throw 'NOSF did not use the documented paper priority policy' }
-    if ($logText -notmatch 'provisioningDelay=90\.0') { throw 'NOSF did not inherit the default CBMW provisioning delay' }
+    if ($logText -notmatch 'provisioningDelay=60\.0') { throw 'NOSF did not inherit the default CBMW provisioning delay' }
 
     $paperOutput = 'Output/smoke_tests/NOSF_paper_aligned'
     $paperOutputPath = Join-Path $projectRoot $paperOutput

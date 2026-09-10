@@ -22,7 +22,7 @@ final class CEWBOnDemandPool {
     static final int VM_RAM_MB = intProperty(
             "cbmw.cewb.ondemand.vm.ram.mb", 64 * 1024);
     static final double VM_PROVISIONING_SECONDS = property(
-            "cbmw.cewb.ondemand.vm.provisioning.sec", 90.0);
+            "cbmw.cewb.ondemand.vm.provisioning.sec", 60.0);
     static final double CONTAINER_DEPLOYMENT_SECONDS = property(
             "cbmw.cewb.container.delay.sec", 0.4);
     static final double PROVISIONING_INTERVAL_SECONDS = property(

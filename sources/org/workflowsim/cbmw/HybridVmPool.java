@@ -42,7 +42,7 @@ public class HybridVmPool {
             System.getProperty("cbmw.ondemand.memory.per.gb.sec", "0.000001"));
     /** Modelled on-demand provisioning delay (seconds). sstji = lstji - OPD. */
     public static final double ON_DEMAND_PROVISIONING_DELAY = Double.parseDouble(
-            System.getProperty("cbmw.ondemand.delay.sec", "90.0"));
+            System.getProperty("cbmw.ondemand.delay.sec", "60.0"));
     public static final double SCHEDULING_PERIOD = Double.parseDouble(
             System.getProperty("cbmw.scheduling.period.sec", "5.0"));
     public static final double ON_DEMAND_MIN_BILLING_SECONDS = Double.parseDouble(
