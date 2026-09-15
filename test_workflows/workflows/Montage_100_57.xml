@@ -4,103 +4,103 @@
 <adag xmlns="http://pegasus.isi.edu/schema/DAX" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pegasus.isi.edu/schema/DAX http://pegasus.isi.edu/schema/dax-2.1.xsd" version="2.1" count="1" index="0" name="test" jobCount="100" fileCount="0" childCount="84">
 <!-- part 1: list of all referenced files (may be empty) -->
 <!-- part 2: definition of all jobs (at least one) -->
-  <job id="ID00000" namespace="Montage" name="mProjectPP" version="1.0" runtime="13.85">
+  <job id="ID00000" namespace="Montage" name="mProjectPP" version="1.0" runtime="14">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="2mass-atlas-ID00000s-jID00000.fits" link="input" register="true" transfer="true" optional="false" type="data" size="4222080"/>
     <uses file="p2mass-atlas-ID00000s-jID00000.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4157716"/>
     <uses file="p2mass-atlas-ID00000s-jID00000_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4157716"/>
   </job>
-  <job id="ID00001" namespace="Montage" name="mProjectPP" version="1.0" runtime="13.11">
+  <job id="ID00001" namespace="Montage" name="mProjectPP" version="1.0" runtime="13">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="2mass-atlas-ID00001s-jID00001.fits" link="input" register="true" transfer="true" optional="false" type="data" size="4222080"/>
     <uses file="p2mass-atlas-ID00001s-jID00001.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4183167"/>
     <uses file="p2mass-atlas-ID00001s-jID00001_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4183167"/>
   </job>
-  <job id="ID00002" namespace="Montage" name="mProjectPP" version="1.0" runtime="13.42">
+  <job id="ID00002" namespace="Montage" name="mProjectPP" version="1.0" runtime="13">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="2mass-atlas-ID00002s-jID00002.fits" link="input" register="true" transfer="true" optional="false" type="data" size="4222080"/>
     <uses file="p2mass-atlas-ID00002s-jID00002.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4163104"/>
     <uses file="p2mass-atlas-ID00002s-jID00002_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4163104"/>
   </job>
-  <job id="ID00003" namespace="Montage" name="mProjectPP" version="1.0" runtime="13.30">
+  <job id="ID00003" namespace="Montage" name="mProjectPP" version="1.0" runtime="13">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="2mass-atlas-ID00003s-jID00003.fits" link="input" register="true" transfer="true" optional="false" type="data" size="4222080"/>
     <uses file="p2mass-atlas-ID00003s-jID00003.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4160478"/>
     <uses file="p2mass-atlas-ID00003s-jID00003_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4160478"/>
   </job>
-  <job id="ID00004" namespace="Montage" name="mProjectPP" version="1.0" runtime="13.16">
+  <job id="ID00004" namespace="Montage" name="mProjectPP" version="1.0" runtime="13">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="2mass-atlas-ID00004s-jID00004.fits" link="input" register="true" transfer="true" optional="false" type="data" size="4222080"/>
     <uses file="p2mass-atlas-ID00004s-jID00004.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4146308"/>
     <uses file="p2mass-atlas-ID00004s-jID00004_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4146308"/>
   </job>
-  <job id="ID00005" namespace="Montage" name="mProjectPP" version="1.0" runtime="13.57">
+  <job id="ID00005" namespace="Montage" name="mProjectPP" version="1.0" runtime="14">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="2mass-atlas-ID00005s-jID00005.fits" link="input" register="true" transfer="true" optional="false" type="data" size="4222080"/>
     <uses file="p2mass-atlas-ID00005s-jID00005.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4157375"/>
     <uses file="p2mass-atlas-ID00005s-jID00005_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4157375"/>
   </job>
-  <job id="ID00006" namespace="Montage" name="mProjectPP" version="1.0" runtime="13.25">
+  <job id="ID00006" namespace="Montage" name="mProjectPP" version="1.0" runtime="13">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="2mass-atlas-ID00006s-jID00006.fits" link="input" register="true" transfer="true" optional="false" type="data" size="4222080"/>
     <uses file="p2mass-atlas-ID00006s-jID00006.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4149715"/>
     <uses file="p2mass-atlas-ID00006s-jID00006_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4149715"/>
   </job>
-  <job id="ID00007" namespace="Montage" name="mProjectPP" version="1.0" runtime="13.65">
+  <job id="ID00007" namespace="Montage" name="mProjectPP" version="1.0" runtime="14">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="2mass-atlas-ID00007s-jID00007.fits" link="input" register="true" transfer="true" optional="false" type="data" size="4222080"/>
     <uses file="p2mass-atlas-ID00007s-jID00007.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4151438"/>
     <uses file="p2mass-atlas-ID00007s-jID00007_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4151438"/>
   </job>
-  <job id="ID00008" namespace="Montage" name="mProjectPP" version="1.0" runtime="13.63">
+  <job id="ID00008" namespace="Montage" name="mProjectPP" version="1.0" runtime="14">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="2mass-atlas-ID00008s-jID00008.fits" link="input" register="true" transfer="true" optional="false" type="data" size="4222080"/>
     <uses file="p2mass-atlas-ID00008s-jID00008.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4158069"/>
     <uses file="p2mass-atlas-ID00008s-jID00008_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4158069"/>
   </job>
-  <job id="ID00009" namespace="Montage" name="mProjectPP" version="1.0" runtime="13.70">
+  <job id="ID00009" namespace="Montage" name="mProjectPP" version="1.0" runtime="14">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="2mass-atlas-ID00009s-jID00009.fits" link="input" register="true" transfer="true" optional="false" type="data" size="4222080"/>
     <uses file="p2mass-atlas-ID00009s-jID00009.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4162206"/>
     <uses file="p2mass-atlas-ID00009s-jID00009_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4162206"/>
   </job>
-  <job id="ID00010" namespace="Montage" name="mProjectPP" version="1.0" runtime="13.55">
+  <job id="ID00010" namespace="Montage" name="mProjectPP" version="1.0" runtime="14">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="2mass-atlas-ID00010s-jID00010.fits" link="input" register="true" transfer="true" optional="false" type="data" size="4222080"/>
     <uses file="p2mass-atlas-ID00010s-jID00010.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4156691"/>
     <uses file="p2mass-atlas-ID00010s-jID00010_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4156691"/>
   </job>
-  <job id="ID00011" namespace="Montage" name="mProjectPP" version="1.0" runtime="13.81">
+  <job id="ID00011" namespace="Montage" name="mProjectPP" version="1.0" runtime="14">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="2mass-atlas-ID00011s-jID00011.fits" link="input" register="true" transfer="true" optional="false" type="data" size="4222080"/>
     <uses file="p2mass-atlas-ID00011s-jID00011.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4164317"/>
     <uses file="p2mass-atlas-ID00011s-jID00011_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4164317"/>
   </job>
-  <job id="ID00012" namespace="Montage" name="mProjectPP" version="1.0" runtime="13.62">
+  <job id="ID00012" namespace="Montage" name="mProjectPP" version="1.0" runtime="14">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="2mass-atlas-ID00012s-jID00012.fits" link="input" register="true" transfer="true" optional="false" type="data" size="4222080"/>
     <uses file="p2mass-atlas-ID00012s-jID00012.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4165693"/>
     <uses file="p2mass-atlas-ID00012s-jID00012_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4165693"/>
   </job>
-  <job id="ID00013" namespace="Montage" name="mProjectPP" version="1.0" runtime="13.36">
+  <job id="ID00013" namespace="Montage" name="mProjectPP" version="1.0" runtime="13">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="2mass-atlas-ID00013s-jID00013.fits" link="input" register="true" transfer="true" optional="false" type="data" size="4222080"/>
     <uses file="p2mass-atlas-ID00013s-jID00013.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4158003"/>
     <uses file="p2mass-atlas-ID00013s-jID00013_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4158003"/>
   </job>
-  <job id="ID00014" namespace="Montage" name="mProjectPP" version="1.0" runtime="13.17">
+  <job id="ID00014" namespace="Montage" name="mProjectPP" version="1.0" runtime="13">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="2mass-atlas-ID00014s-jID00014.fits" link="input" register="true" transfer="true" optional="false" type="data" size="4222080"/>
     <uses file="p2mass-atlas-ID00014s-jID00014.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4160320"/>
     <uses file="p2mass-atlas-ID00014s-jID00014_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4160320"/>
   </job>
-  <job id="ID00015" namespace="Montage" name="mProjectPP" version="1.0" runtime="13.58">
+  <job id="ID00015" namespace="Montage" name="mProjectPP" version="1.0" runtime="14">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="2mass-atlas-ID00015s-jID00015.fits" link="input" register="true" transfer="true" optional="false" type="data" size="4222080"/>
     <uses file="p2mass-atlas-ID00015s-jID00015.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4159619"/>
     <uses file="p2mass-atlas-ID00015s-jID00015_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4159619"/>
   </job>
-  <job id="ID00016" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.57">
+  <job id="ID00016" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00000s-jID00000.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4157716"/>
     <uses file="p2mass-atlas-ID00000s-jID00000_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4157716"/>
@@ -109,7 +109,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="264"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="178931"/>
   </job>
-  <job id="ID00017" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.60">
+  <job id="ID00017" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00000s-jID00000.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4165443"/>
     <uses file="p2mass-atlas-ID00000s-jID00000_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4165443"/>
@@ -118,7 +118,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="273"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="156550"/>
   </job>
-  <job id="ID00018" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.58">
+  <job id="ID00018" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00000s-jID00000.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4160415"/>
     <uses file="p2mass-atlas-ID00000s-jID00000_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4160415"/>
@@ -127,7 +127,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="268"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="399793"/>
   </job>
-  <job id="ID00019" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.64">
+  <job id="ID00019" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00000s-jID00000.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4171910"/>
     <uses file="p2mass-atlas-ID00000s-jID00000_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4171910"/>
@@ -136,7 +136,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="276"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="307002"/>
   </job>
-  <job id="ID00020" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.45">
+  <job id="ID00020" namespace="Montage" name="mDiffFit" version="1.0" runtime="10">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00001s-jID00001.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4164523"/>
     <uses file="p2mass-atlas-ID00001s-jID00001_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4164523"/>
@@ -145,7 +145,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="273"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="368185"/>
   </job>
-  <job id="ID00021" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.64">
+  <job id="ID00021" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00001s-jID00001.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4171124"/>
     <uses file="p2mass-atlas-ID00001s-jID00001_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4171124"/>
@@ -154,7 +154,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="263"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="337755"/>
   </job>
-  <job id="ID00022" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.58">
+  <job id="ID00022" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00001s-jID00001.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4164308"/>
     <uses file="p2mass-atlas-ID00001s-jID00001_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4164308"/>
@@ -163,7 +163,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="260"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="198353"/>
   </job>
-  <job id="ID00023" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.74">
+  <job id="ID00023" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00001s-jID00001.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4166789"/>
     <uses file="p2mass-atlas-ID00001s-jID00001_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4166789"/>
@@ -172,7 +172,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="276"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="230511"/>
   </job>
-  <job id="ID00024" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.61">
+  <job id="ID00024" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00001s-jID00001.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4158911"/>
     <uses file="p2mass-atlas-ID00001s-jID00001_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4158911"/>
@@ -181,7 +181,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="266"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="400569"/>
   </job>
-  <job id="ID00025" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.58">
+  <job id="ID00025" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00001s-jID00001.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4150384"/>
     <uses file="p2mass-atlas-ID00001s-jID00001_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4150384"/>
@@ -190,7 +190,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="252"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="282709"/>
   </job>
-  <job id="ID00026" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.67">
+  <job id="ID00026" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00001s-jID00001.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4154593"/>
     <uses file="p2mass-atlas-ID00001s-jID00001_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4154593"/>
@@ -199,7 +199,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="259"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="351800"/>
   </job>
-  <job id="ID00027" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.67">
+  <job id="ID00027" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00001s-jID00001.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4159635"/>
     <uses file="p2mass-atlas-ID00001s-jID00001_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4159635"/>
@@ -208,7 +208,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="275"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="312503"/>
   </job>
-  <job id="ID00028" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.57">
+  <job id="ID00028" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00001s-jID00001.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4165076"/>
     <uses file="p2mass-atlas-ID00001s-jID00001_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4165076"/>
@@ -217,7 +217,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="275"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="373385"/>
   </job>
-  <job id="ID00029" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.74">
+  <job id="ID00029" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00002s-jID00002.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4163104"/>
     <uses file="p2mass-atlas-ID00002s-jID00002_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4163104"/>
@@ -226,7 +226,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="265"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="249020"/>
   </job>
-  <job id="ID00030" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.91">
+  <job id="ID00030" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00002s-jID00002.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4158673"/>
     <uses file="p2mass-atlas-ID00002s-jID00002_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4158673"/>
@@ -235,7 +235,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="256"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="378333"/>
   </job>
-  <job id="ID00031" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.55">
+  <job id="ID00031" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00003s-jID00003.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4166458"/>
     <uses file="p2mass-atlas-ID00003s-jID00003_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4166458"/>
@@ -244,7 +244,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="276"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="386166"/>
   </job>
-  <job id="ID00032" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.49">
+  <job id="ID00032" namespace="Montage" name="mDiffFit" version="1.0" runtime="10">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00003s-jID00003.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4143864"/>
     <uses file="p2mass-atlas-ID00003s-jID00003_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4143864"/>
@@ -253,7 +253,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="271"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="236443"/>
   </job>
-  <job id="ID00033" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.61">
+  <job id="ID00033" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00003s-jID00003.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4170320"/>
     <uses file="p2mass-atlas-ID00003s-jID00003_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4170320"/>
@@ -262,7 +262,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="275"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="350882"/>
   </job>
-  <job id="ID00034" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.53">
+  <job id="ID00034" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00003s-jID00003.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4173699"/>
     <uses file="p2mass-atlas-ID00003s-jID00003_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4173699"/>
@@ -271,7 +271,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="285"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="221385"/>
   </job>
-  <job id="ID00035" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.53">
+  <job id="ID00035" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00004s-jID00004.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4146308"/>
     <uses file="p2mass-atlas-ID00004s-jID00004_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4146308"/>
@@ -280,7 +280,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="269"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="344835"/>
   </job>
-  <job id="ID00036" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.67">
+  <job id="ID00036" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00004s-jID00004.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4193984"/>
     <uses file="p2mass-atlas-ID00004s-jID00004_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4193984"/>
@@ -289,7 +289,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="289"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="358810"/>
   </job>
-  <job id="ID00037" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.54">
+  <job id="ID00037" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00004s-jID00004.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4158906"/>
     <uses file="p2mass-atlas-ID00004s-jID00004_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4158906"/>
@@ -298,7 +298,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="273"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="349453"/>
   </job>
-  <job id="ID00038" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.41">
+  <job id="ID00038" namespace="Montage" name="mDiffFit" version="1.0" runtime="10">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00005s-jID00005.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4157375"/>
     <uses file="p2mass-atlas-ID00005s-jID00005_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4157375"/>
@@ -307,7 +307,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="266"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="183983"/>
   </job>
-  <job id="ID00039" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.58">
+  <job id="ID00039" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00006s-jID00006.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4170651"/>
     <uses file="p2mass-atlas-ID00006s-jID00006_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4170651"/>
@@ -316,7 +316,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="266"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="227424"/>
   </job>
-  <job id="ID00040" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.51">
+  <job id="ID00040" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00006s-jID00006.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4162077"/>
     <uses file="p2mass-atlas-ID00006s-jID00006_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4162077"/>
@@ -325,7 +325,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="275"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="345235"/>
   </job>
-  <job id="ID00041" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.77">
+  <job id="ID00041" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00006s-jID00006.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4169945"/>
     <uses file="p2mass-atlas-ID00006s-jID00006_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4169945"/>
@@ -334,7 +334,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="257"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="356906"/>
   </job>
-  <job id="ID00042" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.46">
+  <job id="ID00042" namespace="Montage" name="mDiffFit" version="1.0" runtime="10">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00006s-jID00006.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4162840"/>
     <uses file="p2mass-atlas-ID00006s-jID00006_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4162840"/>
@@ -343,7 +343,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="263"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="411551"/>
   </job>
-  <job id="ID00043" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.40">
+  <job id="ID00043" namespace="Montage" name="mDiffFit" version="1.0" runtime="10">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00006s-jID00006.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4168959"/>
     <uses file="p2mass-atlas-ID00006s-jID00006_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4168959"/>
@@ -352,7 +352,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="275"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="249626"/>
   </job>
-  <job id="ID00044" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.54">
+  <job id="ID00044" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00006s-jID00006.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4163301"/>
     <uses file="p2mass-atlas-ID00006s-jID00006_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4163301"/>
@@ -361,7 +361,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="273"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="336954"/>
   </job>
-  <job id="ID00045" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.56">
+  <job id="ID00045" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00007s-jID00007.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4180044"/>
     <uses file="p2mass-atlas-ID00007s-jID00007_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4180044"/>
@@ -370,7 +370,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="272"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="211113"/>
   </job>
-  <job id="ID00046" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.62">
+  <job id="ID00046" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00007s-jID00007.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4173202"/>
     <uses file="p2mass-atlas-ID00007s-jID00007_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4173202"/>
@@ -379,7 +379,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="281"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="227822"/>
   </job>
-  <job id="ID00047" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.59">
+  <job id="ID00047" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00007s-jID00007.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4166419"/>
     <uses file="p2mass-atlas-ID00007s-jID00007_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4166419"/>
@@ -388,7 +388,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="268"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="321779"/>
   </job>
-  <job id="ID00048" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.48">
+  <job id="ID00048" namespace="Montage" name="mDiffFit" version="1.0" runtime="10">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00007s-jID00007.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4182535"/>
     <uses file="p2mass-atlas-ID00007s-jID00007_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4182535"/>
@@ -397,7 +397,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="288"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="385592"/>
   </job>
-  <job id="ID00049" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.69">
+  <job id="ID00049" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00008s-jID00008.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4163934"/>
     <uses file="p2mass-atlas-ID00008s-jID00008_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4163934"/>
@@ -406,7 +406,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="275"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="193627"/>
   </job>
-  <job id="ID00050" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.65">
+  <job id="ID00050" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00008s-jID00008.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4139936"/>
     <uses file="p2mass-atlas-ID00008s-jID00008_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4139936"/>
@@ -415,14 +415,14 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="271"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="334486"/>
   </job>
-  <job id="ID00051" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.55">
+  <job id="ID00051" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00008s-jID00008.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4149557"/>
     <uses file="p2mass-atlas-ID00008s-jID00008_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4149557"/>
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="282"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="418121"/>
   </job>
-  <job id="ID00052" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.66">
+  <job id="ID00052" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00008s-jID00008.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4167198"/>
     <uses file="p2mass-atlas-ID00008s-jID00008_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4167198"/>
@@ -431,7 +431,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="259"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="158263"/>
   </job>
-  <job id="ID00053" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.55">
+  <job id="ID00053" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00008s-jID00008.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4176316"/>
     <uses file="p2mass-atlas-ID00008s-jID00008_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4176316"/>
@@ -440,14 +440,14 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="284"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="360905"/>
   </job>
-  <job id="ID00054" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.56">
+  <job id="ID00054" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00009s-jID00009.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4160230"/>
     <uses file="p2mass-atlas-ID00009s-jID00009_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4160230"/>
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="262"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="371340"/>
   </job>
-  <job id="ID00055" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.47">
+  <job id="ID00055" namespace="Montage" name="mDiffFit" version="1.0" runtime="10">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00010s-jID00010.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4158752"/>
     <uses file="p2mass-atlas-ID00010s-jID00010_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4158752"/>
@@ -456,7 +456,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="270"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="143886"/>
   </job>
-  <job id="ID00056" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.48">
+  <job id="ID00056" namespace="Montage" name="mDiffFit" version="1.0" runtime="10">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00010s-jID00010.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4163477"/>
     <uses file="p2mass-atlas-ID00010s-jID00010_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4163477"/>
@@ -465,7 +465,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="258"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="353366"/>
   </job>
-  <job id="ID00057" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.51">
+  <job id="ID00057" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00010s-jID00010.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4158554"/>
     <uses file="p2mass-atlas-ID00010s-jID00010_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4158554"/>
@@ -474,7 +474,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="250"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="321395"/>
   </job>
-  <job id="ID00058" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.59">
+  <job id="ID00058" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00010s-jID00010.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4162770"/>
     <uses file="p2mass-atlas-ID00010s-jID00010_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4162770"/>
@@ -483,14 +483,14 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="286"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="225744"/>
   </job>
-  <job id="ID00059" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.72">
+  <job id="ID00059" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00010s-jID00010.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4174310"/>
     <uses file="p2mass-atlas-ID00010s-jID00010_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4174310"/>
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="281"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="352586"/>
   </job>
-  <job id="ID00060" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.49">
+  <job id="ID00060" namespace="Montage" name="mDiffFit" version="1.0" runtime="10">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00010s-jID00010.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4153783"/>
     <uses file="p2mass-atlas-ID00010s-jID00010_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4153783"/>
@@ -499,7 +499,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="273"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="198205"/>
   </job>
-  <job id="ID00061" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.64">
+  <job id="ID00061" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00010s-jID00010.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4180931"/>
     <uses file="p2mass-atlas-ID00010s-jID00010_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4180931"/>
@@ -508,7 +508,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="275"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="168036"/>
   </job>
-  <job id="ID00062" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.46">
+  <job id="ID00062" namespace="Montage" name="mDiffFit" version="1.0" runtime="10">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00011s-jID00011.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4161623"/>
     <uses file="p2mass-atlas-ID00011s-jID00011_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4161623"/>
@@ -517,7 +517,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="285"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="344267"/>
   </job>
-  <job id="ID00063" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.35">
+  <job id="ID00063" namespace="Montage" name="mDiffFit" version="1.0" runtime="10">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00011s-jID00011.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4178771"/>
     <uses file="p2mass-atlas-ID00011s-jID00011_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4178771"/>
@@ -526,7 +526,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="266"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="213184"/>
   </job>
-  <job id="ID00064" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.64">
+  <job id="ID00064" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00011s-jID00011.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4156068"/>
     <uses file="p2mass-atlas-ID00011s-jID00011_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4156068"/>
@@ -535,7 +535,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="272"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="368991"/>
   </job>
-  <job id="ID00065" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.59">
+  <job id="ID00065" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00012s-jID00012.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4147534"/>
     <uses file="p2mass-atlas-ID00012s-jID00012_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4147534"/>
@@ -544,14 +544,14 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="278"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="157385"/>
   </job>
-  <job id="ID00066" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.72">
+  <job id="ID00066" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00012s-jID00012.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4159193"/>
     <uses file="p2mass-atlas-ID00012s-jID00012_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4159193"/>
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="268"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="316446"/>
   </job>
-  <job id="ID00067" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.57">
+  <job id="ID00067" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00012s-jID00012.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4161958"/>
     <uses file="p2mass-atlas-ID00012s-jID00012_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4161958"/>
@@ -560,7 +560,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="292"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="274392"/>
   </job>
-  <job id="ID00068" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.61">
+  <job id="ID00068" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00013s-jID00013.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4161735"/>
     <uses file="p2mass-atlas-ID00013s-jID00013_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4161735"/>
@@ -569,7 +569,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="271"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="251338"/>
   </job>
-  <job id="ID00069" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.66">
+  <job id="ID00069" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00013s-jID00013.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4157783"/>
     <uses file="p2mass-atlas-ID00013s-jID00013_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4157783"/>
@@ -578,7 +578,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="258"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="259107"/>
   </job>
-  <job id="ID00070" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.77">
+  <job id="ID00070" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00013s-jID00013.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4166093"/>
     <uses file="p2mass-atlas-ID00013s-jID00013_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4166093"/>
@@ -587,7 +587,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="274"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="420860"/>
   </job>
-  <job id="ID00071" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.43">
+  <job id="ID00071" namespace="Montage" name="mDiffFit" version="1.0" runtime="10">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00013s-jID00013.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4149490"/>
     <uses file="p2mass-atlas-ID00013s-jID00013_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4149490"/>
@@ -596,14 +596,14 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="280"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="165358"/>
   </job>
-  <job id="ID00072" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.79">
+  <job id="ID00072" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00013s-jID00013.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4168911"/>
     <uses file="p2mass-atlas-ID00013s-jID00013_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4168911"/>
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="270"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="254590"/>
   </job>
-  <job id="ID00073" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.65">
+  <job id="ID00073" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00015s-jID00015.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4157920"/>
     <uses file="p2mass-atlas-ID00015s-jID00015_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4157920"/>
@@ -612,7 +612,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="278"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="308378"/>
   </job>
-  <job id="ID00074" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.49">
+  <job id="ID00074" namespace="Montage" name="mDiffFit" version="1.0" runtime="10">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00015s-jID00015.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4181429"/>
     <uses file="p2mass-atlas-ID00015s-jID00015_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4181429"/>
@@ -621,7 +621,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="274"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="377305"/>
   </job>
-  <job id="ID00075" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.61">
+  <job id="ID00075" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00015s-jID00015.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4155665"/>
     <uses file="p2mass-atlas-ID00015s-jID00015_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4155665"/>
@@ -630,7 +630,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="265"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="286292"/>
   </job>
-  <job id="ID00076" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.47">
+  <job id="ID00076" namespace="Montage" name="mDiffFit" version="1.0" runtime="10">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00015s-jID00015.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4167789"/>
     <uses file="p2mass-atlas-ID00015s-jID00015_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4167789"/>
@@ -639,7 +639,7 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="276"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="161693"/>
   </job>
-  <job id="ID00077" namespace="Montage" name="mDiffFit" version="1.0" runtime="10.65">
+  <job id="ID00077" namespace="Montage" name="mDiffFit" version="1.0" runtime="11">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="p2mass-atlas-ID00015s-jID00015.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4163597"/>
     <uses file="p2mass-atlas-ID00015s-jID00015_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4163597"/>
@@ -648,130 +648,130 @@
     <uses file="fit.txt" link="output" register="false" transfer="false" optional="false" type="data" size="263"/>
     <uses file="diff.txt" link="output" register="false" transfer="false" optional="false" type="data" size="309680"/>
   </job>
-  <job id="ID00078" namespace="Montage" name="mConcatFit" version="1.0" runtime="4.96">
+  <job id="ID00078" namespace="Montage" name="mConcatFit" version="1.0" runtime="5">
     <uses file="fits_list.tbl" link="input" register="true" transfer="true" optional="false" type="data" size="1690"/>
     <uses file="fit.txt" link="input" register="false" transfer="false" optional="false" type="data" size="264"/>
     <uses file="diff.txt" link="input" register="false" transfer="false" optional="false" type="data" size="178931"/>
     <uses file="fits.tbl" link="output" register="false" transfer="false" optional="false" type="data" size="13017"/>
   </job>
-  <job id="ID00079" namespace="Montage" name="mBgModel" version="1.0" runtime="5.34">
+  <job id="ID00079" namespace="Montage" name="mBgModel" version="1.0" runtime="5">
     <uses file="pimages.tbl" link="input" register="true" transfer="true" optional="false" type="data" size="2680"/>
     <uses file="fits.tbl" link="input" register="false" transfer="false" optional="false" type="data" size="13017"/>
     <uses file="corrections.tbl" link="output" register="false" transfer="false" optional="false" type="data" size="850"/>
   </job>
-  <job id="ID00080" namespace="Montage" name="mBackground" version="1.0" runtime="10.88">
+  <job id="ID00080" namespace="Montage" name="mBackground" version="1.0" runtime="11">
     <uses file="corrections.tbl" link="input" register="false" transfer="false" optional="false" type="data" size="850"/>
     <uses file="p2mass-atlas-ID00000s-jID00000.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4181573"/>
     <uses file="p2mass-atlas-ID00000s-jID00000_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4181573"/>
     <uses file="c2mass-atlas-ID00000s-jID00000_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4181573"/>
     <uses file="c2mass-atlas-ID00000s-jID00000.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4181573"/>
   </job>
-  <job id="ID00081" namespace="Montage" name="mBackground" version="1.0" runtime="10.96">
+  <job id="ID00081" namespace="Montage" name="mBackground" version="1.0" runtime="11">
     <uses file="corrections.tbl" link="input" register="false" transfer="false" optional="false" type="data" size="850"/>
     <uses file="p2mass-atlas-ID00001s-jID00001.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4145069"/>
     <uses file="p2mass-atlas-ID00001s-jID00001_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4145069"/>
     <uses file="c2mass-atlas-ID00001s-jID00001_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4145069"/>
     <uses file="c2mass-atlas-ID00001s-jID00001.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4145069"/>
   </job>
-  <job id="ID00082" namespace="Montage" name="mBackground" version="1.0" runtime="10.61">
+  <job id="ID00082" namespace="Montage" name="mBackground" version="1.0" runtime="11">
     <uses file="corrections.tbl" link="input" register="false" transfer="false" optional="false" type="data" size="850"/>
     <uses file="p2mass-atlas-ID00002s-jID00002.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4148062"/>
     <uses file="p2mass-atlas-ID00002s-jID00002_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4148062"/>
     <uses file="c2mass-atlas-ID00002s-jID00002_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4148062"/>
     <uses file="c2mass-atlas-ID00002s-jID00002.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4148062"/>
   </job>
-  <job id="ID00083" namespace="Montage" name="mBackground" version="1.0" runtime="10.73">
+  <job id="ID00083" namespace="Montage" name="mBackground" version="1.0" runtime="11">
     <uses file="corrections.tbl" link="input" register="false" transfer="false" optional="false" type="data" size="850"/>
     <uses file="p2mass-atlas-ID00003s-jID00003.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4168932"/>
     <uses file="p2mass-atlas-ID00003s-jID00003_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4168932"/>
     <uses file="c2mass-atlas-ID00003s-jID00003.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4168932"/>
     <uses file="c2mass-atlas-ID00003s-jID00003_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4168932"/>
   </job>
-  <job id="ID00084" namespace="Montage" name="mBackground" version="1.0" runtime="10.66">
+  <job id="ID00084" namespace="Montage" name="mBackground" version="1.0" runtime="11">
     <uses file="corrections.tbl" link="input" register="false" transfer="false" optional="false" type="data" size="850"/>
     <uses file="p2mass-atlas-ID00004s-jID00004.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4175052"/>
     <uses file="p2mass-atlas-ID00004s-jID00004_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4175052"/>
     <uses file="c2mass-atlas-ID00004s-jID00004.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4175052"/>
     <uses file="c2mass-atlas-ID00004s-jID00004_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4175052"/>
   </job>
-  <job id="ID00085" namespace="Montage" name="mBackground" version="1.0" runtime="10.49">
+  <job id="ID00085" namespace="Montage" name="mBackground" version="1.0" runtime="10">
     <uses file="corrections.tbl" link="input" register="false" transfer="false" optional="false" type="data" size="850"/>
     <uses file="p2mass-atlas-ID00005s-jID00005.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4168253"/>
     <uses file="p2mass-atlas-ID00005s-jID00005_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4168253"/>
     <uses file="c2mass-atlas-ID00005s-jID00005_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4168253"/>
     <uses file="c2mass-atlas-ID00005s-jID00005.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4168253"/>
   </job>
-  <job id="ID00086" namespace="Montage" name="mBackground" version="1.0" runtime="10.90">
+  <job id="ID00086" namespace="Montage" name="mBackground" version="1.0" runtime="11">
     <uses file="corrections.tbl" link="input" register="false" transfer="false" optional="false" type="data" size="850"/>
     <uses file="p2mass-atlas-ID00006s-jID00006.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4150555"/>
     <uses file="p2mass-atlas-ID00006s-jID00006_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4150555"/>
     <uses file="c2mass-atlas-ID00006s-jID00006_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4150555"/>
     <uses file="c2mass-atlas-ID00006s-jID00006.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4150555"/>
   </job>
-  <job id="ID00087" namespace="Montage" name="mBackground" version="1.0" runtime="10.75">
+  <job id="ID00087" namespace="Montage" name="mBackground" version="1.0" runtime="11">
     <uses file="corrections.tbl" link="input" register="false" transfer="false" optional="false" type="data" size="850"/>
     <uses file="p2mass-atlas-ID00007s-jID00007.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4167576"/>
     <uses file="p2mass-atlas-ID00007s-jID00007_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4167576"/>
     <uses file="c2mass-atlas-ID00007s-jID00007.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4167576"/>
     <uses file="c2mass-atlas-ID00007s-jID00007_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4167576"/>
   </job>
-  <job id="ID00088" namespace="Montage" name="mBackground" version="1.0" runtime="10.72">
+  <job id="ID00088" namespace="Montage" name="mBackground" version="1.0" runtime="11">
     <uses file="corrections.tbl" link="input" register="false" transfer="false" optional="false" type="data" size="850"/>
     <uses file="p2mass-atlas-ID00008s-jID00008.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4169285"/>
     <uses file="p2mass-atlas-ID00008s-jID00008_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4169285"/>
     <uses file="c2mass-atlas-ID00008s-jID00008.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4169285"/>
     <uses file="c2mass-atlas-ID00008s-jID00008_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4169285"/>
   </job>
-  <job id="ID00089" namespace="Montage" name="mBackground" version="1.0" runtime="10.86">
+  <job id="ID00089" namespace="Montage" name="mBackground" version="1.0" runtime="11">
     <uses file="corrections.tbl" link="input" register="false" transfer="false" optional="false" type="data" size="850"/>
     <uses file="p2mass-atlas-ID00009s-jID00009.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4163564"/>
     <uses file="p2mass-atlas-ID00009s-jID00009_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4163564"/>
     <uses file="c2mass-atlas-ID00009s-jID00009_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4163564"/>
     <uses file="c2mass-atlas-ID00009s-jID00009.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4163564"/>
   </job>
-  <job id="ID00090" namespace="Montage" name="mBackground" version="1.0" runtime="10.74">
+  <job id="ID00090" namespace="Montage" name="mBackground" version="1.0" runtime="11">
     <uses file="corrections.tbl" link="input" register="false" transfer="false" optional="false" type="data" size="850"/>
     <uses file="p2mass-atlas-ID00010s-jID00010.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4150193"/>
     <uses file="p2mass-atlas-ID00010s-jID00010_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4150193"/>
     <uses file="c2mass-atlas-ID00010s-jID00010_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4150193"/>
     <uses file="c2mass-atlas-ID00010s-jID00010.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4150193"/>
   </job>
-  <job id="ID00091" namespace="Montage" name="mBackground" version="1.0" runtime="10.69">
+  <job id="ID00091" namespace="Montage" name="mBackground" version="1.0" runtime="11">
     <uses file="corrections.tbl" link="input" register="false" transfer="false" optional="false" type="data" size="850"/>
     <uses file="p2mass-atlas-ID00011s-jID00011.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4171380"/>
     <uses file="p2mass-atlas-ID00011s-jID00011_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4171380"/>
     <uses file="c2mass-atlas-ID00011s-jID00011_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4171380"/>
     <uses file="c2mass-atlas-ID00011s-jID00011.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4171380"/>
   </job>
-  <job id="ID00092" namespace="Montage" name="mBackground" version="1.0" runtime="10.74">
+  <job id="ID00092" namespace="Montage" name="mBackground" version="1.0" runtime="11">
     <uses file="corrections.tbl" link="input" register="false" transfer="false" optional="false" type="data" size="850"/>
     <uses file="p2mass-atlas-ID00012s-jID00012.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4166972"/>
     <uses file="p2mass-atlas-ID00012s-jID00012_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4166972"/>
     <uses file="c2mass-atlas-ID00012s-jID00012_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4166972"/>
     <uses file="c2mass-atlas-ID00012s-jID00012.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4166972"/>
   </job>
-  <job id="ID00093" namespace="Montage" name="mBackground" version="1.0" runtime="10.69">
+  <job id="ID00093" namespace="Montage" name="mBackground" version="1.0" runtime="11">
     <uses file="corrections.tbl" link="input" register="false" transfer="false" optional="false" type="data" size="850"/>
     <uses file="p2mass-atlas-ID00013s-jID00013.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4176164"/>
     <uses file="p2mass-atlas-ID00013s-jID00013_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4176164"/>
     <uses file="c2mass-atlas-ID00013s-jID00013.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4176164"/>
     <uses file="c2mass-atlas-ID00013s-jID00013_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4176164"/>
   </job>
-  <job id="ID00094" namespace="Montage" name="mBackground" version="1.0" runtime="10.73">
+  <job id="ID00094" namespace="Montage" name="mBackground" version="1.0" runtime="11">
     <uses file="corrections.tbl" link="input" register="false" transfer="false" optional="false" type="data" size="850"/>
     <uses file="p2mass-atlas-ID00014s-jID00014.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4175565"/>
     <uses file="p2mass-atlas-ID00014s-jID00014_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4175565"/>
     <uses file="c2mass-atlas-ID00014s-jID00014.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4175565"/>
     <uses file="c2mass-atlas-ID00014s-jID00014_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4175565"/>
   </job>
-  <job id="ID00095" namespace="Montage" name="mBackground" version="1.0" runtime="10.78">
+  <job id="ID00095" namespace="Montage" name="mBackground" version="1.0" runtime="11">
     <uses file="corrections.tbl" link="input" register="false" transfer="false" optional="false" type="data" size="850"/>
     <uses file="p2mass-atlas-ID00015s-jID00015.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4165493"/>
     <uses file="p2mass-atlas-ID00015s-jID00015_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4165493"/>
     <uses file="c2mass-atlas-ID00015s-jID00015_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4165493"/>
     <uses file="c2mass-atlas-ID00015s-jID00015.fits" link="output" register="false" transfer="false" optional="false" type="data" size="4165493"/>
   </job>
-  <job id="ID00096" namespace="Montage" name="mImgTbl" version="1.0" runtime="7.63">
+  <job id="ID00096" namespace="Montage" name="mImgTbl" version="1.0" runtime="8">
     <uses file="cimages.tbl" link="input" register="true" transfer="true" optional="false" type="data" size="2680"/>
     <uses file="c2mass-atlas-ID00000s-jID00000_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4181573"/>
     <uses file="c2mass-atlas-ID00000s-jID00000.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4181573"/>
@@ -807,18 +807,18 @@
     <uses file="c2mass-atlas-ID00015s-jID00015.fits" link="input" register="false" transfer="false" optional="false" type="data" size="4165493"/>
     <uses file="newcimages.tbl" link="output" register="false" transfer="false" optional="false" type="data" size="5734"/>
   </job>
-  <job id="ID00097" namespace="Montage" name="mAdd" version="1.0" runtime="9.60">
+  <job id="ID00097" namespace="Montage" name="mAdd" version="1.0" runtime="10">
     <uses file="region.hdr" link="input" register="true" transfer="true" optional="false" type="data" size="304"/>
     <uses file="newcimages.tbl" link="input" register="false" transfer="false" optional="false" type="data" size="5734"/>
     <uses file="mosaic_ID00097_ID00097.fits" link="output" register="false" transfer="false" optional="false" type="data" size="69432167"/>
     <uses file="mosaic_ID00097_ID00097_area.fits" link="output" register="false" transfer="false" optional="false" type="data" size="69432167"/>
   </job>
-  <job id="ID00098" namespace="Montage" name="mShrink" version="1.0" runtime="6.91">
+  <job id="ID00098" namespace="Montage" name="mShrink" version="1.0" runtime="7">
     <uses file="mosaic_ID00097_ID00097.fits" link="input" register="false" transfer="false" optional="false" type="data" size="69432167"/>
     <uses file="mosaic_ID00097_ID00097_area.fits" link="input" register="false" transfer="false" optional="false" type="data" size="69432167"/>
     <uses file="shrunken_ID00098_ID00098.fits" link="output" register="false" transfer="false" optional="false" type="data" size="2778398"/>
   </job>
-  <job id="ID00099" namespace="Montage" name="mJPEG" version="1.0" runtime="0.83">
+  <job id="ID00099" namespace="Montage" name="mJPEG" version="1.0" runtime="5">
     <uses file="shrunken_ID00098_ID00098.fits" link="input" register="false" transfer="false" optional="false" type="data" size="2778398"/>
     <uses file="shrunken_ID00098_ID00098.jpg" link="output" register="true" transfer="true" optional="false" type="data" size="420195"/>
   </job>

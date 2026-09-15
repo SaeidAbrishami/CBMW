@@ -4,7 +4,7 @@
 <adag xmlns="http://pegasus.isi.edu/schema/DAX" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://pegasus.isi.edu/schema/DAX http://pegasus.isi.edu/schema/dax-2.1.xsd" version="2.1" count="1" index="0" name="test" jobCount="97" fileCount="0" childCount="24">
 <!-- part 1: list of all referenced files (may be empty) -->
 <!-- part 2: definition of all jobs (at least one) -->
-  <job id="ID00000" namespace="SIPHT" name="Patser_concate" version="1.0" runtime="0.0593">
+  <job id="ID00000" namespace="SIPHT" name="Patser_concate" version="1.0" runtime="5">
     <uses file="NC_0025AG05_PatserOutID00001.txt" link="input" register="false" transfer="false" optional="false" type="data" size="81221"/>
     <uses file="NC_0025AG05_PatserOutID00002.txt" link="input" register="false" transfer="false" optional="false" type="data" size="66854"/>
     <uses file="NC_0025AG05_PatserOutID00003.txt" link="input" register="false" transfer="false" optional="false" type="data" size="121884"/>
@@ -26,140 +26,140 @@
     <uses file="NC_0025AG05_PatserOutID00019.txt" link="input" register="false" transfer="false" optional="false" type="data" size="70733"/>
     <uses file="NC_0025AG05_PatserOut.txt" link="output" register="false" transfer="false" optional="false" type="data" size="1759074"/>
   </job>
-  <job id="ID00001" namespace="SIPHT" name="Patser" version="1.0" runtime="1.2770">
+  <job id="ID00001" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00001_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00001.txt" link="output" register="false" transfer="false" optional="false" type="data" size="81221"/>
   </job>
-  <job id="ID00002" namespace="SIPHT" name="Patser" version="1.0" runtime="1.3077">
+  <job id="ID00002" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00002_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00002.txt" link="output" register="false" transfer="false" optional="false" type="data" size="66854"/>
   </job>
-  <job id="ID00003" namespace="SIPHT" name="Patser" version="1.0" runtime="1.1404">
+  <job id="ID00003" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00003_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00003.txt" link="output" register="false" transfer="false" optional="false" type="data" size="121884"/>
   </job>
-  <job id="ID00004" namespace="SIPHT" name="Patser" version="1.0" runtime="1.5321">
+  <job id="ID00004" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00004_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00004.txt" link="output" register="false" transfer="false" optional="false" type="data" size="109575"/>
   </job>
-  <job id="ID00005" namespace="SIPHT" name="Patser" version="1.0" runtime="0.9449">
+  <job id="ID00005" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00005_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00005.txt" link="output" register="false" transfer="false" optional="false" type="data" size="64225"/>
   </job>
-  <job id="ID00006" namespace="SIPHT" name="Patser" version="1.0" runtime="1.4069">
+  <job id="ID00006" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00006_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00006.txt" link="output" register="false" transfer="false" optional="false" type="data" size="72304"/>
   </job>
-  <job id="ID00007" namespace="SIPHT" name="Patser" version="1.0" runtime="1.2235">
+  <job id="ID00007" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00007_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00007.txt" link="output" register="false" transfer="false" optional="false" type="data" size="118367"/>
   </job>
-  <job id="ID00008" namespace="SIPHT" name="Patser" version="1.0" runtime="0.9760">
+  <job id="ID00008" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00008_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00008.txt" link="output" register="false" transfer="false" optional="false" type="data" size="55487"/>
   </job>
-  <job id="ID00009" namespace="SIPHT" name="Patser" version="1.0" runtime="0.8781">
+  <job id="ID00009" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00009_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00009.txt" link="output" register="false" transfer="false" optional="false" type="data" size="127541"/>
   </job>
-  <job id="ID00010" namespace="SIPHT" name="Patser" version="1.0" runtime="1.3846">
+  <job id="ID00010" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00010_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00010.txt" link="output" register="false" transfer="false" optional="false" type="data" size="108555"/>
   </job>
-  <job id="ID00011" namespace="SIPHT" name="Patser" version="1.0" runtime="0.9679">
+  <job id="ID00011" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00011_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00011.txt" link="output" register="false" transfer="false" optional="false" type="data" size="58006"/>
   </job>
-  <job id="ID00012" namespace="SIPHT" name="Patser" version="1.0" runtime="1.8134">
+  <job id="ID00012" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00012_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00012.txt" link="output" register="false" transfer="false" optional="false" type="data" size="96496"/>
   </job>
-  <job id="ID00013" namespace="SIPHT" name="Patser" version="1.0" runtime="1.5914">
+  <job id="ID00013" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00013_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00013.txt" link="output" register="false" transfer="false" optional="false" type="data" size="117336"/>
   </job>
-  <job id="ID00014" namespace="SIPHT" name="Patser" version="1.0" runtime="1.1709">
+  <job id="ID00014" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00014_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00014.txt" link="output" register="false" transfer="false" optional="false" type="data" size="127990"/>
   </job>
-  <job id="ID00015" namespace="SIPHT" name="Patser" version="1.0" runtime="1.0411">
+  <job id="ID00015" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00015_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00015.txt" link="output" register="false" transfer="false" optional="false" type="data" size="126931"/>
   </job>
-  <job id="ID00016" namespace="SIPHT" name="Patser" version="1.0" runtime="1.8115">
+  <job id="ID00016" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00016_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00016.txt" link="output" register="false" transfer="false" optional="false" type="data" size="57884"/>
   </job>
-  <job id="ID00017" namespace="SIPHT" name="Patser" version="1.0" runtime="1.2349">
+  <job id="ID00017" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00017_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00017.txt" link="output" register="false" transfer="false" optional="false" type="data" size="59068"/>
   </job>
-  <job id="ID00018" namespace="SIPHT" name="Patser" version="1.0" runtime="0.8970">
+  <job id="ID00018" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00018_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00018.txt" link="output" register="false" transfer="false" optional="false" type="data" size="118617"/>
   </job>
-  <job id="ID00019" namespace="SIPHT" name="Patser" version="1.0" runtime="1.3905">
+  <job id="ID00019" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00019_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00019.txt" link="output" register="false" transfer="false" optional="false" type="data" size="70733"/>
   </job>
-  <job id="ID00020" namespace="SIPHT" name="Findterm" version="1.0" runtime="1854.7951">
+  <job id="ID00020" namespace="SIPHT" name="Findterm" version="1.0" runtime="1855">
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="RNAfold" link="input" register="true" transfer="true" optional="false" type="data" size="591942"/>
     <uses file="findterm.out" link="output" register="false" transfer="false" optional="false" type="data" size="134"/>
@@ -171,20 +171,20 @@
     <uses file="vienna_output" link="output" register="false" transfer="false" optional="false" type="data" size="4301973"/>
     <uses file="vienna_index_tmp" link="output" register="false" transfer="false" optional="false" type="data" size="7128312"/>
   </job>
-  <job id="ID00021" namespace="SIPHT" name="RNAMotif" version="1.0" runtime="38.8041">
+  <job id="ID00021" namespace="SIPHT" name="RNAMotif" version="1.0" runtime="39">
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="RNAMofficial_descriptor.txt" link="input" register="true" transfer="true" optional="false" type="data" size="17626"/>
     <uses file="rnamotif.out" link="output" register="false" transfer="false" optional="false" type="data" size="1033828"/>
     <uses file="rnamotif.err" link="output" register="false" transfer="false" optional="false" type="data" size="310"/>
   </job>
-  <job id="ID00022" namespace="SIPHT" name="Transterm" version="1.0" runtime="49.9864">
+  <job id="ID00022" namespace="SIPHT" name="Transterm" version="1.0" runtime="50">
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="expterm.dat" link="input" register="true" transfer="true" optional="false" type="data" size="45788"/>
     <uses file="NC_0025AG05.ptt" link="input" register="true" transfer="true" optional="false" type="data" size="340915"/>
     <uses file="transterm.out" link="output" register="false" transfer="false" optional="false" type="data" size="448361"/>
     <uses file="transterm.err" link="output" register="false" transfer="false" optional="false" type="data" size="96"/>
   </job>
-  <job id="ID00023" namespace="SIPHT" name="Blast" version="1.0" runtime="1956.0691">
+  <job id="ID00023" namespace="SIPHT" name="Blast" version="1.0" runtime="1956">
     <uses file="blasta" link="input" register="true" transfer="true" optional="false" type="data" size="786856"/>
     <uses file="xdformat" link="input" register="true" transfer="true" optional="false" type="data" size="380164"/>
     <uses file="time" link="input" register="true" transfer="true" optional="false" type="data" size="11944"/>
@@ -1093,7 +1093,7 @@
     <uses file="blast.out" link="output" register="false" transfer="false" optional="false" type="data" size="512"/>
     <uses file="BLAST_sorted.out" link="output" register="false" transfer="false" optional="false" type="data" size="4744921"/>
   </job>
-  <job id="ID00024" namespace="SIPHT" name="SRNA" version="1.0" runtime="454.4583">
+  <job id="ID00024" namespace="SIPHT" name="SRNA" version="1.0" runtime="454">
     <uses file="access_genomes2.txt" link="input" register="true" transfer="true" optional="false" type="data" size="83722"/>
     <uses file="sRNAPredict.in" link="input" register="true" transfer="true" optional="false" type="data" size="1198"/>
     <uses file="NC_0025AG05.gbk" link="input" register="true" transfer="true" optional="false" type="data" size="13216918"/>
@@ -1129,13 +1129,13 @@
     <uses file="Seq_NC_0025AG05" link="output" register="false" transfer="false" optional="false" type="data" size="83669"/>
     <uses file="srna.out" link="output" register="false" transfer="false" optional="false" type="data" size="339787"/>
   </job>
-  <job id="ID00025" namespace="SIPHT" name="FFN_Parse" version="1.0" runtime="1.4998">
+  <job id="ID00025" namespace="SIPHT" name="FFN_Parse" version="1.0" runtime="5">
     <uses file="NC_0025AG05.ffn" link="input" register="true" transfer="true" optional="false" type="data" size="3782770"/>
     <uses file="NC_0025AG05.ptt" link="input" register="true" transfer="true" optional="false" type="data" size="340915"/>
     <uses file="Seq_NC_0025AG05" link="input" register="true" transfer="true" optional="false" type="data" size="81659"/>
     <uses file="NC_0025AG05_parsed.ffn" link="output" register="false" transfer="false" optional="false" type="data" size="911718"/>
   </job>
-  <job id="ID00026" namespace="SIPHT" name="Blast_candidate" version="1.0" runtime="5.9623">
+  <job id="ID00026" namespace="SIPHT" name="Blast_candidate" version="1.0" runtime="6">
     <uses file="Seq_known_sRNAs_IGRs.txt" link="input" register="true" transfer="true" optional="false" type="data" size="172432"/>
     <uses file="blasta" link="input" register="true" transfer="true" optional="false" type="data" size="786856"/>
     <uses file="xdformat" link="input" register="true" transfer="true" optional="false" type="data" size="380164"/>
@@ -1145,7 +1145,7 @@
     <uses file="blast_candidate.out" link="output" register="false" transfer="false" optional="false" type="data" size="2989"/>
     <uses file="blast_candidate.err" link="output" register="false" transfer="false" optional="false" type="data" size="545"/>
   </job>
-  <job id="ID00027" namespace="SIPHT" name="Blast_QRNA" version="1.0" runtime="1252.3269">
+  <job id="ID00027" namespace="SIPHT" name="Blast_QRNA" version="1.0" runtime="1252">
     <uses file="xdformat" link="input" register="true" transfer="true" optional="false" type="data" size="380164"/>
     <uses file="blasta" link="input" register="true" transfer="true" optional="false" type="data" size="786856"/>
     <uses file="time" link="input" register="true" transfer="true" optional="false" type="data" size="11944"/>
@@ -2017,7 +2017,7 @@
     <uses file="Seq_NC_0025AG05" link="input" register="false" transfer="false" optional="false" type="data" size="84508"/>
     <uses file="NC_0025AG05_QRNA.txt.all.CUTOFF0.ID[100:0].GC[100:0].gff" link="output" register="false" transfer="false" optional="false" type="data" size="170221"/>
   </job>
-  <job id="ID00028" namespace="SIPHT" name="Blast_synteny" version="1.0" runtime="33.0000">
+  <job id="ID00028" namespace="SIPHT" name="Blast_synteny" version="1.0" runtime="33">
     <uses file="Flanking_ORFs_known.txt" link="input" register="true" transfer="true" optional="false" type="data" size="1419426"/>
     <uses file="xdformat" link="input" register="true" transfer="true" optional="false" type="data" size="380164"/>
     <uses file="blasta" link="input" register="true" transfer="true" optional="false" type="data" size="786856"/>
@@ -2026,14 +2026,14 @@
     <uses file="NC_0025AG05_parsed.ffn" link="input" register="false" transfer="false" optional="false" type="data" size="911718"/>
     <uses file="NC_0025AG05_synteny.txt" link="output" register="false" transfer="false" optional="false" type="data" size="1105559"/>
   </job>
-  <job id="ID00029" namespace="SIPHT" name="Blast_paralogues" version="1.0" runtime="5.6970">
+  <job id="ID00029" namespace="SIPHT" name="Blast_paralogues" version="1.0" runtime="6">
     <uses file="xdformat" link="input" register="true" transfer="true" optional="false" type="data" size="380164"/>
     <uses file="blasta" link="input" register="true" transfer="true" optional="false" type="data" size="786856"/>
     <uses file="time" link="input" register="true" transfer="true" optional="false" type="data" size="11944"/>
     <uses file="Seq_NC_0025AG05" link="input" register="false" transfer="false" optional="false" type="data" size="82098"/>
     <uses file="NC_0025AG05_paralogues.txt" link="output" register="false" transfer="false" optional="false" type="data" size="985981"/>
   </job>
-  <job id="ID00030" namespace="SIPHT" name="SRNA_annotate" version="1.0" runtime="1.2492">
+  <job id="ID00030" namespace="SIPHT" name="SRNA_annotate" version="1.0" runtime="5">
     <uses file="access_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="sRNAPredict.in" link="input" register="true" transfer="true" optional="false" type="data" size="1198"/>
     <uses file="BLAST_NC_0025AG05" link="input" register="true" transfer="true" optional="false" type="data" size="13025"/>
@@ -2053,7 +2053,7 @@
     <uses file="NC_0025AG05_synteny.txt" link="input" register="false" transfer="false" optional="false" type="data" size="1105559"/>
     <uses file="NC_0025AG05_paralogues.txt" link="input" register="false" transfer="false" optional="false" type="data" size="985981"/>
   </job>
-  <job id="ID00031" namespace="SIPHT" name="Patser_concate" version="1.0" runtime="0.0683">
+  <job id="ID00031" namespace="SIPHT" name="Patser_concate" version="1.0" runtime="5">
     <uses file="NC_0025AG05_PatserOutID00032.txt" link="input" register="false" transfer="false" optional="false" type="data" size="81480"/>
     <uses file="NC_0025AG05_PatserOutID00033.txt" link="input" register="false" transfer="false" optional="false" type="data" size="91353"/>
     <uses file="NC_0025AG05_PatserOutID00034.txt" link="input" register="false" transfer="false" optional="false" type="data" size="128057"/>
@@ -2075,140 +2075,140 @@
     <uses file="NC_0025AG05_PatserOutID00050.txt" link="input" register="false" transfer="false" optional="false" type="data" size="113219"/>
     <uses file="NC_0025AG05_PatserOut.txt" link="output" register="false" transfer="false" optional="false" type="data" size="1894342"/>
   </job>
-  <job id="ID00032" namespace="SIPHT" name="Patser" version="1.0" runtime="1.6217">
+  <job id="ID00032" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00032_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00032.txt" link="output" register="false" transfer="false" optional="false" type="data" size="81480"/>
   </job>
-  <job id="ID00033" namespace="SIPHT" name="Patser" version="1.0" runtime="1.2996">
+  <job id="ID00033" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00033_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00033.txt" link="output" register="false" transfer="false" optional="false" type="data" size="91353"/>
   </job>
-  <job id="ID00034" namespace="SIPHT" name="Patser" version="1.0" runtime="1.0208">
+  <job id="ID00034" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00034_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00034.txt" link="output" register="false" transfer="false" optional="false" type="data" size="128057"/>
   </job>
-  <job id="ID00035" namespace="SIPHT" name="Patser" version="1.0" runtime="1.1893">
+  <job id="ID00035" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00035_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00035.txt" link="output" register="false" transfer="false" optional="false" type="data" size="106238"/>
   </job>
-  <job id="ID00036" namespace="SIPHT" name="Patser" version="1.0" runtime="1.4297">
+  <job id="ID00036" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00036_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00036.txt" link="output" register="false" transfer="false" optional="false" type="data" size="136548"/>
   </job>
-  <job id="ID00037" namespace="SIPHT" name="Patser" version="1.0" runtime="1.5486">
+  <job id="ID00037" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00037_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00037.txt" link="output" register="false" transfer="false" optional="false" type="data" size="93817"/>
   </job>
-  <job id="ID00038" namespace="SIPHT" name="Patser" version="1.0" runtime="1.2723">
+  <job id="ID00038" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00038_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00038.txt" link="output" register="false" transfer="false" optional="false" type="data" size="112253"/>
   </job>
-  <job id="ID00039" namespace="SIPHT" name="Patser" version="1.0" runtime="1.3049">
+  <job id="ID00039" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00039_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00039.txt" link="output" register="false" transfer="false" optional="false" type="data" size="133764"/>
   </job>
-  <job id="ID00040" namespace="SIPHT" name="Patser" version="1.0" runtime="1.2800">
+  <job id="ID00040" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00040_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00040.txt" link="output" register="false" transfer="false" optional="false" type="data" size="108128"/>
   </job>
-  <job id="ID00041" namespace="SIPHT" name="Patser" version="1.0" runtime="1.2845">
+  <job id="ID00041" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00041_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00041.txt" link="output" register="false" transfer="false" optional="false" type="data" size="48608"/>
   </job>
-  <job id="ID00042" namespace="SIPHT" name="Patser" version="1.0" runtime="1.3355">
+  <job id="ID00042" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00042_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00042.txt" link="output" register="false" transfer="false" optional="false" type="data" size="133965"/>
   </job>
-  <job id="ID00043" namespace="SIPHT" name="Patser" version="1.0" runtime="1.2456">
+  <job id="ID00043" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00043_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00043.txt" link="output" register="false" transfer="false" optional="false" type="data" size="92954"/>
   </job>
-  <job id="ID00044" namespace="SIPHT" name="Patser" version="1.0" runtime="1.6055">
+  <job id="ID00044" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00044_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00044.txt" link="output" register="false" transfer="false" optional="false" type="data" size="87630"/>
   </job>
-  <job id="ID00045" namespace="SIPHT" name="Patser" version="1.0" runtime="1.4827">
+  <job id="ID00045" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00045_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00045.txt" link="output" register="false" transfer="false" optional="false" type="data" size="87630"/>
   </job>
-  <job id="ID00046" namespace="SIPHT" name="Patser" version="1.0" runtime="1.2807">
+  <job id="ID00046" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00046_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00046.txt" link="output" register="false" transfer="false" optional="false" type="data" size="49622"/>
   </job>
-  <job id="ID00047" namespace="SIPHT" name="Patser" version="1.0" runtime="1.3460">
+  <job id="ID00047" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00047_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00047.txt" link="output" register="false" transfer="false" optional="false" type="data" size="96642"/>
   </job>
-  <job id="ID00048" namespace="SIPHT" name="Patser" version="1.0" runtime="1.4413">
+  <job id="ID00048" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00048_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00048.txt" link="output" register="false" transfer="false" optional="false" type="data" size="66435"/>
   </job>
-  <job id="ID00049" namespace="SIPHT" name="Patser" version="1.0" runtime="1.3476">
+  <job id="ID00049" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00049_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00049.txt" link="output" register="false" transfer="false" optional="false" type="data" size="125999"/>
   </job>
-  <job id="ID00050" namespace="SIPHT" name="Patser" version="1.0" runtime="1.3991">
+  <job id="ID00050" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00050_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00050.txt" link="output" register="false" transfer="false" optional="false" type="data" size="113219"/>
   </job>
-  <job id="ID00051" namespace="SIPHT" name="Findterm" version="1.0" runtime="1454.5924">
+  <job id="ID00051" namespace="SIPHT" name="Findterm" version="1.0" runtime="1455">
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="RNAfold" link="input" register="true" transfer="true" optional="false" type="data" size="591942"/>
     <uses file="findterm.out" link="output" register="false" transfer="false" optional="false" type="data" size="134"/>
@@ -2220,20 +2220,20 @@
     <uses file="vienna_output" link="output" register="false" transfer="false" optional="false" type="data" size="7800282"/>
     <uses file="vienna_index_tmp" link="output" register="false" transfer="false" optional="false" type="data" size="6241208"/>
   </job>
-  <job id="ID00052" namespace="SIPHT" name="RNAMotif" version="1.0" runtime="33.9070">
+  <job id="ID00052" namespace="SIPHT" name="RNAMotif" version="1.0" runtime="34">
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="RNAMofficial_descriptor.txt" link="input" register="true" transfer="true" optional="false" type="data" size="17626"/>
     <uses file="rnamotif.out" link="output" register="false" transfer="false" optional="false" type="data" size="1157596"/>
     <uses file="rnamotif.err" link="output" register="false" transfer="false" optional="false" type="data" size="310"/>
   </job>
-  <job id="ID00053" namespace="SIPHT" name="Transterm" version="1.0" runtime="62.0108">
+  <job id="ID00053" namespace="SIPHT" name="Transterm" version="1.0" runtime="62">
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="expterm.dat" link="input" register="true" transfer="true" optional="false" type="data" size="45788"/>
     <uses file="NC_0025AG05.ptt" link="input" register="true" transfer="true" optional="false" type="data" size="340915"/>
     <uses file="transterm.out" link="output" register="false" transfer="false" optional="false" type="data" size="430896"/>
     <uses file="transterm.err" link="output" register="false" transfer="false" optional="false" type="data" size="95"/>
   </job>
-  <job id="ID00054" namespace="SIPHT" name="Blast" version="1.0" runtime="2801.1641">
+  <job id="ID00054" namespace="SIPHT" name="Blast" version="1.0" runtime="2801">
     <uses file="blasta" link="input" register="true" transfer="true" optional="false" type="data" size="786856"/>
     <uses file="xdformat" link="input" register="true" transfer="true" optional="false" type="data" size="380164"/>
     <uses file="time" link="input" register="true" transfer="true" optional="false" type="data" size="11944"/>
@@ -3090,7 +3090,7 @@
     <uses file="blast.out" link="output" register="false" transfer="false" optional="false" type="data" size="511"/>
     <uses file="BLAST_sorted.out" link="output" register="false" transfer="false" optional="false" type="data" size="5772544"/>
   </job>
-  <job id="ID00055" namespace="SIPHT" name="SRNA" version="1.0" runtime="354.5656">
+  <job id="ID00055" namespace="SIPHT" name="SRNA" version="1.0" runtime="355">
     <uses file="access_genomes2.txt" link="input" register="true" transfer="true" optional="false" type="data" size="83722"/>
     <uses file="sRNAPredict.in" link="input" register="true" transfer="true" optional="false" type="data" size="1198"/>
     <uses file="NC_0025AG05.gbk" link="input" register="true" transfer="true" optional="false" type="data" size="14218005"/>
@@ -3126,13 +3126,13 @@
     <uses file="Seq_NC_0025AG05" link="output" register="false" transfer="false" optional="false" type="data" size="86157"/>
     <uses file="srna.out" link="output" register="false" transfer="false" optional="false" type="data" size="339982"/>
   </job>
-  <job id="ID00056" namespace="SIPHT" name="FFN_Parse" version="1.0" runtime="1.2725">
+  <job id="ID00056" namespace="SIPHT" name="FFN_Parse" version="1.0" runtime="5">
     <uses file="NC_0025AG05.ffn" link="input" register="true" transfer="true" optional="false" type="data" size="4244084"/>
     <uses file="NC_0025AG05.ptt" link="input" register="true" transfer="true" optional="false" type="data" size="340915"/>
     <uses file="Seq_NC_0025AG05" link="input" register="true" transfer="true" optional="false" type="data" size="88409"/>
     <uses file="NC_0025AG05_parsed.ffn" link="output" register="false" transfer="false" optional="false" type="data" size="701519"/>
   </job>
-  <job id="ID00057" namespace="SIPHT" name="Blast_candidate" version="1.0" runtime="5.2745">
+  <job id="ID00057" namespace="SIPHT" name="Blast_candidate" version="1.0" runtime="5">
     <uses file="Seq_known_sRNAs_IGRs.txt" link="input" register="true" transfer="true" optional="false" type="data" size="172432"/>
     <uses file="blasta" link="input" register="true" transfer="true" optional="false" type="data" size="786856"/>
     <uses file="xdformat" link="input" register="true" transfer="true" optional="false" type="data" size="380164"/>
@@ -3142,7 +3142,7 @@
     <uses file="blast_candidate.out" link="output" register="false" transfer="false" optional="false" type="data" size="2789"/>
     <uses file="blast_candidate.err" link="output" register="false" transfer="false" optional="false" type="data" size="543"/>
   </job>
-  <job id="ID00058" namespace="SIPHT" name="Blast_QRNA" version="1.0" runtime="1317.7791">
+  <job id="ID00058" namespace="SIPHT" name="Blast_QRNA" version="1.0" runtime="1318">
     <uses file="xdformat" link="input" register="true" transfer="true" optional="false" type="data" size="380164"/>
     <uses file="blasta" link="input" register="true" transfer="true" optional="false" type="data" size="786856"/>
     <uses file="time" link="input" register="true" transfer="true" optional="false" type="data" size="11944"/>
@@ -4086,7 +4086,7 @@
     <uses file="Seq_NC_0025AG05" link="input" register="false" transfer="false" optional="false" type="data" size="82206"/>
     <uses file="NC_0025AG05_QRNA.txt.all.CUTOFF0.ID[100:0].GC[100:0].gff" link="output" register="false" transfer="false" optional="false" type="data" size="180318"/>
   </job>
-  <job id="ID00059" namespace="SIPHT" name="Blast_synteny" version="1.0" runtime="33.0000">
+  <job id="ID00059" namespace="SIPHT" name="Blast_synteny" version="1.0" runtime="33">
     <uses file="Flanking_ORFs_known.txt" link="input" register="true" transfer="true" optional="false" type="data" size="1419426"/>
     <uses file="xdformat" link="input" register="true" transfer="true" optional="false" type="data" size="380164"/>
     <uses file="blasta" link="input" register="true" transfer="true" optional="false" type="data" size="786856"/>
@@ -4095,14 +4095,14 @@
     <uses file="NC_0025AG05_parsed.ffn" link="input" register="false" transfer="false" optional="false" type="data" size="701519"/>
     <uses file="NC_0025AG05_synteny.txt" link="output" register="false" transfer="false" optional="false" type="data" size="984828"/>
   </job>
-  <job id="ID00060" namespace="SIPHT" name="Blast_paralogues" version="1.0" runtime="2.7165">
+  <job id="ID00060" namespace="SIPHT" name="Blast_paralogues" version="1.0" runtime="5">
     <uses file="xdformat" link="input" register="true" transfer="true" optional="false" type="data" size="380164"/>
     <uses file="blasta" link="input" register="true" transfer="true" optional="false" type="data" size="786856"/>
     <uses file="time" link="input" register="true" transfer="true" optional="false" type="data" size="11944"/>
     <uses file="Seq_NC_0025AG05" link="input" register="false" transfer="false" optional="false" type="data" size="84825"/>
     <uses file="NC_0025AG05_paralogues.txt" link="output" register="false" transfer="false" optional="false" type="data" size="785271"/>
   </job>
-  <job id="ID00061" namespace="SIPHT" name="SRNA_annotate" version="1.0" runtime="1.4598">
+  <job id="ID00061" namespace="SIPHT" name="SRNA_annotate" version="1.0" runtime="5">
     <uses file="access_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="sRNAPredict.in" link="input" register="true" transfer="true" optional="false" type="data" size="1198"/>
     <uses file="BLAST_NC_0025AG05" link="input" register="true" transfer="true" optional="false" type="data" size="13025"/>
@@ -4122,7 +4122,7 @@
     <uses file="NC_0025AG05_synteny.txt" link="input" register="false" transfer="false" optional="false" type="data" size="984828"/>
     <uses file="NC_0025AG05_paralogues.txt" link="input" register="false" transfer="false" optional="false" type="data" size="785271"/>
   </job>
-  <job id="ID00062" namespace="SIPHT" name="Patser_concate" version="1.0" runtime="0.1062">
+  <job id="ID00062" namespace="SIPHT" name="Patser_concate" version="1.0" runtime="5">
     <uses file="NC_0025AG05_PatserOutID00063.txt" link="input" register="false" transfer="false" optional="false" type="data" size="67689"/>
     <uses file="NC_0025AG05_PatserOutID00064.txt" link="input" register="false" transfer="false" optional="false" type="data" size="84577"/>
     <uses file="NC_0025AG05_PatserOutID00065.txt" link="input" register="false" transfer="false" optional="false" type="data" size="110236"/>
@@ -4148,168 +4148,168 @@
     <uses file="NC_0025AG05_PatserOutID00085.txt" link="input" register="false" transfer="false" optional="false" type="data" size="62995"/>
     <uses file="NC_0025AG05_PatserOut.txt" link="output" register="false" transfer="false" optional="false" type="data" size="1884946"/>
   </job>
-  <job id="ID00063" namespace="SIPHT" name="Patser" version="1.0" runtime="1.3980">
+  <job id="ID00063" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00063_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00063.txt" link="output" register="false" transfer="false" optional="false" type="data" size="67689"/>
   </job>
-  <job id="ID00064" namespace="SIPHT" name="Patser" version="1.0" runtime="0.9796">
+  <job id="ID00064" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00064_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00064.txt" link="output" register="false" transfer="false" optional="false" type="data" size="84577"/>
   </job>
-  <job id="ID00065" namespace="SIPHT" name="Patser" version="1.0" runtime="1.2127">
+  <job id="ID00065" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00065_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00065.txt" link="output" register="false" transfer="false" optional="false" type="data" size="110236"/>
   </job>
-  <job id="ID00066" namespace="SIPHT" name="Patser" version="1.0" runtime="1.4891">
+  <job id="ID00066" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00066_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00066.txt" link="output" register="false" transfer="false" optional="false" type="data" size="63123"/>
   </job>
-  <job id="ID00067" namespace="SIPHT" name="Patser" version="1.0" runtime="1.0685">
+  <job id="ID00067" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00067_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00067.txt" link="output" register="false" transfer="false" optional="false" type="data" size="84641"/>
   </job>
-  <job id="ID00068" namespace="SIPHT" name="Patser" version="1.0" runtime="1.5288">
+  <job id="ID00068" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00068_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00068.txt" link="output" register="false" transfer="false" optional="false" type="data" size="72771"/>
   </job>
-  <job id="ID00069" namespace="SIPHT" name="Patser" version="1.0" runtime="1.1773">
+  <job id="ID00069" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00069_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00069.txt" link="output" register="false" transfer="false" optional="false" type="data" size="99164"/>
   </job>
-  <job id="ID00070" namespace="SIPHT" name="Patser" version="1.0" runtime="1.4954">
+  <job id="ID00070" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00070_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00070.txt" link="output" register="false" transfer="false" optional="false" type="data" size="65579"/>
   </job>
-  <job id="ID00071" namespace="SIPHT" name="Patser" version="1.0" runtime="1.5671">
+  <job id="ID00071" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00071_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00071.txt" link="output" register="false" transfer="false" optional="false" type="data" size="118213"/>
   </job>
-  <job id="ID00072" namespace="SIPHT" name="Patser" version="1.0" runtime="1.2524">
+  <job id="ID00072" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00072_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00072.txt" link="output" register="false" transfer="false" optional="false" type="data" size="50637"/>
   </job>
-  <job id="ID00073" namespace="SIPHT" name="Patser" version="1.0" runtime="1.2844">
+  <job id="ID00073" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00073_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00073.txt" link="output" register="false" transfer="false" optional="false" type="data" size="94252"/>
   </job>
-  <job id="ID00074" namespace="SIPHT" name="Patser" version="1.0" runtime="1.4293">
+  <job id="ID00074" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00074_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00074.txt" link="output" register="false" transfer="false" optional="false" type="data" size="128217"/>
   </job>
-  <job id="ID00075" namespace="SIPHT" name="Patser" version="1.0" runtime="1.5119">
+  <job id="ID00075" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00075_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00075.txt" link="output" register="false" transfer="false" optional="false" type="data" size="94458"/>
   </job>
-  <job id="ID00076" namespace="SIPHT" name="Patser" version="1.0" runtime="1.4849">
+  <job id="ID00076" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00076_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00076.txt" link="output" register="false" transfer="false" optional="false" type="data" size="94562"/>
   </job>
-  <job id="ID00077" namespace="SIPHT" name="Patser" version="1.0" runtime="0.7694">
+  <job id="ID00077" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00077_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00077.txt" link="output" register="false" transfer="false" optional="false" type="data" size="95178"/>
   </job>
-  <job id="ID00078" namespace="SIPHT" name="Patser" version="1.0" runtime="0.9705">
+  <job id="ID00078" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00078_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00078.txt" link="output" register="false" transfer="false" optional="false" type="data" size="112916"/>
   </job>
-  <job id="ID00079" namespace="SIPHT" name="Patser" version="1.0" runtime="0.9053">
+  <job id="ID00079" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00079_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00079.txt" link="output" register="false" transfer="false" optional="false" type="data" size="67357"/>
   </job>
-  <job id="ID00080" namespace="SIPHT" name="Patser" version="1.0" runtime="1.3012">
+  <job id="ID00080" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00080_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00080.txt" link="output" register="false" transfer="false" optional="false" type="data" size="73688"/>
   </job>
-  <job id="ID00081" namespace="SIPHT" name="Patser" version="1.0" runtime="0.9364">
+  <job id="ID00081" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00081_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00081.txt" link="output" register="false" transfer="false" optional="false" type="data" size="80270"/>
   </job>
-  <job id="ID00082" namespace="SIPHT" name="Patser" version="1.0" runtime="1.5004">
+  <job id="ID00082" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00082_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00082.txt" link="output" register="false" transfer="false" optional="false" type="data" size="46313"/>
   </job>
-  <job id="ID00083" namespace="SIPHT" name="Patser" version="1.0" runtime="0.7467">
+  <job id="ID00083" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00083_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00083.txt" link="output" register="false" transfer="false" optional="false" type="data" size="67243"/>
   </job>
-  <job id="ID00084" namespace="SIPHT" name="Patser" version="1.0" runtime="0.9178">
+  <job id="ID00084" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00084_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00084.txt" link="output" register="false" transfer="false" optional="false" type="data" size="50867"/>
   </job>
-  <job id="ID00085" namespace="SIPHT" name="Patser" version="1.0" runtime="1.2210">
+  <job id="ID00085" namespace="SIPHT" name="Patser" version="1.0" runtime="5">
     <uses file="patser.in" link="input" register="true" transfer="true" optional="false" type="data" size="14"/>
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="alphabet" link="input" register="true" transfer="true" optional="false" type="data" size="16"/>
     <uses file="ID00085_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="NC_0025AG05_PatserOutID00085.txt" link="output" register="false" transfer="false" optional="false" type="data" size="62995"/>
   </job>
-  <job id="ID00086" namespace="SIPHT" name="Findterm" version="1.0" runtime="1419.8670">
+  <job id="ID00086" namespace="SIPHT" name="Findterm" version="1.0" runtime="1420">
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="RNAfold" link="input" register="true" transfer="true" optional="false" type="data" size="591942"/>
     <uses file="findterm.out" link="output" register="false" transfer="false" optional="false" type="data" size="134"/>
@@ -4321,20 +4321,20 @@
     <uses file="vienna_output" link="output" register="false" transfer="false" optional="false" type="data" size="7338603"/>
     <uses file="vienna_index_tmp" link="output" register="false" transfer="false" optional="false" type="data" size="6462275"/>
   </job>
-  <job id="ID00087" namespace="SIPHT" name="RNAMotif" version="1.0" runtime="23.8404">
+  <job id="ID00087" namespace="SIPHT" name="RNAMotif" version="1.0" runtime="24">
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="RNAMofficial_descriptor.txt" link="input" register="true" transfer="true" optional="false" type="data" size="17626"/>
     <uses file="rnamotif.out" link="output" register="false" transfer="false" optional="false" type="data" size="1032323"/>
     <uses file="rnamotif.err" link="output" register="false" transfer="false" optional="false" type="data" size="310"/>
   </job>
-  <job id="ID00088" namespace="SIPHT" name="Transterm" version="1.0" runtime="54.8072">
+  <job id="ID00088" namespace="SIPHT" name="Transterm" version="1.0" runtime="55">
     <uses file="NC_0025AG05.fna" link="input" register="true" transfer="true" optional="false" type="data" size="5361487"/>
     <uses file="expterm.dat" link="input" register="true" transfer="true" optional="false" type="data" size="45788"/>
     <uses file="NC_0025AG05.ptt" link="input" register="true" transfer="true" optional="false" type="data" size="340915"/>
     <uses file="transterm.out" link="output" register="false" transfer="false" optional="false" type="data" size="423429"/>
     <uses file="transterm.err" link="output" register="false" transfer="false" optional="false" type="data" size="97"/>
   </job>
-  <job id="ID00089" namespace="SIPHT" name="Blast" version="1.0" runtime="2180.2799">
+  <job id="ID00089" namespace="SIPHT" name="Blast" version="1.0" runtime="2180">
     <uses file="blasta" link="input" register="true" transfer="true" optional="false" type="data" size="786856"/>
     <uses file="xdformat" link="input" register="true" transfer="true" optional="false" type="data" size="380164"/>
     <uses file="time" link="input" register="true" transfer="true" optional="false" type="data" size="11944"/>
@@ -5263,7 +5263,7 @@
     <uses file="blast.out" link="output" register="false" transfer="false" optional="false" type="data" size="511"/>
     <uses file="BLAST_sorted.out" link="output" register="false" transfer="false" optional="false" type="data" size="5239533"/>
   </job>
-  <job id="ID00090" namespace="SIPHT" name="SRNA" version="1.0" runtime="523.1233">
+  <job id="ID00090" namespace="SIPHT" name="SRNA" version="1.0" runtime="523">
     <uses file="access_genomes2.txt" link="input" register="true" transfer="true" optional="false" type="data" size="83722"/>
     <uses file="sRNAPredict.in" link="input" register="true" transfer="true" optional="false" type="data" size="1198"/>
     <uses file="NC_0025AG05.gbk" link="input" register="true" transfer="true" optional="false" type="data" size="10574590"/>
@@ -5299,13 +5299,13 @@
     <uses file="Seq_NC_0025AG05" link="output" register="false" transfer="false" optional="false" type="data" size="77998"/>
     <uses file="srna.out" link="output" register="false" transfer="false" optional="false" type="data" size="327215"/>
   </job>
-  <job id="ID00091" namespace="SIPHT" name="FFN_Parse" version="1.0" runtime="1.7182">
+  <job id="ID00091" namespace="SIPHT" name="FFN_Parse" version="1.0" runtime="5">
     <uses file="NC_0025AG05.ffn" link="input" register="true" transfer="true" optional="false" type="data" size="4952108"/>
     <uses file="NC_0025AG05.ptt" link="input" register="true" transfer="true" optional="false" type="data" size="340915"/>
     <uses file="Seq_NC_0025AG05" link="input" register="true" transfer="true" optional="false" type="data" size="78606"/>
     <uses file="NC_0025AG05_parsed.ffn" link="output" register="false" transfer="false" optional="false" type="data" size="633122"/>
   </job>
-  <job id="ID00092" namespace="SIPHT" name="Blast_candidate" version="1.0" runtime="4.1919">
+  <job id="ID00092" namespace="SIPHT" name="Blast_candidate" version="1.0" runtime="5">
     <uses file="Seq_known_sRNAs_IGRs.txt" link="input" register="true" transfer="true" optional="false" type="data" size="172432"/>
     <uses file="blasta" link="input" register="true" transfer="true" optional="false" type="data" size="786856"/>
     <uses file="xdformat" link="input" register="true" transfer="true" optional="false" type="data" size="380164"/>
@@ -5315,7 +5315,7 @@
     <uses file="blast_candidate.out" link="output" register="false" transfer="false" optional="false" type="data" size="2922"/>
     <uses file="blast_candidate.err" link="output" register="false" transfer="false" optional="false" type="data" size="544"/>
   </job>
-  <job id="ID00093" namespace="SIPHT" name="Blast_QRNA" version="1.0" runtime="1333.7564">
+  <job id="ID00093" namespace="SIPHT" name="Blast_QRNA" version="1.0" runtime="1334">
     <uses file="xdformat" link="input" register="true" transfer="true" optional="false" type="data" size="380164"/>
     <uses file="blasta" link="input" register="true" transfer="true" optional="false" type="data" size="786856"/>
     <uses file="time" link="input" register="true" transfer="true" optional="false" type="data" size="11944"/>
@@ -6209,7 +6209,7 @@
     <uses file="Seq_NC_0025AG05" link="input" register="false" transfer="false" optional="false" type="data" size="84353"/>
     <uses file="NC_0025AG05_QRNA.txt.all.CUTOFF0.ID[100:0].GC[100:0].gff" link="output" register="false" transfer="false" optional="false" type="data" size="181372"/>
   </job>
-  <job id="ID00094" namespace="SIPHT" name="Blast_synteny" version="1.0" runtime="33.0000">
+  <job id="ID00094" namespace="SIPHT" name="Blast_synteny" version="1.0" runtime="33">
     <uses file="Flanking_ORFs_known.txt" link="input" register="true" transfer="true" optional="false" type="data" size="1419426"/>
     <uses file="xdformat" link="input" register="true" transfer="true" optional="false" type="data" size="380164"/>
     <uses file="blasta" link="input" register="true" transfer="true" optional="false" type="data" size="786856"/>
@@ -6218,14 +6218,14 @@
     <uses file="NC_0025AG05_parsed.ffn" link="input" register="false" transfer="false" optional="false" type="data" size="633122"/>
     <uses file="NC_0025AG05_synteny.txt" link="output" register="false" transfer="false" optional="false" type="data" size="610721"/>
   </job>
-  <job id="ID00095" namespace="SIPHT" name="Blast_paralogues" version="1.0" runtime="3.8975">
+  <job id="ID00095" namespace="SIPHT" name="Blast_paralogues" version="1.0" runtime="5">
     <uses file="xdformat" link="input" register="true" transfer="true" optional="false" type="data" size="380164"/>
     <uses file="blasta" link="input" register="true" transfer="true" optional="false" type="data" size="786856"/>
     <uses file="time" link="input" register="true" transfer="true" optional="false" type="data" size="11944"/>
     <uses file="Seq_NC_0025AG05" link="input" register="false" transfer="false" optional="false" type="data" size="82339"/>
     <uses file="NC_0025AG05_paralogues.txt" link="output" register="false" transfer="false" optional="false" type="data" size="624253"/>
   </job>
-  <job id="ID00096" namespace="SIPHT" name="SRNA_annotate" version="1.0" runtime="1.5533">
+  <job id="ID00096" namespace="SIPHT" name="SRNA_annotate" version="1.0" runtime="5">
     <uses file="access_matrix.txt" link="input" register="true" transfer="true" optional="false" type="data" size="170917"/>
     <uses file="sRNAPredict.in" link="input" register="true" transfer="true" optional="false" type="data" size="1198"/>
     <uses file="BLAST_NC_0025AG05" link="input" register="true" transfer="true" optional="false" type="data" size="13025"/>

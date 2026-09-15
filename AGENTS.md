@@ -54,8 +54,11 @@ All five algorithms support both modes (120 scenarios per repetition).
 - EDGE_200 manifests already contain positions 1-100 and 401-500, with
   `arrival(401)-arrival(101)` subtracted from the latter block. No runtime
   rescaling, selection, or rebasing occurs.
-- TXT samples use `ceil(mu + uniform(-0.20*mu, +0.20*mu))`, generation seed
-  20260909. Runtime resampling defaults to false even across repetitions.
+- XML task runtimes are whole seconds with a minimum of 5 seconds. Matching
+  TXT samples are discrete uniform integers from `ceil(0.80*mu)` through
+  `floor(1.20*mu)` (inclusive), then clamped to a minimum of 5 seconds;
+  generation seed 20260909. Runtime resampling defaults to false even across
+  repetitions.
 - Deadline = manifest arrival + XML critical path * tightness. The planning
   uncertainty settings (quantile 0.99, sigma/mu 0.05) remain separate controls.
 - `scripts/run_results_workbook.ps1` runs CBMW once across all 24 scenarios and
