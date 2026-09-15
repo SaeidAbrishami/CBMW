@@ -420,7 +420,7 @@ public class CBMWBroker extends AbstractWorkflowBroker {
 
     @Override
     protected boolean usesPeriodicScheduling() {
-        return !immediateReservedCapacityWake;
+        return false;
     }
 
     @Override
