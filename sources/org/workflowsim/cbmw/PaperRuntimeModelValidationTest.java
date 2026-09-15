@@ -14,6 +14,9 @@ public final class PaperRuntimeModelValidationTest {
                 "Planning runtime must add alpha times the mean");
         assertClose(PaperRuntimeModel.conservativeEstimate(0.0), 0.0,
                 "Zero runtime must remain zero");
+        assertClose(PaperRuntimeModel.NEGOTIATION_FEASIBILITY_REL_EPSILON,
+                1.0e-12,
+                "Default negotiation feasibility epsilon must be reproducible");
 
         System.out.println("PaperRuntimeModelValidationTest: PASS");
     }

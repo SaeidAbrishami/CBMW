@@ -82,6 +82,7 @@ Useful JVM switches:
 | `-Dcbmw.runtime.stddev.ratio=0.05` | Runtime uncertainty used for normal resampling and NOSF; it does not affect CBMW's planning duration. |
 | `-Dcbmw.negotiation.beta=1.0` | Workflow-level safety factor applied to the conservative critical path. |
 | `-Dcbmw.negotiation.gamma=1.0` | Markup applied to CBMW's post-planning raw execution-cost quote. |
+| `-Dcbmw.negotiation.feasibility.rel.epsilon=1e-12` | Relative tolerance used only when comparing CBMW's required critical-path duration with the available deadline span; prevents floating-point equality artifacts without adding scheduling slack. |
 | `-Dcbmw.preemption.safety.sec=0` | Minimum post-preemption slack required before a running reserved task can be interrupted. |
 | `-Dcbmw.ondemand.delay.sec=60` | Shared CBMW/NOSF on-demand provisioning delay. NOSF deliberately uses this common-market value instead of the paper's 97-second experiment value. |
 | `-Dnosf.profile=COMMON_MARKET` | NOSF experiment profile. `PAPER_ALIGNED` selects the paper's seven EC2 types, hourly billing, network transfers, and 30 repetitions while retaining the common deadline/workflow/runtime/boot controls. |

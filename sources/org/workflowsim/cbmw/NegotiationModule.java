@@ -49,18 +49,39 @@ public class NegotiationModule {
 
         double slack    = wfr.getDeadline() - wfr.getArrivalTime();
         double required = cp * beta;
-        boolean feasible = (required <= slack);
+        double tolerance = feasibilityTolerance(required, slack,
+                PaperRuntimeModel.NEGOTIATION_FEASIBILITY_REL_EPSILON);
+        boolean feasible = isDeadlineFeasible(required, slack,
+                PaperRuntimeModel.NEGOTIATION_FEASIBILITY_REL_EPSILON);
         wfr.setDeadlineFeasible(feasible);
         wfr.setAccepted(feasible);
 
         CBMWLogger.log("NEGOTIATE",
                 String.format("wf=%d tasks=%d arrivalTime=%.4f deadline=%.4f"
-                        + " cp=%.4f beta=%.3f BETA*cp=%.4f slack=%.4f -> %s",
+                        + " cp=%.4f beta=%.3f BETA*cp=%.12f slack=%.12f"
+                        + " delta=%.12g tolerance=%.12g -> %s",
                         wfr.getWorkflowId(), wfr.getTaskList().size(),
                         wfr.getArrivalTime(), wfr.getDeadline(),
-                        cp, beta, required, slack,
+                        cp, beta, required, slack, required - slack, tolerance,
                         feasible ? "ACCEPTED" : "REJECTED (slack < BETA*cp)"));
         return feasible;
+    }
+
+    static boolean isDeadlineFeasible(double required, double slack,
+                                      double relativeEpsilon) {
+        return required <= slack
+                + feasibilityTolerance(required, slack, relativeEpsilon);
+    }
+
+    static double feasibilityTolerance(double required, double slack,
+                                       double relativeEpsilon) {
+        if (!Double.isFinite(relativeEpsilon) || relativeEpsilon < 0.0) {
+            throw new IllegalArgumentException(
+                    "relative feasibility epsilon must be finite and >= 0");
+        }
+        double scale = Math.max(1.0,
+                Math.max(Math.abs(required), Math.abs(slack)));
+        return relativeEpsilon * scale;
     }
 
     /**
