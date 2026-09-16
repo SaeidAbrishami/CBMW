@@ -82,6 +82,8 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
                             task.getCloudletId()));
                 }
             }
+
+            validatePlannedPrecedence(tasks);
         } catch (Exception e) {
             releaseWorkflowBookings(tasks);
             throw e;
@@ -115,9 +117,16 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
     private void planTask(Task task, boolean forceOnDemand) throws Exception {
         int taskId = task.getCloudletId();
         double est = wfr.getEST(taskId);
-        double lft = wfr.getLFT(taskId);
-        double lst = wfr.getLST(taskId);
         double dur = duration(task);
+        double lft = effectiveLatestFinish(task);
+        double lst = lft - dur;
+
+        // The paper timing sweep is resource-agnostic. Once a child has been
+        // placed, tighten its parents against the child's selected execution
+        // start so that resource placement cannot invert a dependency edge.
+        wfr.setLFT(taskId, lft);
+        wfr.setLST(taskId, lst);
+        task.setLatestStartTime(lst);
 
         int bestVm = ON_DEMAND_SENTINEL;
         double bestSlot = -1.0;
@@ -167,6 +176,55 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
                 String.format("wf=%d task=%d est=%.4f lft=%.4f sst=%.4f"
                                 + " rule=LST-OPD dur=%.4f",
                         wfr.getWorkflowId(), taskId, est, lft, sst, dur));
+    }
+
+    /**
+     * Tightens the theoretical LFT against already-planned child starts.
+     * Tasks are planned in descending LFT order, so every child is assigned
+     * before its parents reach this method.
+     */
+    private double effectiveLatestFinish(Task task) {
+        double effectiveLft = wfr.getLFT(task.getCloudletId());
+        for (Task child : task.getChildList()) {
+            int childId = child.getCloudletId();
+            if (!wfr.hasScheduledStart(childId)
+                    || !wfr.hasAssignedVm(childId)) {
+                throw new IllegalStateException(
+                        "Child must be planned before parent: " + childId);
+            }
+            effectiveLft = Math.min(
+                    effectiveLft, plannedExecutionStart(childId));
+        }
+        return effectiveLft;
+    }
+
+    /** SST is execution start for reserved tasks and order time for o0. */
+    private double plannedExecutionStart(int taskId) {
+        double start = wfr.getScheduledStart(taskId);
+        if (wfr.getAssignedVm(taskId) == ON_DEMAND_SENTINEL) {
+            start += HybridVmPool.ON_DEMAND_PROVISIONING_DELAY;
+        }
+        return start;
+    }
+
+    /** Fails planning immediately if any selected resource slots invert an edge. */
+    private void validatePlannedPrecedence(List<Task> tasks) {
+        final double epsilon = 1e-9;
+        for (Task parent : tasks) {
+            int parentId = parent.getCloudletId();
+            double parentFinish = plannedExecutionStart(parentId)
+                    + duration(parent);
+            for (Task child : parent.getChildList()) {
+                int childId = child.getCloudletId();
+                double childStart = plannedExecutionStart(childId);
+                if (parentFinish > childStart + epsilon) {
+                    throw new IllegalStateException(String.format(
+                            "Invalid CBMW plan: parent %d finishes at %.4f"
+                                    + " after child %d starts at %.4f",
+                            parentId, parentFinish, childId, childStart));
+                }
+            }
+        }
     }
 
     /** Frees reservations made before a later task makes planning fail. */
