@@ -69,7 +69,10 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
         Map<Integer, Integer> pendingRamMb = new HashMap<>();
 
         // The broker supplies the paper §4.3 sstji-ascending stable order.
-        List<Cloudlet> readyJobs = new ArrayList<>((List<Cloudlet>) getCloudletList());
+        // The broker maintains this list in stable SST order. The scheduler
+        // only reads it, so avoid copying the entire ready queue on every
+        // CloudSim update event.
+        List<Cloudlet> readyJobs = (List<Cloudlet>) getCloudletList();
 
         List<Cloudlet> toSchedule = new ArrayList<>();
         int firstFutureIndex = readyJobs.size();

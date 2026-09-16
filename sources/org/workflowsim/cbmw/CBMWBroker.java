@@ -38,7 +38,6 @@ public class CBMWBroker extends AbstractWorkflowBroker {
             new HashMap<>();
     private final Map<Integer, Double> remainingPlanningDurations =
             new HashMap<>();
-    private final List<Cloudlet> newlyReadyJobs = new ArrayList<>();
     private final Set<Job> runningReservedJobs = new LinkedHashSet<>();
     private final Set<Integer> waitingForPlannedReservedVm =
             new HashSet<>();
@@ -120,20 +119,24 @@ public class CBMWBroker extends AbstractWorkflowBroker {
     @Override
     @SuppressWarnings("unchecked")
     protected void processCloudletSubmit(SimEvent ev) {
-        newlyReadyJobs.addAll((List<Cloudlet>) ev.getData());
-        super.processCloudletSubmit(ev);
+        List<Cloudlet> additions = (List<Cloudlet>) ev.getData();
+        CBMWPerformanceMetrics.recordReadyQueueScan(additions.size());
+        recordReadyQueue(additions);
+
+        // The existing queue is already SST-ordered. Sort only the newly-ready
+        // batch, then merge it stably so equal-SST jobs retain the same order
+        // produced by ArrayList.sort() over the old queue plus appended jobs.
+        CBMWPerformanceMetrics.recordPreemptionSort(additions.size());
+        stableMergeSorted(getCloudletList(), additions,
+                Comparator.comparingDouble(this::scheduledStart));
+        sendNow(getId(), WorkflowSimTags.CLOUDLET_UPDATE);
     }
 
     @Override
     @SuppressWarnings("unchecked")
     protected void processCloudletUpdate(SimEvent ev) {
         immediateReservedCapacityWake = false;
-        CBMWPerformanceMetrics.recordReadyQueueScan(newlyReadyJobs.size());
-        recordReadyQueue(newlyReadyJobs);
-        newlyReadyJobs.clear();
         List<Cloudlet> ready = (List<Cloudlet>) getCloudletList();
-        CBMWPerformanceMetrics.recordPreemptionSort(ready.size());
-        ready.sort(Comparator.comparingDouble(this::scheduledStart));
 
         // A replacement cannot be submitted until the datacenter confirms
         // that the selected victim has stopped and released its PEs.
@@ -404,6 +407,53 @@ public class CBMWBroker extends AbstractWorkflowBroker {
                 ? workflow.getScheduledStart(primaryTaskId(job)) : 0.0;
     }
 
+    /** Stable merge equivalent to sorting {@code sorted + additions}. */
+    static <T> void stableMergeSorted(List<T> sorted, List<T> additions,
+                                      Comparator<? super T> comparator) {
+        if (additions.isEmpty()) return;
+
+        List<T> incoming = new ArrayList<>(additions);
+        incoming.sort(comparator);
+        List<T> merged = new ArrayList<>(sorted.size() + incoming.size());
+        int existingIndex = 0;
+        int incomingIndex = 0;
+        while (existingIndex < sorted.size() && incomingIndex < incoming.size()) {
+            T existing = sorted.get(existingIndex);
+            T added = incoming.get(incomingIndex);
+            if (comparator.compare(existing, added) <= 0) {
+                merged.add(existing);
+                existingIndex++;
+            } else {
+                merged.add(added);
+                incomingIndex++;
+            }
+        }
+        while (existingIndex < sorted.size()) {
+            merged.add(sorted.get(existingIndex++));
+        }
+        while (incomingIndex < incoming.size()) {
+            merged.add(incoming.get(incomingIndex++));
+        }
+        sorted.clear();
+        sorted.addAll(merged);
+    }
+
+    /** Inserts after existing equal-key entries, matching stable append+sort. */
+    static <T> void stableInsertSorted(List<T> sorted, T addition,
+                                       Comparator<? super T> comparator) {
+        int low = 0;
+        int high = sorted.size();
+        while (low < high) {
+            int middle = (low + high) >>> 1;
+            if (comparator.compare(sorted.get(middle), addition) <= 0) {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        sorted.add(low, addition);
+    }
+
     private static double readNonNegativeDouble(String property,
                                                 double defaultValue) {
         double value = Double.parseDouble(System.getProperty(
@@ -468,7 +518,8 @@ public class CBMWBroker extends AbstractWorkflowBroker {
         vmPool.taskFinished(preemption.vmId, victimTaskId);
         vmPool.releaseSlot(victimTaskId);
         accounting.markReservedTaskPreempted(canceled);
-        getCloudletList().add(canceled);
+        stableInsertSorted(getCloudletList(), canceled,
+                Comparator.comparingDouble(this::scheduledStart));
 
         CBMWLogger.logf("RESERVED-PREEMPTED",
                 "victimWf=%d victimTask=%d vm=%d remainingMI=%d replacementTask=%d",
