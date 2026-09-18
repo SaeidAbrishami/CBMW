@@ -3,10 +3,8 @@ package org.workflowsim.cbmw;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import org.cloudbus.cloudsim.core.CloudSim;
 import org.workflowsim.CondorVM;
 import org.workflowsim.Task;
@@ -17,9 +15,9 @@ import org.workflowsim.planning.BasePlanningAlgorithm;
  *
  * Computes EST/EFT/LFT/LST for each task and assigns tasks to reserved VM slots
  * by searching backward from LFT. Tasks that cannot fit on reserved capacity are
- * assigned to the paper's dummy on-demand resource at LST - OPD. If an entry
- * task requires on-demand capacity, the workflow deadline is extended once by
- * OPD and the workflow is replanned against that adjusted deadline.
+ * assigned to the paper's dummy on-demand resource at LST - OPD. Workflow
+ * deadlines already include the provisioning delay when they are loaded, so
+ * planning never changes a workflow deadline based on its resource assignment.
  */
 public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
 
@@ -40,7 +38,6 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
     public void run() throws Exception {
         List<Task> tasks = getTaskList();
         List<Task> sorted = new ArrayList<>(tasks);
-        Set<Integer> forcedOnDemandEntries = new HashSet<>();
 
         try {
             computePaperTiming(tasks, wfr.getDeadline());
@@ -52,35 +49,7 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
                             wfr.getWorkflowId(), tasks.size(), wfr.getDeadline()));
 
             for (Task task : sorted) {
-                planTask(task, false);
-                if (task.getParentList().isEmpty()
-                        && wfr.getAssignedVm(task.getCloudletId())
-                        == ON_DEMAND_SENTINEL) {
-                    forcedOnDemandEntries.add(task.getCloudletId());
-                }
-            }
-
-            if (!forcedOnDemandEntries.isEmpty()) {
-                releaseWorkflowBookings(tasks);
-                double originalDeadline = wfr.getDeadline();
-                double adjustedDeadline = originalDeadline
-                        + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY;
-                wfr.setDeadline(adjustedDeadline);
-                CBMWLogger.log("PLAN-EXTEND-ENTRY-ONDEMAND",
-                        String.format("wf=%d entryTasks=%s originalDeadline=%.4f"
-                                        + " opd=%.4f adjustedDeadline=%.4f",
-                                wfr.getWorkflowId(), forcedOnDemandEntries,
-                                originalDeadline,
-                                HybridVmPool.ON_DEMAND_PROVISIONING_DELAY,
-                                adjustedDeadline));
-
-                computePaperTiming(tasks, adjustedDeadline);
-                sorted.sort(Comparator.comparingDouble(
-                        (Task t) -> wfr.getLFT(t.getCloudletId())).reversed());
-                for (Task task : sorted) {
-                    planTask(task, forcedOnDemandEntries.contains(
-                            task.getCloudletId()));
-                }
+                planTask(task);
             }
 
             validatePlannedPrecedence(tasks);
@@ -114,7 +83,7 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
         }
     }
 
-    private void planTask(Task task, boolean forceOnDemand) throws Exception {
+    private void planTask(Task task) throws Exception {
         int taskId = task.getCloudletId();
         double est = wfr.getEST(taskId);
         double dur = duration(task);
@@ -134,19 +103,17 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
         int taskCores = wfr.getTaskCores(taskId);
         int taskRamMb = wfr.getTaskRamMb(taskId);
 
-        if (!forceOnDemand) {
-            for (CondorVM vm : pool.getReservedVms()) {
-                double slot = findLatestFeasibleSlot(vm.getId(), est, lft, dur,
-                        taskCores, taskRamMb);
-                if (slot < 0.0) continue;
+        for (CondorVM vm : pool.getReservedVms()) {
+            double slot = findLatestFeasibleSlot(vm.getId(), est, lft, dur,
+                    taskCores, taskRamMb);
+            if (slot < 0.0) continue;
 
-                int load = pool.getBookings(vm.getId()).size();
-                if (slot > bestSlot + 1e-9
-                        || (slot >= bestSlot - 1e-9 && load < bestLoad)) {
-                    bestSlot = slot;
-                    bestVm = vm.getId();
-                    bestLoad = load;
-                }
+            int load = pool.getBookings(vm.getId()).size();
+            if (slot > bestSlot + 1e-9
+                    || (slot >= bestSlot - 1e-9 && load < bestLoad)) {
+                bestSlot = slot;
+                bestVm = vm.getId();
+                bestLoad = load;
             }
         }
 

@@ -28,7 +28,9 @@ import org.w3c.dom.NodeList;
  * For each entry in the JSON it:
  *   1. Resolves exactly one matching .xml/.txt pair recursively
  *   2. Computes the critical path directly from the XML runtime attributes
- *   3. Sets deadline = arrivalTime + criticalPath * tightness
+ *   3. Sets deadline = arrivalTime + criticalPath * tightness + on-demand
+ *      provisioning delay. The delay is included for every workflow, whether
+ *      or not any task is eventually assigned to on-demand capacity.
  *
  * The returned list is sorted by arrival time.
  */
@@ -100,7 +102,8 @@ public class WorkflowLoader {
             String xmlPath     = xmlFile.getPath();
 
             double cp       = computeCriticalPath(xmlPath);
-            double deadline = arrivalTime + cp * tightness;
+            double deadline = arrivalTime + cp * tightness
+                    + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY;
             fullDataset.add(new WorkflowArrivalData(xmlPath, arrivalTime, deadline));
         }
 

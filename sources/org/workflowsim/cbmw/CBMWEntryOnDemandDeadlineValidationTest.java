@@ -4,43 +4,44 @@ import java.util.Arrays;
 import java.util.List;
 import org.workflowsim.Task;
 
-/** Focused validation for entry-task on-demand provisioning feasibility. */
+/** Ensures planning does not add a second provisioning delay for on-demand entries. */
 public final class CBMWEntryOnDemandDeadlineValidationTest {
 
     private CBMWEntryOnDemandDeadlineValidationTest() {}
 
     public static void main(String[] args) throws Exception {
         validateFeasibleBoundary();
-        validateDeadlineExtensionInsteadOfRejection();
+        validateNoSecondDeadlineExtension();
         System.out.println("CBMWEntryOnDemandDeadlineValidationTest: PASS");
     }
 
     private static void validateFeasibleBoundary() throws Exception {
         HybridVmPool pool = new HybridVmPool(0);
-        WorkflowRecord workflow = createTwoTaskWorkflow(1, 120.0);
+        // The loader now applies the universal 60-second OPD before planning.
+        WorkflowRecord workflow = createTwoTaskWorkflow(1, 180.0);
         runPlanner(workflow, pool);
 
         assert workflow.getAssignedVm(1)
                 == CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL
                 : "Oversized entry task must use on-demand";
         assert Math.abs(workflow.getDeadline() - 180.0) < 1e-9
-                : "Entry on-demand task must extend deadline by OPD";
+                : "Planning must not add a second OPD to an already adjusted deadline";
         assert Math.abs(workflow.getScheduledStart(1) - 90.0) < 1e-9
-                : "Replanned entry order must follow adjusted LST - OPD";
+                : "Entry order must follow LST - OPD";
         assert Math.abs(workflow.getLFT(1) - 160.0) < 1e-9
-                : "Entry LFT must use the adjusted workflow deadline";
+                : "Entry LFT must use the universally adjusted workflow deadline";
     }
 
-    private static void validateDeadlineExtensionInsteadOfRejection() throws Exception {
+    private static void validateNoSecondDeadlineExtension() throws Exception {
         HybridVmPool pool = new HybridVmPool(0);
-        WorkflowRecord workflow = createTwoTaskWorkflow(2, 119.0);
+        WorkflowRecord workflow = createTwoTaskWorkflow(2, 179.0);
         runPlanner(workflow, pool);
 
         assert Math.abs(workflow.getDeadline() - 179.0) < 1e-9
-                : "Formerly rejected workflow must receive exactly one OPD extension";
+                : "An on-demand entry must not cause an additional OPD extension";
         assert workflow.getAssignedVm(1)
                 == CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL
-                : "Entry task that caused the extension must remain on-demand";
+                : "Oversized entry task must remain on-demand";
     }
 
     private static WorkflowRecord createTwoTaskWorkflow(int workflowId,

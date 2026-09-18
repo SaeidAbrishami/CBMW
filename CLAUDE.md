@@ -64,7 +64,8 @@ test_workflows/                   ← real scientific workflow DAX files
 - Inputs: `test_workflows/workflows`, with 500 XML/TXT pairs and eight full/edge
   arrival manifests. Scenario timestamps are used exactly, without rescaling.
 - JSON records contain `workflow_name` and `arrival_time_seconds`.
-- Deadlines are arrival + XML critical path * tightness.
+- Deadlines are arrival + XML critical path * tightness + the configured
+  on-demand provisioning delay, for every workflow.
 - TXT runtimes are rounded-up uniform +/-20% samples; resampling defaults false.
 
 ### VM model
