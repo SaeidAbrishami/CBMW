@@ -3,6 +3,7 @@ package org.workflowsim.cbmw;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -32,23 +33,40 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
     private Map<Integer, WorkflowRecord> activeWorkflows;
     private ProvisioningModule provisioner;
     private Set<Integer> waitingForPlannedReservedVm = Collections.emptySet();
+    /**
+     * Static o0 orders superseded when Algorithm 3 advances a future task to
+     * reserved capacity. The broker consumes the marker at the scheduled
+     * order event, preventing an unused logical container from being created.
+     */
+    private Set<Integer> cancelledOnDemandOrders = new HashSet<>();
 
     public CBMWDynamicSchedulingAlgorithm() {}
 
     public CBMWDynamicSchedulingAlgorithm(HybridVmPool pool,
                                            Map<Integer, WorkflowRecord> activeWorkflows,
                                            ProvisioningModule provisioner) {
-        this(pool, activeWorkflows, provisioner, Collections.emptySet());
+        this(pool, activeWorkflows, provisioner, Collections.emptySet(),
+                new HashSet<Integer>());
     }
 
     public CBMWDynamicSchedulingAlgorithm(HybridVmPool pool,
                                            Map<Integer, WorkflowRecord> activeWorkflows,
                                            ProvisioningModule provisioner,
                                            Set<Integer> waitingForPlannedReservedVm) {
+        this(pool, activeWorkflows, provisioner, waitingForPlannedReservedVm,
+                new HashSet<Integer>());
+    }
+
+    public CBMWDynamicSchedulingAlgorithm(HybridVmPool pool,
+                                           Map<Integer, WorkflowRecord> activeWorkflows,
+                                           ProvisioningModule provisioner,
+                                           Set<Integer> waitingForPlannedReservedVm,
+                                           Set<Integer> cancelledOnDemandOrders) {
         this.pool            = pool;
         this.activeWorkflows = activeWorkflows;
         this.provisioner     = provisioner;
         this.waitingForPlannedReservedVm = waitingForPlannedReservedVm;
+        this.cancelledOnDemandOrders = cancelledOnDemandOrders;
     }
 
     public void init(HybridVmPool pool,
@@ -218,6 +236,10 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                     now, now + planningDuration, taskId,
                     pendingCores, pendingRamMb);
             if (res != null) {
+                if (wfr.getAssignedVm(taskId)
+                        == CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL) {
+                    cancelledOnDemandOrders.add(taskId);
+                }
                 pool.rebookSlot(taskId, res.getId(),
                         now, now + planningDuration);
                 assign(job, res);

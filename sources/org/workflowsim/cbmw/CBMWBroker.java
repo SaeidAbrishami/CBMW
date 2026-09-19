@@ -41,6 +41,8 @@ public class CBMWBroker extends AbstractWorkflowBroker {
     private final Set<Job> runningReservedJobs = new LinkedHashSet<>();
     private final Set<Integer> waitingForPlannedReservedVm =
             new HashSet<>();
+    /** Static on-demand order events cancelled by a successful early advance. */
+    private final Set<Integer> cancelledOnDemandOrders = new HashSet<>();
     private boolean immediateReservedCapacityWake;
 
     private static final class ReservedPreemption {
@@ -61,7 +63,7 @@ public class CBMWBroker extends AbstractWorkflowBroker {
         negotiation.setGamma(PaperRuntimeModel.NEGOTIATION_GAMMA);
         this.dynamicScheduler = new CBMWDynamicSchedulingAlgorithm(
                 vmPool, activeWorkflows, provisioner,
-                waitingForPlannedReservedVm);
+                waitingForPlannedReservedVm, cancelledOnDemandOrders);
     }
 
     @Override
@@ -481,6 +483,11 @@ public class CBMWBroker extends AbstractWorkflowBroker {
         }
         if (ev.getTag() == WorkflowSimTags.CBMW_ON_DEMAND_ORDER) {
             int taskId = (Integer) ev.getData();
+            if (cancelledOnDemandOrders.remove(taskId)) {
+                CBMWLogger.logf("CBMW-ONDEMAND-ORDER-CANCELLED",
+                        "task=%d advanced-to-reserved-before-order", taskId);
+                return;
+            }
             orderLogicalOnDemandContainer(taskId);
             sendNow(getId(), WorkflowSimTags.CLOUDLET_UPDATE);
             return;
