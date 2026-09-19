@@ -33,6 +33,8 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
     private Map<Integer, WorkflowRecord> activeWorkflows;
     private ProvisioningModule provisioner;
     private Set<Integer> waitingForPlannedReservedVm = Collections.emptySet();
+    private Map<Integer, Double> reservedRetryTimes = Collections.emptyMap();
+    private boolean safeReservedRebookingEnabled;
     /**
      * Static o0 orders superseded when Algorithm 3 advances a future task to
      * reserved capacity. The broker consumes the marker at the scheduled
@@ -46,7 +48,7 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                                            Map<Integer, WorkflowRecord> activeWorkflows,
                                            ProvisioningModule provisioner) {
         this(pool, activeWorkflows, provisioner, Collections.emptySet(),
-                new HashSet<Integer>());
+                new HashSet<Integer>(), new HashMap<Integer, Double>(), false);
     }
 
     public CBMWDynamicSchedulingAlgorithm(HybridVmPool pool,
@@ -54,7 +56,7 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                                            ProvisioningModule provisioner,
                                            Set<Integer> waitingForPlannedReservedVm) {
         this(pool, activeWorkflows, provisioner, waitingForPlannedReservedVm,
-                new HashSet<Integer>());
+                new HashSet<Integer>(), new HashMap<Integer, Double>(), false);
     }
 
     public CBMWDynamicSchedulingAlgorithm(HybridVmPool pool,
@@ -62,11 +64,24 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                                            ProvisioningModule provisioner,
                                            Set<Integer> waitingForPlannedReservedVm,
                                            Set<Integer> cancelledOnDemandOrders) {
+        this(pool, activeWorkflows, provisioner, waitingForPlannedReservedVm,
+                cancelledOnDemandOrders, new HashMap<Integer, Double>(), false);
+    }
+
+    public CBMWDynamicSchedulingAlgorithm(HybridVmPool pool,
+                                           Map<Integer, WorkflowRecord> activeWorkflows,
+                                           ProvisioningModule provisioner,
+                                           Set<Integer> waitingForPlannedReservedVm,
+                                           Set<Integer> cancelledOnDemandOrders,
+                                           Map<Integer, Double> reservedRetryTimes,
+                                           boolean safeReservedRebookingEnabled) {
         this.pool            = pool;
         this.activeWorkflows = activeWorkflows;
         this.provisioner     = provisioner;
         this.waitingForPlannedReservedVm = waitingForPlannedReservedVm;
         this.cancelledOnDemandOrders = cancelledOnDemandOrders;
+        this.reservedRetryTimes = reservedRetryTimes;
+        this.safeReservedRebookingEnabled = safeReservedRebookingEnabled;
     }
 
     public void init(HybridVmPool pool,
@@ -115,6 +130,12 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                 break;
             }
 
+            double retryAt = reservedRetryTimes.getOrDefault(
+                    taskId, Double.NEGATIVE_INFINITY);
+            if (retryAt > now + 1e-9) {
+                continue;
+            }
+
             if (wfr == null) {
                 CBMWLogger.log("DISPATCH-SKIP",
                         String.format("wf=%d task=%d missing workflow record",
@@ -153,6 +174,63 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
 
             } else {
                 // arij = reserved VM. Try Provisioner(tji, arij).
+                if (safeReservedRebookingEnabled) {
+                    HybridVmPool.ReservedSlot slot = pool.reserveEarliestSlack(
+                            taskId, plannedVm, now, planningDuration);
+                    if (slot == null) {
+                        waitingForPlannedReservedVm.add(taskId);
+                        reservedRetryTimes.remove(taskId);
+                        CBMWLogger.log("DISPATCH-WAIT-NO-RESERVED-SLACK",
+                                String.format("wf=%d task=%d now=%.4f",
+                                        wfId, taskId, now));
+                        continue;
+                    }
+
+                    wfr.setAssignedVm(taskId, slot.getVmId());
+                    if (slot.getStart() > now + 1e-9) {
+                        reservedRetryTimes.put(taskId, slot.getStart());
+                        waitingForPlannedReservedVm.remove(taskId);
+                        CBMWLogger.log("DISPATCH-DEFER-RESERVED-SLACK",
+                                String.format("wf=%d task=%d vm=%d now=%.4f"
+                                                + " retryAt=%.4f end=%.4f",
+                                        wfId, taskId, slot.getVmId(), now,
+                                        slot.getStart(), slot.getEnd()));
+                        continue;
+                    }
+
+                    if (!hasRuntimeCapacity(slot.getVmId(), taskId,
+                            pendingCores, pendingRamMb)) {
+                        // The profile can temporarily be ahead of runtime
+                        // acknowledgements. Do not hold a slot starting now
+                        // while the task is still unable to execute; a task
+                        // completion will trigger a fresh atomic search.
+                        pool.releaseSlot(taskId);
+                        reservedRetryTimes.remove(taskId);
+                        waitingForPlannedReservedVm.add(taskId);
+                        CBMWLogger.log("DISPATCH-WAIT-RUNTIME-CAPACITY",
+                                String.format("wf=%d task=%d vm=%d now=%.4f",
+                                        wfId, taskId, slot.getVmId(), now));
+                        continue;
+                    }
+
+                    CondorVM reserved = pool.getVmById(slot.getVmId());
+                    if (reserved == null) {
+                        pool.releaseSlot(taskId);
+                        continue;
+                    }
+                    reservedRetryTimes.remove(taskId);
+                    waitingForPlannedReservedVm.remove(taskId);
+                    assign(job, reserved);
+                    toSchedule.add(job);
+                    reservePending(slot.getVmId(), taskId,
+                            pendingCores, pendingRamMb);
+                    CBMWLogger.log("DISPATCH",
+                            String.format("wf=%d task=%d -> vm=%d"
+                                            + " (safe reserved slot)",
+                                    wfId, taskId, slot.getVmId()));
+                    continue;
+                }
+
                 CondorVM planned = pool.getVmById(plannedVm);
                 if (planned != null && hasRuntimeCapacity(
                         plannedVm, taskId, pendingCores, pendingRamMb)) {

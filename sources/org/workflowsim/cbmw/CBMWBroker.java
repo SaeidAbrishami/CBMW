@@ -35,6 +35,9 @@ public class CBMWBroker extends AbstractWorkflowBroker {
     private static final boolean RESERVED_SST_WAKE_ENABLED =
             Boolean.parseBoolean(System.getProperty(
                     "cbmw.reserved.sst.wake.enabled", "true"));
+    private static final boolean SAFE_RESERVED_REBOOKING_ENABLED =
+            Boolean.parseBoolean(System.getProperty(
+                    "cbmw.safe.reserved.rebooking.enabled", "true"));
     private static final double SST_WAKE_EPSILON = 1e-9;
 
     private final CBMWDynamicSchedulingAlgorithm dynamicScheduler;
@@ -47,6 +50,8 @@ public class CBMWBroker extends AbstractWorkflowBroker {
             new HashSet<>();
     /** Static on-demand order events cancelled by a successful early advance. */
     private final Set<Integer> cancelledOnDemandOrders = new HashSet<>();
+    /** Earliest capacity-safe retry time for a delayed reserved task. */
+    private final Map<Integer, Double> reservedRetryTimes = new HashMap<>();
     private final ReservedSstWakeController reservedSstWakeController =
             new ReservedSstWakeController();
     private boolean immediateReservedCapacityWake;
@@ -123,9 +128,11 @@ public class CBMWBroker extends AbstractWorkflowBroker {
         negotiation.setGamma(PaperRuntimeModel.NEGOTIATION_GAMMA);
         this.dynamicScheduler = new CBMWDynamicSchedulingAlgorithm(
                 vmPool, activeWorkflows, provisioner,
-                waitingForPlannedReservedVm, cancelledOnDemandOrders);
-        CBMWLogger.logf("CONFIG", "reservedExactSstWake=%s",
-                RESERVED_SST_WAKE_ENABLED);
+                waitingForPlannedReservedVm, cancelledOnDemandOrders,
+                reservedRetryTimes, SAFE_RESERVED_REBOOKING_ENABLED);
+        CBMWLogger.logf("CONFIG",
+                "reservedExactSstWake=%s safeReservedRebooking=%s",
+                RESERVED_SST_WAKE_ENABLED, SAFE_RESERVED_REBOOKING_ENABLED);
     }
 
     @Override
@@ -203,9 +210,12 @@ public class CBMWBroker extends AbstractWorkflowBroker {
             immediateReservedCapacityWake = false;
             List<Cloudlet> ready = (List<Cloudlet>) getCloudletList();
 
-            // A replacement cannot be submitted until the datacenter confirms
-            // that the selected victim has stopped and released its PEs.
-            if (!pendingPreemptions.isEmpty() || requestReservedPreemption()) {
+            // Legacy replacement cannot continue until the datacenter confirms
+            // that the selected victim stopped. Safe rebooking deliberately
+            // waits for a reservation gap instead of requesting replacement.
+            if (!pendingPreemptions.isEmpty()
+                    || (!SAFE_RESERVED_REBOOKING_ENABLED
+                        && requestReservedPreemption())) {
                 return;
             }
 
@@ -224,7 +234,9 @@ public class CBMWBroker extends AbstractWorkflowBroker {
             // Runtime usage now includes every successful submission from this
             // pass. If a later due task was retained because those submissions
             // consumed its capacity, start replacement now at the same timestamp.
-            requestReservedPreemption();
+            if (!SAFE_RESERVED_REBOOKING_ENABLED) {
+                requestReservedPreemption();
+            }
         } finally {
             scheduleNextReservedSstWake();
         }
@@ -237,7 +249,8 @@ public class CBMWBroker extends AbstractWorkflowBroker {
      */
     @SuppressWarnings("unchecked")
     private void scheduleNextReservedSstWake() {
-        if (!RESERVED_SST_WAKE_ENABLED) return;
+        if (!RESERVED_SST_WAKE_ENABLED
+                && !SAFE_RESERVED_REBOOKING_ENABLED) return;
 
         double now = CloudSim.clock();
         double nextSst = Double.POSITIVE_INFINITY;
@@ -245,6 +258,14 @@ public class CBMWBroker extends AbstractWorkflowBroker {
         for (Cloudlet cloudlet : ready) {
             Job job = (Job) cloudlet;
             int taskId = primaryTaskId(job);
+            if (SAFE_RESERVED_REBOOKING_ENABLED) {
+                double retryAt = reservedRetryTimes.getOrDefault(
+                        taskId, Double.POSITIVE_INFINITY);
+                if (Double.isFinite(retryAt)
+                        && retryAt > now + SST_WAKE_EPSILON) {
+                    nextSst = Math.min(nextSst, retryAt);
+                }
+            }
             WorkflowRecord workflow = activeWorkflows.get(
                     workflowIdForJob(job));
             if (workflow == null
@@ -253,10 +274,11 @@ public class CBMWBroker extends AbstractWorkflowBroker {
                     || provisioner.getProvisionedVm(taskId) != null) {
                 continue;
             }
-            double sst = workflow.getScheduledStart(taskId);
-            if (Double.isFinite(sst) && sst > now + SST_WAKE_EPSILON) {
-                nextSst = sst;
-                break;
+            if (RESERVED_SST_WAKE_ENABLED) {
+                double sst = workflow.getScheduledStart(taskId);
+                if (Double.isFinite(sst) && sst > now + SST_WAKE_EPSILON) {
+                    nextSst = Math.min(nextSst, sst);
+                }
             }
         }
 
@@ -584,7 +606,8 @@ public class CBMWBroker extends AbstractWorkflowBroker {
     public void processEvent(SimEvent ev) {
         if (ev.getTag() == WorkflowSimTags.CBMW_RESERVED_SST_WAKE) {
             ReservedSstWake wake = (ReservedSstWake) ev.getData();
-            if (!RESERVED_SST_WAKE_ENABLED
+            if ((!RESERVED_SST_WAKE_ENABLED
+                    && !SAFE_RESERVED_REBOOKING_ENABLED)
                     || !reservedSstWakeController.consume(wake)) {
                 CBMWLogger.logf("CBMW-RESERVED-SST-WAKE-STALE",
                         "generation=%d target=%.4f activeTarget=%.4f",
@@ -672,6 +695,7 @@ public class CBMWBroker extends AbstractWorkflowBroker {
         int taskId = primaryTaskId((Job) cl);
         remainingPlanningDurations.remove(taskId);
         waitingForPlannedReservedVm.remove(taskId);
+        reservedRetryTimes.remove(taskId);
         assert runningReservedIndexMatchesSubmittedList();
     }
 

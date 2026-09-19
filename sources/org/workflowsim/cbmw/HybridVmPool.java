@@ -17,6 +17,23 @@ import org.workflowsim.WorkflowSimTags;
  */
 public class HybridVmPool {
 
+    /** Immutable result of moving a reserved task to a capacity-safe slot. */
+    public static final class ReservedSlot {
+        private final int vmId;
+        private final double start;
+        private final double end;
+
+        private ReservedSlot(int vmId, double start, double end) {
+            this.vmId = vmId;
+            this.start = start;
+            this.end = end;
+        }
+
+        public int getVmId() { return vmId; }
+        public double getStart() { return start; }
+        public double getEnd() { return end; }
+    }
+
     public static final int    NUM_RESERVED = Integer.getInteger(
             "cbmw.reserved.instances", 5);
     public static final int    RESERVED_CORES = Integer.getInteger(
@@ -283,6 +300,54 @@ public class HybridVmPool {
         releaseSlot(taskId);
         bookSlot(vmId, taskId, start, end,
                 getTaskCores(taskId), getTaskRamMb(taskId));
+    }
+
+    /**
+     * Atomically moves a task's booking to the earliest reserved-capacity gap.
+     * The task's old booking is removed while searching so it is not counted
+     * against itself. The preferred VM wins equal-start ties; otherwise the
+     * globally earliest slot is selected. If no slot exists, the old booking
+     * is restored unchanged.
+     */
+    public ReservedSlot reserveEarliestSlack(int taskId, int preferredVmId,
+                                              double earliestStart,
+                                              double duration) {
+        int cores = getTaskCores(taskId);
+        int ramMb = getTaskRamMb(taskId);
+        double[] previous = taskBookingIndex.get(taskId);
+        double[] saved = previous != null ? previous.clone() : null;
+        if (previous != null) releaseSlot(taskId);
+
+        ReservedSlot best = null;
+        for (CondorVM vm : reservedVms) {
+            double start = findEarliestFeasibleSlot(vm.getId(), earliestStart,
+                    duration, cores, ramMb);
+            if (!Double.isFinite(start) || start == Double.MAX_VALUE) continue;
+
+            if (best == null || start < best.start - 1e-9
+                    || (Math.abs(start - best.start) <= 1e-9
+                        && preferVm(vm.getId(), best.vmId, preferredVmId))) {
+                best = new ReservedSlot(vm.getId(), start, start + duration);
+            }
+        }
+
+        if (best == null) {
+            if (saved != null) {
+                bookSlot((int) saved[0], taskId, saved[1], saved[2],
+                        (int) saved[3], (int) saved[4]);
+            }
+            return null;
+        }
+
+        bookSlot(best.vmId, taskId, best.start, best.end, cores, ramMb);
+        return best;
+    }
+
+    private boolean preferVm(int candidateVmId, int currentVmId,
+                             int preferredVmId) {
+        if (candidateVmId == preferredVmId) return currentVmId != preferredVmId;
+        if (currentVmId == preferredVmId) return false;
+        return candidateVmId < currentVmId;
     }
 
     /** Returns a snapshot of booked [start, end] intervals for a reserved VM. */
