@@ -32,6 +32,10 @@ public class CBMWBroker extends AbstractWorkflowBroker {
 
     private static final double PREEMPTION_SAFETY_SECONDS =
             readNonNegativeDouble("cbmw.preemption.safety.sec", 0.0);
+    private static final boolean RESERVED_SST_WAKE_ENABLED =
+            Boolean.parseBoolean(System.getProperty(
+                    "cbmw.reserved.sst.wake.enabled", "true"));
+    private static final double SST_WAKE_EPSILON = 1e-9;
 
     private final CBMWDynamicSchedulingAlgorithm dynamicScheduler;
     private final Map<Integer, ReservedPreemption> pendingPreemptions =
@@ -43,7 +47,63 @@ public class CBMWBroker extends AbstractWorkflowBroker {
             new HashSet<>();
     /** Static on-demand order events cancelled by a successful early advance. */
     private final Set<Integer> cancelledOnDemandOrders = new HashSet<>();
+    private final ReservedSstWakeController reservedSstWakeController =
+            new ReservedSstWakeController();
     private boolean immediateReservedCapacityWake;
+
+    static final class ReservedSstWake {
+        private final long generation;
+        private final double targetTime;
+
+        private ReservedSstWake(long generation, double targetTime) {
+            this.generation = generation;
+            this.targetTime = targetTime;
+        }
+
+        long getGeneration() { return generation; }
+        double getTargetTime() { return targetTime; }
+    }
+
+    /** Keeps exactly one logical SST wake active while stale events drain. */
+    static final class ReservedSstWakeController {
+        private long generation;
+        private double targetTime = Double.POSITIVE_INFINITY;
+
+        ReservedSstWake arm(double requestedTime) {
+            if (!Double.isFinite(requestedTime)) {
+                clear();
+                return null;
+            }
+            if (Double.isFinite(targetTime)
+                    && Math.abs(targetTime - requestedTime)
+                            <= SST_WAKE_EPSILON) {
+                return null;
+            }
+            generation++;
+            targetTime = requestedTime;
+            return new ReservedSstWake(generation, targetTime);
+        }
+
+        boolean consume(ReservedSstWake wake) {
+            if (wake == null || wake.generation != generation
+                    || !Double.isFinite(targetTime)
+                    || Math.abs(wake.targetTime - targetTime)
+                            > SST_WAKE_EPSILON) {
+                return false;
+            }
+            targetTime = Double.POSITIVE_INFINITY;
+            return true;
+        }
+
+        void clear() {
+            if (Double.isFinite(targetTime)) {
+                generation++;
+                targetTime = Double.POSITIVE_INFINITY;
+            }
+        }
+
+        double getTargetTime() { return targetTime; }
+    }
 
     private static final class ReservedPreemption {
         private final Job victim;
@@ -64,6 +124,8 @@ public class CBMWBroker extends AbstractWorkflowBroker {
         this.dynamicScheduler = new CBMWDynamicSchedulingAlgorithm(
                 vmPool, activeWorkflows, provisioner,
                 waitingForPlannedReservedVm, cancelledOnDemandOrders);
+        CBMWLogger.logf("CONFIG", "reservedExactSstWake=%s",
+                RESERVED_SST_WAKE_ENABLED);
     }
 
     @Override
@@ -137,31 +199,74 @@ public class CBMWBroker extends AbstractWorkflowBroker {
     @Override
     @SuppressWarnings("unchecked")
     protected void processCloudletUpdate(SimEvent ev) {
-        immediateReservedCapacityWake = false;
-        List<Cloudlet> ready = (List<Cloudlet>) getCloudletList();
-
-        // A replacement cannot be submitted until the datacenter confirms
-        // that the selected victim has stopped and released its PEs.
-        if (!pendingPreemptions.isEmpty() || requestReservedPreemption()) {
-            return;
-        }
-
-        dynamicScheduler.setCloudletList(getCloudletList());
-        dynamicScheduler.setVmList(getVmsCreatedList());
-        dynamicScheduler.getScheduledList().clear();
-
         try {
-            dynamicScheduler.run();
-        } catch (Exception e) {
-            Log.printLine("CBMW dynamic scheduler error: " + e.getMessage());
+            immediateReservedCapacityWake = false;
+            List<Cloudlet> ready = (List<Cloudlet>) getCloudletList();
+
+            // A replacement cannot be submitted until the datacenter confirms
+            // that the selected victim has stopped and released its PEs.
+            if (!pendingPreemptions.isEmpty() || requestReservedPreemption()) {
+                return;
+            }
+
+            dynamicScheduler.setCloudletList(ready);
+            dynamicScheduler.setVmList(getVmsCreatedList());
+            dynamicScheduler.getScheduledList().clear();
+
+            try {
+                dynamicScheduler.run();
+            } catch (Exception e) {
+                Log.printLine("CBMW dynamic scheduler error: " + e.getMessage());
+            }
+
+            dispatchScheduledJobs(dynamicScheduler.getScheduledList());
+
+            // Runtime usage now includes every successful submission from this
+            // pass. If a later due task was retained because those submissions
+            // consumed its capacity, start replacement now at the same timestamp.
+            requestReservedPreemption();
+        } finally {
+            scheduleNextReservedSstWake();
+        }
+    }
+
+    /**
+     * Arms one effective event for the earliest future reserved SST. The ready
+     * queue is already maintained in SST order, but on-demand entries are
+     * skipped because they own separate order and container-ready events.
+     */
+    @SuppressWarnings("unchecked")
+    private void scheduleNextReservedSstWake() {
+        if (!RESERVED_SST_WAKE_ENABLED) return;
+
+        double now = CloudSim.clock();
+        double nextSst = Double.POSITIVE_INFINITY;
+        List<Cloudlet> ready = (List<Cloudlet>) getCloudletList();
+        for (Cloudlet cloudlet : ready) {
+            Job job = (Job) cloudlet;
+            int taskId = primaryTaskId(job);
+            WorkflowRecord workflow = activeWorkflows.get(
+                    workflowIdForJob(job));
+            if (workflow == null
+                    || workflow.getAssignedVm(taskId)
+                            == CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL
+                    || provisioner.getProvisionedVm(taskId) != null) {
+                continue;
+            }
+            double sst = workflow.getScheduledStart(taskId);
+            if (Double.isFinite(sst) && sst > now + SST_WAKE_EPSILON) {
+                nextSst = sst;
+                break;
+            }
         }
 
-        dispatchScheduledJobs(dynamicScheduler.getScheduledList());
-
-        // Runtime usage now includes every successful submission from this
-        // pass. If a later due task was retained because those submissions
-        // consumed its capacity, start replacement now at the same timestamp.
-        requestReservedPreemption();
+        ReservedSstWake wake = reservedSstWakeController.arm(nextSst);
+        if (wake == null) return;
+        schedule(getId(), Math.max(0.0, wake.targetTime - now),
+                WorkflowSimTags.CBMW_RESERVED_SST_WAKE, wake);
+        CBMWLogger.logf("CBMW-RESERVED-SST-WAKE-SCHEDULED",
+                "generation=%d target=%.4f now=%.4f",
+                wake.generation, wake.targetTime, now);
     }
 
     /**
@@ -477,6 +582,23 @@ public class CBMWBroker extends AbstractWorkflowBroker {
 
     @Override
     public void processEvent(SimEvent ev) {
+        if (ev.getTag() == WorkflowSimTags.CBMW_RESERVED_SST_WAKE) {
+            ReservedSstWake wake = (ReservedSstWake) ev.getData();
+            if (!RESERVED_SST_WAKE_ENABLED
+                    || !reservedSstWakeController.consume(wake)) {
+                CBMWLogger.logf("CBMW-RESERVED-SST-WAKE-STALE",
+                        "generation=%d target=%.4f activeTarget=%.4f",
+                        wake != null ? wake.generation : -1L,
+                        wake != null ? wake.targetTime : Double.NaN,
+                        reservedSstWakeController.getTargetTime());
+                return;
+            }
+            CBMWLogger.logf("CBMW-RESERVED-SST-WAKE-FIRED",
+                    "generation=%d target=%.4f now=%.4f",
+                    wake.generation, wake.targetTime, CloudSim.clock());
+            sendNow(getId(), WorkflowSimTags.CLOUDLET_UPDATE);
+            return;
+        }
         if (ev.getTag() == CloudSimTags.CLOUDLET_CANCEL) {
             processReservedPreemptionAck((Cloudlet) ev.getData());
             return;

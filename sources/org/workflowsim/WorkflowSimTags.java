@@ -72,6 +72,8 @@ public class WorkflowSimTags {
     public static final int CEWB_ON_DEMAND_TASK_COMPLETE = BASE + 21;
     /** A checkpointed CEWB spot task is ready for reclassification. */
     public static final int CEWB_SPOT_RETRY_READY = BASE + 22;
+    /** CBMW ready queue reaching its next reserved task's exact planned SST. */
+    public static final int CBMW_RESERVED_SST_WAKE = BASE + 23;
 
     /**
      * Private Constructor
