@@ -113,7 +113,13 @@ public class CBMWSimulation {
             new ExperimentScenario(45.0, 4.0),
             new ExperimentScenario(60.0, 1.2),
             new ExperimentScenario(60.0, 2.0),
-            new ExperimentScenario(60.0, 4.0)
+            new ExperimentScenario(60.0, 4.0),
+            new ExperimentScenario(75.0, 1.2),
+            new ExperimentScenario(75.0, 2.0),
+            new ExperimentScenario(75.0, 4.0),
+            new ExperimentScenario(90.0, 1.2),
+            new ExperimentScenario(90.0, 2.0),
+            new ExperimentScenario(90.0, 4.0)
     };
     private static final List<DatasetMode> DATASET_MODES = configuredDatasetModes();
 
@@ -258,7 +264,7 @@ public class CBMWSimulation {
 
         CloudSim.init(1, Calendar.getInstance(), false);
 
-        WorkflowDatacenter datacenter = createDatacenter("Datacenter_0");
+        WorkflowDatacenter datacenter = createDatacenter("Datacenter_0", algorithm);
 
         OverheadParameters  op = new OverheadParameters(0, null, null, null, null, 0);
         ClusteringParameters cp = new ClusteringParameters(
@@ -373,10 +379,15 @@ public class CBMWSimulation {
     // Datacenter setup
     // -----------------------------------------------------------------------
 
-    private static WorkflowDatacenter createDatacenter(String name) throws Exception {
+    private static WorkflowDatacenter createDatacenter(String name,
+                                                       String algorithm) throws Exception {
         long mips = (long) HybridVmPool.RESERVED_MIPS;
         List<Pe> peList = new ArrayList<>();
-        for (int i = 0; i < 50000; i++) {
+        // CBMW reserves 960 vCPUs; dedicated on-demand containers are logical
+        // and need no CloudSim host PEs. A modest headroom keeps the simulator
+        // within the memory budget of an 8 GiB Linux machine.
+        int hostPes = "CBMW".equals(algorithm) ? 2048 : 50000;
+        for (int i = 0; i < hostPes; i++) {
             peList.add(new Pe(i, new PeProvisionerSimple(mips)));
         }
         Host host = new Host(0,
@@ -466,14 +477,16 @@ public class CBMWSimulation {
                 .append("avgTotal,avgAccepted,avgRejected,avgMetDeadline,")
                 .append("avgRejectedNegotiation,avgRejectedPlanning,")
                 .append("avgAcceptanceRate,avgDeadlineRate,avgOverallSuccessRate,")
-                .append("avgCountViolation,avgTimeViolation,")
-                .append("avgOnDemandCost,")
+                .append("avgCountViolation,avgTimeViolation,avgDeadlineMissCount,")
+                .append("maxDeadlineMissSeconds,avgDeadlineMissSeconds,")
+                .append("avgOnDemandCost,avgDirectMeasuredOnDemandCost,")
                 .append("avgSpotCost,avgEstimatedRawCost,avgOfferedPrice,")
                 .append("avgBrokerRevenue,avgBrokerProfit,")
                 .append("avgReservedCost,avgTotalCost,avgMarginalCost,avgMakespan,")
                 .append("avgSimulationStartTime,avgSimulationDuration,")
                 .append("avgSimulationDurationHours,")
                 .append("avgReservedUtil,avgOnDemandUsageRatio,avgSpotUsageRatio,")
+                .append("avgReservedCpuWorkShare,avgOnDemandCpuWorkShare,")
                 .append("avgProvisionedOnDemandVms,avgOnDemandVmUtilization,")
                 .append("avgDeadlineRiskTasks,")
                 .append("avgReservedInstanceCount,avgReservedCoresPerInstance,")
@@ -623,7 +636,12 @@ public class CBMWSimulation {
         private double overallSuccessRate;
         private double countViolation;
         private double timeViolation;
+        private double deadlineMissCount;
+        private double maxDeadlineMissSeconds;
+        private double deadlineMissSecondsSum;
         private double onDemandCost;
+        private double directMeasuredOnDemandCost;
+        private int measuredCostRuns;
         private double spotCost;
         private double estimatedRawCost;
         private double offeredPrice;
@@ -640,6 +658,8 @@ public class CBMWSimulation {
         private double reservedUtil;
         private double onDemandUsageRatio;
         private double spotUsageRatio;
+        private double reservedCpuWorkShare;
+        private double onDemandCpuWorkShare;
         private double provisionedOnDemandVms;
         private double onDemandVmUtilization;
         private double deadlineRiskTasks;
@@ -695,7 +715,16 @@ public class CBMWSimulation {
             overallSuccessRate += row.overallSuccessRate;
             countViolation += row.countViolation;
             timeViolation += row.timeViolation;
+            deadlineMissCount += row.deadlineMissCount;
+            maxDeadlineMissSeconds = Math.max(maxDeadlineMissSeconds,
+                    row.maxDeadlineMissSeconds);
+            deadlineMissSecondsSum += row.avgDeadlineMissSeconds
+                    * row.deadlineMissCount;
             onDemandCost += row.onDemandCost;
+            if (Double.isFinite(row.directMeasuredOnDemandCost)) {
+                directMeasuredOnDemandCost += row.directMeasuredOnDemandCost;
+                measuredCostRuns++;
+            }
             spotCost += row.spotCost;
             estimatedRawCost += row.estimatedRawCost;
             offeredPrice += row.offeredPrice;
@@ -714,6 +743,8 @@ public class CBMWSimulation {
             reservedUtil += row.reservedUtil;
             onDemandUsageRatio += row.onDemandUsageRatio;
             spotUsageRatio += row.spotUsageRatio;
+            reservedCpuWorkShare += row.reservedCpuWorkShare;
+            onDemandCpuWorkShare += row.onDemandCpuWorkShare;
             provisionedOnDemandVms += row.provisionedOnDemandVms;
             onDemandVmUtilization += row.onDemandVmUtilization;
             deadlineRiskTasks += row.deadlineRiskTasks;
@@ -756,7 +787,12 @@ public class CBMWSimulation {
                     f2(rejectedPlanning / runs), f4(acceptanceRate / runs),
                     f4(deadlineRate / runs), f4(overallSuccessRate / runs),
                     f4(countViolation / runs), f4(timeViolation / runs),
-                    f4(onDemandCost / runs), f4(spotCost / runs),
+                    f4(deadlineMissCount / runs), f4(maxDeadlineMissSeconds),
+                    f4(deadlineMissCount == 0 ? 0.0
+                            : deadlineMissSecondsSum / deadlineMissCount),
+                    f4(onDemandCost / runs),
+                    measuredCostRuns == 0 ? "" : f4(directMeasuredOnDemandCost
+                            / measuredCostRuns), f4(spotCost / runs),
                     f4(estimatedRawCost / runs), f4(offeredPrice / runs),
                     f4(brokerRevenue / runs), f4(brokerProfit / runs),
                     f2(reservedCost / runs), f4(totalCost / runs),
@@ -765,6 +801,8 @@ public class CBMWSimulation {
                     f2(simulationDuration / runs),
                     f4(simulationDurationHours / runs), f4(reservedUtil / runs),
                     f4(onDemandUsageRatio / runs), f4(spotUsageRatio / runs),
+                    f4(reservedCpuWorkShare / runs),
+                    f4(onDemandCpuWorkShare / runs),
                     f4(provisionedOnDemandVms / runs),
                     f4(onDemandVmUtilization / runs), f2(deadlineRiskTasks / runs),
                     f4(reservedInstanceCount / runs),

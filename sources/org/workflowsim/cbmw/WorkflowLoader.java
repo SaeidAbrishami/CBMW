@@ -101,7 +101,11 @@ public class WorkflowLoader {
             File xmlFile       = xmlByName.get(name);
             String xmlPath     = xmlFile.getPath();
 
-            double cp       = computeCriticalPath(xmlPath);
+            // CBMW uses cet=(1+alpha)*mu in both deadline generation and
+            // planning; applying the margin to the critical path is exact
+            // because every task uses the same relative bound.
+            double cp       = computeCriticalPath(xmlPath)
+                    * (1.0 + PaperRuntimeModel.PLANNING_ALPHA);
             double deadline = arrivalTime + cp * tightness
                     + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY;
             fullDataset.add(new WorkflowArrivalData(xmlPath, arrivalTime, deadline));

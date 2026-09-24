@@ -32,12 +32,6 @@ public class CBMWBroker extends AbstractWorkflowBroker {
 
     private static final double PREEMPTION_SAFETY_SECONDS =
             readNonNegativeDouble("cbmw.preemption.safety.sec", 0.0);
-    private static final boolean RESERVED_SST_WAKE_ENABLED =
-            Boolean.parseBoolean(System.getProperty(
-                    "cbmw.reserved.sst.wake.enabled", "true"));
-    private static final boolean SAFE_RESERVED_REBOOKING_ENABLED =
-            Boolean.parseBoolean(System.getProperty(
-                    "cbmw.safe.reserved.rebooking.enabled", "true"));
     private static final double SST_WAKE_EPSILON = 1e-9;
 
     private final CBMWDynamicSchedulingAlgorithm dynamicScheduler;
@@ -50,6 +44,17 @@ public class CBMWBroker extends AbstractWorkflowBroker {
             new HashSet<>();
     /** Static on-demand order events cancelled by a successful early advance. */
     private final Set<Integer> cancelledOnDemandOrders = new HashSet<>();
+    private final java.util.PriorityQueue<PlannedOrder> plannedOrders =
+            new java.util.PriorityQueue<>(Comparator.comparingDouble(o -> o.time));
+
+    private static final class PlannedOrder {
+        final int taskId;
+        final double time;
+        PlannedOrder(int taskId, double time) {
+            this.taskId = taskId;
+            this.time = time;
+        }
+    }
     /** Earliest capacity-safe retry time for a delayed reserved task. */
     private final Map<Integer, Double> reservedRetryTimes = new HashMap<>();
     private final ReservedSstWakeController reservedSstWakeController =
@@ -129,10 +134,14 @@ public class CBMWBroker extends AbstractWorkflowBroker {
         this.dynamicScheduler = new CBMWDynamicSchedulingAlgorithm(
                 vmPool, activeWorkflows, provisioner,
                 waitingForPlannedReservedVm, cancelledOnDemandOrders,
-                reservedRetryTimes, SAFE_RESERVED_REBOOKING_ENABLED);
+                reservedRetryTimes, false);
+        this.dynamicScheduler.setContainerLifecycle(
+                this::cancelLogicalOnDemandContainer,
+                this::isLogicalContainerReady);
         CBMWLogger.logf("CONFIG",
-                "reservedExactSstWake=%s safeReservedRebooking=%s",
-                RESERVED_SST_WAKE_ENABLED, SAFE_RESERVED_REBOOKING_ENABLED);
+                "periodicDispatch=true interval=%.1f opd=%.1f",
+                HybridVmPool.SCHEDULING_PERIOD,
+                HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
     }
 
     @Override
@@ -150,14 +159,23 @@ public class CBMWBroker extends AbstractWorkflowBroker {
                 new CBMWStaticPlanningAlgorithm(wfr, vmPool, negotiation);
         planner.setTaskList(tasks);
         planner.setVmList(vmPool.getAllVms());
+        long planningStart = CBMWPerformanceMetrics.isEnabled()
+                ? System.nanoTime() : 0L;
         try {
             planner.run();
         } catch (Exception e) {
             Log.printLine(getName() + ": static planner error: " + e.getMessage());
+            CBMWLogger.logf("PLAN-FAILED", "wf=%d arrival=%.4f deadline=%.4f reason=%s",
+                    wfr.getWorkflowId(), wfr.getArrivalTime(),
+                    wfr.getDeadline(), e.getMessage());
             wfr.setAccepted(false);
             return false;
+        } finally {
+            if (CBMWPerformanceMetrics.isEnabled()) {
+                CBMWPerformanceMetrics.recordPlanningTime(
+                        System.nanoTime() - planningStart);
+            }
         }
-        schedulePlannedOnDemandOrders(wfr, tasks);
         return true;
     }
 
@@ -169,7 +187,10 @@ public class CBMWBroker extends AbstractWorkflowBroker {
                     != CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL) {
                 continue;
             }
-            double orderTime = wfr.getScheduledStart(taskId);
+            double orderTime = CBMWStaticPlanningAlgorithm.floorTick(
+                    wfr.getScheduledStart(taskId)
+                    - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
+            plannedOrders.add(new PlannedOrder(taskId, orderTime));
             schedule(getId(), Math.max(0.0, orderTime - now),
                     WorkflowSimTags.CBMW_ON_DEMAND_ORDER, taskId);
             CBMWLogger.logf("CBMW-ONDEMAND-ORDER-SCHEDULED",
@@ -181,6 +202,17 @@ public class CBMWBroker extends AbstractWorkflowBroker {
     @Override
     protected void finalizeWorkflowNegotiation(WorkflowRecord wfr) {
         negotiation.quoteExecutionPrice(wfr);
+        schedulePlannedOnDemandOrders(wfr, wfr.getTaskList());
+    }
+
+    @Override
+    protected boolean negotiateWorkflow(WorkflowRecord wfr) {
+        // The static planner is the admission test. Critical path is retained
+        // for reporting, but a separate CP test must not reject a request.
+        wfr.setCriticalPathLength(negotiation.computeCriticalPath(wfr));
+        wfr.setDeadlineFeasible(true);
+        wfr.setAccepted(true);
+        return true;
     }
 
     // -----------------------------------------------------------------------
@@ -210,85 +242,48 @@ public class CBMWBroker extends AbstractWorkflowBroker {
             immediateReservedCapacityWake = false;
             List<Cloudlet> ready = (List<Cloudlet>) getCloudletList();
 
-            // Legacy replacement cannot continue until the datacenter confirms
-            // that the selected victim stopped. Safe rebooking deliberately
-            // waits for a reservation gap instead of requesting replacement.
-            if (!pendingPreemptions.isEmpty()
-                    || (!SAFE_RESERVED_REBOOKING_ENABLED
-                        && requestReservedPreemption())) {
-                return;
-            }
-
             dynamicScheduler.setCloudletList(ready);
             dynamicScheduler.setVmList(getVmsCreatedList());
             dynamicScheduler.getScheduledList().clear();
 
+            long dispatchStart = CBMWPerformanceMetrics.isEnabled()
+                    ? System.nanoTime() : 0L;
             try {
                 dynamicScheduler.run();
+                dispatchScheduledJobs(dynamicScheduler.getScheduledList());
+                launchDueContainers();
             } catch (Exception e) {
-                Log.printLine("CBMW dynamic scheduler error: " + e.getMessage());
+                throw new IllegalStateException("CBMW dynamic scheduler failed at "
+                        + CloudSim.clock(), e);
+            } finally {
+                if (CBMWPerformanceMetrics.isEnabled()) {
+                    CBMWPerformanceMetrics.recordDispatchTime(
+                            System.nanoTime() - dispatchStart);
+                }
             }
 
-            dispatchScheduledJobs(dynamicScheduler.getScheduledList());
-
-            // Runtime usage now includes every successful submission from this
-            // pass. If a later due task was retained because those submissions
-            // consumed its capacity, start replacement now at the same timestamp.
-            if (!SAFE_RESERVED_REBOOKING_ENABLED) {
-                requestReservedPreemption();
-            }
         } finally {
             scheduleNextReservedSstWake();
         }
     }
 
+    private void launchDueContainers() {
+        double now = CloudSim.clock();
+        while (!plannedOrders.isEmpty()
+                && plannedOrders.peek().time <= now + 1e-9) {
+            PlannedOrder order = plannedOrders.remove();
+            if (cancelledOnDemandOrders.remove(order.taskId)) continue;
+            orderLogicalOnDemandContainer(order.taskId);
+        }
+    }
+
     /**
-     * Arms one effective event for the earliest future reserved SST. The ready
-     * queue is already maintained in SST order, but on-demand entries are
-     * skipped because they own separate order and container-ready events.
+     * Retained as an inert compatibility hook for earlier wake-up tests.
      */
     @SuppressWarnings("unchecked")
     private void scheduleNextReservedSstWake() {
-        if (!RESERVED_SST_WAKE_ENABLED
-                && !SAFE_RESERVED_REBOOKING_ENABLED) return;
-
-        double now = CloudSim.clock();
-        double nextSst = Double.POSITIVE_INFINITY;
-        List<Cloudlet> ready = (List<Cloudlet>) getCloudletList();
-        for (Cloudlet cloudlet : ready) {
-            Job job = (Job) cloudlet;
-            int taskId = primaryTaskId(job);
-            if (SAFE_RESERVED_REBOOKING_ENABLED) {
-                double retryAt = reservedRetryTimes.getOrDefault(
-                        taskId, Double.POSITIVE_INFINITY);
-                if (Double.isFinite(retryAt)
-                        && retryAt > now + SST_WAKE_EPSILON) {
-                    nextSst = Math.min(nextSst, retryAt);
-                }
-            }
-            WorkflowRecord workflow = activeWorkflows.get(
-                    workflowIdForJob(job));
-            if (workflow == null
-                    || workflow.getAssignedVm(taskId)
-                            == CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL
-                    || provisioner.getProvisionedVm(taskId) != null) {
-                continue;
-            }
-            if (RESERVED_SST_WAKE_ENABLED) {
-                double sst = workflow.getScheduledStart(taskId);
-                if (Double.isFinite(sst) && sst > now + SST_WAKE_EPSILON) {
-                    nextSst = Math.min(nextSst, sst);
-                }
-            }
-        }
-
-        ReservedSstWake wake = reservedSstWakeController.arm(nextSst);
-        if (wake == null) return;
-        schedule(getId(), Math.max(0.0, wake.targetTime - now),
-                WorkflowSimTags.CBMW_RESERVED_SST_WAKE, wake);
-        CBMWLogger.logf("CBMW-RESERVED-SST-WAKE-SCHEDULED",
-                "generation=%d target=%.4f now=%.4f",
-                wake.generation, wake.targetTime, now);
+        // The base broker schedules the next five-second tick when an event
+        // arrives between ticks. No immediate SST dispatch is permitted.
     }
 
     /**
@@ -599,27 +594,15 @@ public class CBMWBroker extends AbstractWorkflowBroker {
 
     @Override
     protected boolean usesPeriodicScheduling() {
-        return false;
+        return true;
     }
+
+    @Override
+    protected boolean billProvisioningDelay() { return true; }
 
     @Override
     public void processEvent(SimEvent ev) {
         if (ev.getTag() == WorkflowSimTags.CBMW_RESERVED_SST_WAKE) {
-            ReservedSstWake wake = (ReservedSstWake) ev.getData();
-            if ((!RESERVED_SST_WAKE_ENABLED
-                    && !SAFE_RESERVED_REBOOKING_ENABLED)
-                    || !reservedSstWakeController.consume(wake)) {
-                CBMWLogger.logf("CBMW-RESERVED-SST-WAKE-STALE",
-                        "generation=%d target=%.4f activeTarget=%.4f",
-                        wake != null ? wake.generation : -1L,
-                        wake != null ? wake.targetTime : Double.NaN,
-                        reservedSstWakeController.getTargetTime());
-                return;
-            }
-            CBMWLogger.logf("CBMW-RESERVED-SST-WAKE-FIRED",
-                    "generation=%d target=%.4f now=%.4f",
-                    wake.generation, wake.targetTime, CloudSim.clock());
-            sendNow(getId(), WorkflowSimTags.CLOUDLET_UPDATE);
             return;
         }
         if (ev.getTag() == CloudSimTags.CLOUDLET_CANCEL) {
@@ -627,13 +610,8 @@ public class CBMWBroker extends AbstractWorkflowBroker {
             return;
         }
         if (ev.getTag() == WorkflowSimTags.CBMW_ON_DEMAND_ORDER) {
-            int taskId = (Integer) ev.getData();
-            if (cancelledOnDemandOrders.remove(taskId)) {
-                CBMWLogger.logf("CBMW-ONDEMAND-ORDER-CANCELLED",
-                        "task=%d advanced-to-reserved-before-order", taskId);
-                return;
-            }
-            orderLogicalOnDemandContainer(taskId);
+            // Wake the periodic scheduler; requests are issued after its
+            // ready-task passes, whether or not the task is ready.
             sendNow(getId(), WorkflowSimTags.CLOUDLET_UPDATE);
             return;
         }

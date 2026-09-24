@@ -72,6 +72,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
     private final List<WorkflowArrivalData> pendingArrivals     = new ArrayList<>();
     private final List<Double>              pendingArrivalTimes = new ArrayList<>();
     private double simEndTime = -1;
+    private double pendingPeriodicTick = Double.NaN;
     private static final double EPS = 1e-6;
 
     protected AbstractWorkflowBroker(String name, double tightness) throws Exception {
@@ -697,6 +698,9 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         pendingVmCreations.put(vmId, readyAt);
         accounting.markOnDemandOrdered(vmId, vm.getNumberOfPes(), vm.getRam(),
                 orderedAt, readyAt);
+        if (billProvisioningDelay()) {
+            accounting.markOnDemandLaunched(vmId, orderedAt);
+        }
         accounting.markTaskProvisioningOrdered(taskId, orderedAt, readyAt);
         schedule(getId(), Math.max(0.0, readyAt - orderedAt),
                 WorkflowSimTags.CLOUDLET_UPDATE);
@@ -709,6 +713,35 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
     /** Paper model: a container is ready exactly OPD seconds after ordering. */
     protected double projectedOnDemandReadyTime(double orderTime) {
         return orderTime + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY;
+    }
+
+    /** CBMW bills the modeled provisioning interval from request time. */
+    protected boolean billProvisioningDelay() { return false; }
+
+    protected boolean isLogicalContainerReady(int taskId) {
+        CondorVM vm = provisioner.getProvisionedVm(taskId);
+        return vm != null && readyOnDemandContainers.contains(vm.getId());
+    }
+
+    /** Cancel a planned container, retaining any charge accrued since launch. */
+    protected void cancelLogicalOnDemandContainer(int taskId) {
+        CondorVM vm = provisioner.jobCompleted(taskId);
+        if (vm == null) return;
+        int vmId = vm.getId();
+        pendingVmCreations.remove(vmId);
+        readyOnDemandContainers.remove(vmId);
+        double destroyAt = accounting.billableDestroyTime(vmId, CloudSim.clock());
+        accounting.markOnDemandDestroyed(vmId, destroyAt);
+        double uptime = accounting.getOnDemandUptime(vmId);
+        for (WorkflowRecord workflow : activeWorkflows.values()) {
+            if (workflow.hasAssignedVm(taskId)) {
+                workflow.addOnDemandCost(uptime
+                        * vmPool.getOnDemandPricePerSecond(taskId));
+                break;
+            }
+        }
+        vmPool.terminateOnDemandVm(vmId);
+        accounting.snapshotUtilization(vmPool);
     }
 
     /** Allows baselines without CBMW admission control to accept every arrival. */
@@ -725,10 +758,15 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         double now = CloudSim.clock();
         double nextTick = Math.ceil((now - EPS) / period) * period;
         if (nextTick > now + EPS) {
-            schedule(getId(), nextTick - now, WorkflowSimTags.CLOUDLET_UPDATE);
-            CBMWPerformanceMetrics.recordPeriodicWakeScheduled();
+            if (!Double.isFinite(pendingPeriodicTick)
+                    || Math.abs(pendingPeriodicTick - nextTick) > EPS) {
+                pendingPeriodicTick = nextTick;
+                schedule(getId(), nextTick - now, WorkflowSimTags.CLOUDLET_UPDATE);
+                CBMWPerformanceMetrics.recordPeriodicWakeScheduled();
+            }
             return false;
         }
+        pendingPeriodicTick = Double.NaN;
         return true;
     }
 

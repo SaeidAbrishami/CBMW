@@ -33,7 +33,13 @@ public class CBMWAccounting {
         for (Task task : tasks) {
             int taskId = task.getCloudletId();
             double nominalRuntime = wfr.getNominalExecTime(taskId);
-            double runtimeStddev = PaperRuntimeModel.STDDEV_RATIO * nominalRuntime;
+            // The bundled TXT samples use a bounded uniform ±20% model;
+            // its standard deviation is alpha*mu/sqrt(3). The optional
+            // resampling path retains its configured normal ratio.
+            double runtimeStddev = nominalRuntime
+                    * (ExperimentRunContext.shouldResampleRuntimes()
+                        ? PaperRuntimeModel.STDDEV_RATIO
+                        : 0.20 / Math.sqrt(3.0));
             double conservativeRuntime =
                     PaperRuntimeModel.conservativeEstimate(nominalRuntime);
             double planningRuntime = wfr.getEstimatedExecTime(taskId);
@@ -277,8 +283,10 @@ public class CBMWAccounting {
         if (record == null || !Double.isFinite(record.getLaunchTime())) {
             return actualDestroyTime;
         }
-        return Math.max(actualDestroyTime,
-                record.getLaunchTime() + HybridVmPool.ON_DEMAND_MIN_BILLING_SECONDS);
+        return record.getLaunchTime() + Math.max(
+                HybridVmPool.ON_DEMAND_MIN_BILLING_SECONDS,
+                Math.ceil(Math.max(0.0,
+                        actualDestroyTime - record.getLaunchTime() - 1e-9)));
     }
 
     public double getOnDemandUptime(int vmId) {
@@ -353,6 +361,20 @@ public class CBMWAccounting {
             }
         }
         return totalTime > 0.0 ? onDemandTime / totalTime : 0.0;
+    }
+
+    /** Fraction of executed CPU work (allocated cores times actual seconds). */
+    public double getCpuWorkShare(String resourceType) {
+        double selected = 0.0;
+        double total = 0.0;
+        for (TaskExecutionRecord record : taskRecords.values()) {
+            if (!Double.isFinite(record.getFinishTime())) continue;
+            double work = record.getExecutionTime() * record.getTaskCores();
+            if (!Double.isFinite(work) || work < 0.0) continue;
+            total += work;
+            if (resourceType.equals(record.getVmType())) selected += work;
+        }
+        return total > 0.0 ? selected / total : 0.0;
     }
 
     public double getSpotUsageRatio() {

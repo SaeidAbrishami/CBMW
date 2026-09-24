@@ -42,6 +42,9 @@ public final class CBMWPerformanceMetrics {
     private static long dynamicSortCalls;
     private static long dynamicSortItems;
     private static long maxReadyQueue;
+    private static long planningNanos;
+    private static long dispatchNanos;
+    private static long planningAttempts;
 
     private CBMWPerformanceMetrics() {}
 
@@ -68,6 +71,9 @@ public final class CBMWPerformanceMetrics {
         dynamicSortCalls = 0L;
         dynamicSortItems = 0L;
         maxReadyQueue = 0L;
+        planningNanos = 0L;
+        dispatchNanos = 0L;
+        planningAttempts = 0L;
         resetHeapPeaks();
         cpuStartNanos = processCpuTimeNanos();
         wallStartNanos = System.nanoTime();
@@ -114,6 +120,17 @@ public final class CBMWPerformanceMetrics {
         dynamicSortCalls++;
         dynamicSortItems += readyQueueSize;
         updateMaxReadyQueue(readyQueueSize);
+    }
+
+    public static void recordPlanningTime(long elapsedNanos) {
+        if (ENABLED) {
+            planningNanos += Math.max(0L, elapsedNanos);
+            planningAttempts++;
+        }
+    }
+
+    public static void recordDispatchTime(long elapsedNanos) {
+        if (ENABLED) dispatchNanos += Math.max(0L, elapsedNanos);
     }
 
     public static void finishScenario() {
@@ -172,7 +189,9 @@ public final class CBMWPerformanceMetrics {
                         + "blockedBeforeVmAck,periodicDeferrals,periodicWakeSchedules,"
                         + "schedulingPasses,readyQueueScanCalls,readyQueueScanItems,"
                         + "preemptionSortCalls,preemptionSortItems,dynamicSortCalls,"
-                        + "dynamicSortItems,maxReadyQueue");
+                        + "dynamicSortItems,maxReadyQueue,planningAttempts,"
+                        + "planningSeconds,dispatchSeconds,meanPlanningSeconds,"
+                        + "meanDispatchSeconds");
                 writer.newLine();
             }
             writer.write(csv(scenario));
@@ -212,6 +231,18 @@ public final class CBMWPerformanceMetrics {
             writer.write(Long.toString(dynamicSortItems));
             writer.write(',');
             writer.write(Long.toString(maxReadyQueue));
+            writer.write(',');
+            writer.write(Long.toString(planningAttempts));
+            writer.write(',');
+            writer.write(formatSeconds(planningNanos));
+            writer.write(',');
+            writer.write(formatSeconds(dispatchNanos));
+            writer.write(',');
+            writer.write(formatSeconds(planningAttempts == 0 ? 0
+                    : planningNanos / planningAttempts));
+            writer.write(',');
+            writer.write(formatSeconds(schedulingPasses == 0 ? 0
+                    : dispatchNanos / schedulingPasses));
             writer.newLine();
         } catch (IOException e) {
             throw new IllegalStateException(

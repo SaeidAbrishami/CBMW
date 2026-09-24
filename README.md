@@ -4,6 +4,56 @@ Implementation of the **CBMW** (Cost-efficient Broker for Multiple Workflows) al
 
 CBMW manages a hybrid pool of reserved VMs (fixed hourly cost) and on-demand containers (per-second cost) to schedule dynamically arriving scientific workflows while meeting user-specified deadlines at minimum cost.
 
+## Revised CBMW experiments on Linux (8 cores, 8 GiB)
+
+Edit `config/cbmw_experiments.txt`: line 1 selects `CBMW`, line 2 sets the
+maximum number of concurrent experiments, and each subsequent line gives
+`mean_inter_arrival_seconds deadline_factor`. The supplied file has 18
+scenarios: means 15, 30, 45, 60, 75 and 90, with factors 1.2, 2 and 4.
+
+```bash
+scripts/run_cbmw_config.sh config/cbmw_experiments.txt
+```
+
+The launcher compiles Java 17 sources and runs each scenario in an isolated
+CloudSim JVM. Each scenario executes the full 500-workflow trace and the
+compressed 200-workflow boundary trace once, preserving the same workflow
+identities and arrival pattern across deadline factors. Full runs on an 8 GiB
+machine use one JVM at a time with a 5120 MiB heap; line 2 is an upper bound.
+Small smoke tests capped at 100 workflows use up to four 1280 MiB JVMs.
+For example, run `python3 scripts/run_cbmw_config.py
+config/cbmw_experiments.txt --max-workflows 5` for a smoke test.
+
+Combined per-scenario metrics, aggregate metrics and planning/dispatch timing
+are written to `Output/batch/combined/`. Individual runs retain their
+`task_execution.csv`, run log and performance CSV under
+`Output/batch/arrival<mean>_alpha<factor>/`. Deadline miss time is the positive
+difference between actual workflow completion and its deadline; the reported
+average uses completed, admitted workflows that missed. The
+`directMeasuredOnDemandCost` column counts costs from workflows 101–400 in
+the full trace. The default task allocation is a synthetic 1 vCPU / 2 GiB;
+the DAX files do not include CPU/RAM task profiles.
+
+Use `python3 scripts/prepare_cbmw_manifests.py` to reproduce the 75/90-second
+traces and the corrected compressed boundary traces. The simulation assumes
+one bounded-uniform runtime sample per task from the supplied TXT files, a
+20% conservative planning margin, one 60-second allowance in generated
+deadlines, 5-second dispatch ticks and 60-second billable provisioning for
+each on-demand container.
+
+The 60-second allowance covers the earliest on-demand order placed at the
+next scheduling tick after arrival; the 1.2 factor provides additional room
+over the conservative critical path. Neither value alone guarantees
+admission under periodic ticks and reserved-capacity contention. If CBMW's
+backward reserved-slot pass cannot place a workflow, it releases that
+workflow's tentative bookings and tries an earliest feasible periodic plan.
+This recovery uses reserved capacity only when it starts no later than the
+task's on-demand alternative, and rejects a workflow if the resulting plan
+still exceeds its deadline. Recovery may raise on-demand cost.
+If an earlier task occupies a reserved VM past a committed start, the ready
+task waits for a later periodic dispatch; measured deadline misses include
+any resulting delay.
+
 ### Task Runtime Meaning
 
 The task mean runtime `mu` represents the task's complete expected service time:
@@ -25,12 +75,14 @@ DAX/runtime measurement.
 ### Current dataset and results workbook
 
 The default `test_workflows/workflows` folder contains 500 XML/TXT pairs and
-8 arrival manifests. TXT task runtimes are `ceil(mu + uniform(-0.2*mu, 0.2*mu))`
+12 arrival manifests. TXT task runtimes are `ceil(mu + uniform(-0.2*mu, 0.2*mu))`
 in XML job order, generated with seed 20260909. All four full manifests share
 one shuffled workflow order (seed 20260909); exponential inter-arrival gaps
-use seeds `20260909 + mean`, with target means 15, 30, 45, and 60 seconds.
-The observed means need not equal those targets. Edge manifests preserve the
-first 100 and last 100 workflows, shifting the last block by arrival(401)-arrival(101).
+use seeds `20260909 + mean` for means 15, 30, 45 and 60 seconds; the
+75/90-second traces use seeds `20260924 + mean`. Edge manifests preserve
+the first 100 and last 100 workflows, shifting the latter by
+arrival(400)-arrival(100) (1-based positions), so the original gap between
+arrivals 400 and 401 remains.
 The simulator never rescales or rebases these JSON timestamps.
 
 Run all 24 CBMW scenarios and fill the supplied template:
@@ -69,36 +121,22 @@ CBMW processes each workflow arrival through four sequential modules:
 
 | Module | Class | Role |
 |--------|-------|------|
-| 1. Negotiation | `NegotiationModule` | Checks deadline feasibility, invokes the completed static plan to estimate raw execution cost, applies markup `gamma`, and automatically accepts the quote |
+| 1. Negotiation | `NegotiationModule` | Uses the static planner as its admission test, quotes the planned cost, and accepts the quote |
 | 2. Static Planning | `CBMWStaticPlanningAlgorithm` | Backward sweep assigns each task a reserved VM slot at its Latest Start Time (LST = deadline − remainingCP) |
-| 3. Dynamic Scheduling | `CBMWDynamicSchedulingAlgorithm` | Dispatches ready tasks to reserved capacity and applies current-cycle task replacement when a due reserved-planned task cannot start |
+| 3. Dynamic Scheduling | `CBMWDynamicSchedulingAlgorithm` | Dispatches on five-second ticks while honoring committed reserved bookings |
 | 4. Provisioning | `ProvisioningModule` | Spins up and terminates on-demand VMs; tracks per-task costs |
 
 The backward sweep in Module 2 deliberately defers reservations to the latest feasible slot, keeping earlier capacity free for workflows that have not yet arrived.
 
-When reserved `TaskPlanner` placement fails, Algorithm 1 is followed literally:
-the task is assigned to dummy on-demand resource `o0` with
-`SST = LST - on-demand provisioning delay`. Static planning does not add a
-second on-demand feasibility rejection or clamp SST to workflow arrival. If SST
-is already in the past when the workflow arrives, Algorithm 3 orders the
-container immediately; such a task can still miss its deadline.
-
-For a task that was planned on a reserved VM and has reached its SST, runtime
-capacity exhaustion is handled in the current scheduling cycle. The scheduler
-first checks other reserved VMs. If none can run the task, the broker considers
-only reserved tasks that are currently executing before their planned SST. It
-selects the candidate with the greatest post-preemption slack (`LFT - current
-time - remaining planning duration - waiting task planning duration`) that can
-individually release enough CPU and RAM. The candidate is eligible only when
-this slack is at least `cbmw.preemption.safety.sec` (zero by default).
-Completed work is preserved, the victim returns to the ready queue, and the
-waiting task takes its VM after the same-timestamp cancellation acknowledgement.
-Preemption history does not affect eligibility, so a task may be preempted more
-than once while it is still pre-running. Once current time reaches its SST, it
-is protected. If no deadline-safe pre-running victim exists, the waiting task
-stays queued for its originally planned reserved VM and is reconsidered as soon
-as reserved capacity is released; it does not fall back to on-demand. Static
-`o0` assignments retain their normal on-demand provisioning path.
+When reserved placement fails, SST is the on-demand task's planned execution
+start at LST. The request is issued at the aligned time `Spt =
+floor_tick(SST - opd)`. The planner rejects a plan if that request would
+precede the first tick after arrival or if execution would precede the task's
+precedence bound. On each tick the dynamic scheduler first serves due ready
+tasks, then tries every other ready task on reserved capacity, and finally
+issues all due on-demand requests, including tasks that are not yet ready.
+Previously committed reserved slots remain available at their planned start;
+an early start replaces only the task's own future booking.
 
 ### CBMW Price Negotiation
 
@@ -110,8 +148,8 @@ raw cost = sum(planned task duration * allocated resource price)
 offered price = gamma * raw cost
 ```
 
-Reserved tasks use the reserved VM's per-second price. On-demand tasks use the
-task-sized container price and the configured minimum billing duration. The
+Reserved tasks use the reserved VM's per-second price. On-demand tasks use the task-sized container price and the greater of
+60 seconds or the conservative task duration plus provisioning time. The
 markup is configured with `cbmw.negotiation.gamma` and defaults to `1.0`
 because the paper does not publish an experimental gamma value.
 
@@ -330,8 +368,9 @@ with `:` as the classpath separator.
 java -cp "bin;lib/*" org.workflowsim.examples.cbmw.CBMWSimulation
 ```
 
-By default all five algorithms run 24 scenarios each (120 total): four arrival
-rates (15/30/45/60), three tightness values (1.2/2/4), and FULL_500/EDGE_200.
+The historical driver defaults to five algorithms over 36 scenarios each: six
+arrival rates (15/30/45/60/75/90), three factors (1.2/2/4), and both dataset
+modes. For the revised CBMW experiment, use the Linux config launcher above.
 Inputs default to `test_workflows/workflows`. Each scenario selects its
 `dax_poisson_arrivals_mean<mean>s_500workflows.json` or `_edge200.json` file
 and uses the manifest arrival times without modification.
@@ -355,15 +394,16 @@ java '-Dcbmw.algorithms=NOSF' '-Dnosf.profile=PAPER_ALIGNED' `
 
 | Property / scenario | Default | Description |
 |---------------------|---------|-------------|
-| Arrival/deadline configurations | `15/30/45/60` x `1.2/2/4` | `(target mean inter-arrival seconds, deadline multiplier alpha)` |
+| Arrival/deadline configurations | `15/30/45/60/75/90` x `1.2/2/4` | `(target mean inter-arrival seconds, deadline multiplier alpha)` |
 | Dataset modes | `FULL_500`, `EDGE_200` | Both modes for all algorithms |
 | `cbmw.workflow.dir` | `test_workflows/workflows` | Flat directory containing all 500 XML/TXT pairs and the arrival manifest |
-| `cbmw.scenarios` | all 24 | Comma-separated scenario IDs for isolated/resumable runs |
+| `cbmw.scenarios` | all 36 | Comma-separated scenario IDs for isolated/resumable runs |
 | `cbmw.workflow.manifest.<mean>.<mode>` | scenario-specific filename | Arrival manifest filename within `cbmw.workflow.dir` |
 | `cbmw.workflow.dataset.mode` | both modes when unset | Restrict execution to `FULL_500` or `EDGE_200` |
 | `cbmw.reserved.instances` | `5` | Reserved VM count |
 | `cbmw.reserved.cores` | `192` | Cores per reserved VM |
-| `cbmw.reserved.ram.mb` | `384000` | RAM per reserved VM |
+| `cbmw.reserved.ram.mb` | `393216` | RAM per reserved VM |
+| `cbmw.task.ram.mb` | `2048` | Synthetic fallback RAM per task |
 | `cbmw.reserved.per.sec` | `0.0017` | Reserved rental price included in report cost |
 | `cbmw.ondemand.per.sec` | `0.00001` | Default CPU price per core-second |
 | `cbmw.ondemand.memory.per.gb.sec` | `0.000001` | Default memory price per GB-second |

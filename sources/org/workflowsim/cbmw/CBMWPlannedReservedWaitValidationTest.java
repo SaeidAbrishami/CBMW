@@ -10,7 +10,7 @@ import org.cloudbus.cloudsim.Cloudlet;
 import org.workflowsim.Job;
 import org.workflowsim.Task;
 
-/** Focused validation for CBMW's wait-on-planned-reserved dispatch state. */
+/** A blocked reserved task waits for capacity without losing its assignment. */
 public final class CBMWPlannedReservedWaitValidationTest {
 
     private CBMWPlannedReservedWaitValidationTest() {}
@@ -50,18 +50,20 @@ public final class CBMWPlannedReservedWaitValidationTest {
 
         scheduler.run();
         assert scheduler.getScheduledList().isEmpty()
-                : "A committed waiting task must not move to another reserved VM";
+                : "The occupied VM must not dispatch another task";
+        assert waitingForPlanned.contains(waitingTaskId)
+                : "The blocked task must remain pending";
         assert provisioner.getProvisionedVm(waitingTaskId) == null
                 : "A reserved-planned waiting task must not provision on-demand";
 
         pool.taskFinished(plannedVmId, blockerTaskId);
         scheduler.run();
+        assert !waitingForPlanned.contains(waitingTaskId)
+                : "A dispatched task must leave the waiting set";
         assert scheduler.getScheduledList().size() == 1
                 : "The task must dispatch when its planned VM releases capacity";
         assert waiting.getVmId() == plannedVmId
                 : "The waiting task must start on its originally planned VM";
-        assert waitingForPlanned.isEmpty()
-                : "The planned-VM wait state must clear at dispatch";
         assert provisioner.getProvisionedVm(waitingTaskId) == null
                 : "Dispatch on the planned VM must not create on-demand capacity";
 

@@ -101,7 +101,9 @@ public class NegotiationModule {
                 reservedCost += duration * reservedPricePerSecond;
             } else {
                 double billableDuration = Math.max(
-                        HybridVmPool.ON_DEMAND_MIN_BILLING_SECONDS, duration);
+                        HybridVmPool.ON_DEMAND_MIN_BILLING_SECONDS,
+                        Math.ceil(HybridVmPool.ON_DEMAND_PROVISIONING_DELAY
+                                + duration));
                 onDemandCost += billableDuration
                         * HybridVmPool.onDemandPricePerSecond(
                                 wfr.getTaskCores(taskId), wfr.getTaskRamMb(taskId));

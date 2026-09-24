@@ -39,11 +39,11 @@ public class HybridVmPool {
     public static final int    RESERVED_CORES = Integer.getInteger(
             "cbmw.reserved.cores", 192);
     public static final int    RESERVED_RAM_MB = Integer.getInteger(
-            "cbmw.reserved.ram.mb", 384000);
+            "cbmw.reserved.ram.mb", 384 * 1024);
     public static final int    TASK_CORES = Integer.getInteger(
             "cbmw.task.cores", 1);
     public static final int    TASK_RAM_MB = Integer.getInteger(
-            "cbmw.task.ram.mb", 1);
+            "cbmw.task.ram.mb", 2048);
     /** Paper model: each on-demand container is sized exactly for one task. */
     public static final int    ON_DEMAND_CORES = TASK_CORES;
     public static final int    ON_DEMAND_RAM_MB = TASK_RAM_MB;
@@ -57,7 +57,7 @@ public class HybridVmPool {
                     Double.toString(ON_DEMAND_PER_SEC)));
     public static final double ON_DEMAND_MEMORY_PER_GB_SEC = Double.parseDouble(
             System.getProperty("cbmw.ondemand.memory.per.gb.sec", "0.000001"));
-    /** Modelled on-demand provisioning delay (seconds). sstji = lstji - OPD. */
+    /** Modeled advance provisioning delay; SST denotes execution start. */
     public static final double ON_DEMAND_PROVISIONING_DELAY = Double.parseDouble(
             System.getProperty("cbmw.ondemand.delay.sec", "60.0"));
     public static final double SCHEDULING_PERIOD = Double.parseDouble(
@@ -300,6 +300,29 @@ public class HybridVmPool {
         releaseSlot(taskId);
         bookSlot(vmId, taskId, start, end,
                 getTaskCores(taskId), getTaskRamMb(taskId));
+    }
+
+    /** Tests an early start while ignoring only this task's old booking. */
+    public boolean canMoveBookingNow(int taskId, int vmId,
+                                     double start, double end) {
+        double[] old = taskBookingIndex.get(taskId);
+        double[] saved = old == null ? null : old.clone();
+        if (saved != null) releaseSlot(taskId);
+        try {
+            return hasBookedCapacity(vmId, start, end,
+                    getTaskCores(taskId), getTaskRamMb(taskId));
+        } finally {
+            if (saved != null) bookSlot((int) saved[0], taskId,
+                    saved[1], saved[2], (int) saved[3], (int) saved[4]);
+        }
+    }
+
+    /** Replace this task's booking only after checking all other commitments. */
+    public boolean moveBookingNow(int taskId, int vmId,
+                                  double start, double end) {
+        if (!canMoveBookingNow(taskId, vmId, start, end)) return false;
+        rebookSlot(taskId, vmId, start, end);
+        return true;
     }
 
     /**

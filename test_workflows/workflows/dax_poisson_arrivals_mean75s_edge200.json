@@ -1,802 +1,802 @@
 [
   {
     "workflow_name": "CyberShake_1000_23.xml",
-    "arrival_time_seconds": 23.178186
+    "arrival_time_seconds": 6.394002
   },
   {
     "workflow_name": "Montage_100_60.xml",
-    "arrival_time_seconds": 39.611962
+    "arrival_time_seconds": 79.347321
   },
   {
     "workflow_name": "Inspiral_100_46.xml",
-    "arrival_time_seconds": 41.143591
+    "arrival_time_seconds": 167.01268
   },
   {
     "workflow_name": "Inspiral_1000_36.xml",
-    "arrival_time_seconds": 44.49593
+    "arrival_time_seconds": 301.597681
   },
   {
     "workflow_name": "CyberShake_100_7.xml",
-    "arrival_time_seconds": 93.504844
+    "arrival_time_seconds": 308.553363
   },
   {
     "workflow_name": "Inspiral_100_3.xml",
-    "arrival_time_seconds": 143.445132
+    "arrival_time_seconds": 487.141631
   },
   {
     "workflow_name": "Montage_100_26.xml",
-    "arrival_time_seconds": 154.529691
+    "arrival_time_seconds": 578.539127
   },
   {
     "workflow_name": "Montage_100_52.xml",
-    "arrival_time_seconds": 178.097139
+    "arrival_time_seconds": 597.267718
   },
   {
     "workflow_name": "CyberShake_1000_17.xml",
-    "arrival_time_seconds": 194.764008
+    "arrival_time_seconds": 783.045876
   },
   {
     "workflow_name": "Montage_1000_44.xml",
-    "arrival_time_seconds": 261.315031
+    "arrival_time_seconds": 824.842479
   },
   {
     "workflow_name": "Sipht_100_48.xml",
-    "arrival_time_seconds": 351.419486
+    "arrival_time_seconds": 882.273497
   },
   {
     "workflow_name": "Montage_1000_50.xml",
-    "arrival_time_seconds": 374.507953
+    "arrival_time_seconds": 1032.627127
   },
   {
     "workflow_name": "Inspiral_1000_62.xml",
-    "arrival_time_seconds": 381.512949
+    "arrival_time_seconds": 1079.084979
   },
   {
     "workflow_name": "Montage_100_28.xml",
-    "arrival_time_seconds": 404.005936
+    "arrival_time_seconds": 1106.695501
   },
   {
     "workflow_name": "Inspiral_100_29.xml",
-    "arrival_time_seconds": 411.369091
+    "arrival_time_seconds": 1184.776668
   },
   {
     "workflow_name": "Montage_100_9.xml",
-    "arrival_time_seconds": 422.812008
+    "arrival_time_seconds": 1221.937689
   },
   {
     "workflow_name": "Inspiral_1000_47.xml",
-    "arrival_time_seconds": 451.054521
+    "arrival_time_seconds": 1274.723652
   },
   {
     "workflow_name": "CyberShake_1000_27.xml",
-    "arrival_time_seconds": 531.149735
+    "arrival_time_seconds": 1336.074361
   },
   {
     "workflow_name": "Montage_1000_19.xml",
-    "arrival_time_seconds": 590.303594
+    "arrival_time_seconds": 1447.394223
   },
   {
     "workflow_name": "CyberShake_1000_59.xml",
-    "arrival_time_seconds": 612.995993
+    "arrival_time_seconds": 1512.058938
   },
   {
     "workflow_name": "Sipht_100_36.xml",
-    "arrival_time_seconds": 625.457537
+    "arrival_time_seconds": 1527.045138
   },
   {
     "workflow_name": "Inspiral_1000_12.xml",
-    "arrival_time_seconds": 637.815566
+    "arrival_time_seconds": 1597.511797
   },
   {
     "workflow_name": "Inspiral_100_54.xml",
-    "arrival_time_seconds": 655.681031
+    "arrival_time_seconds": 1617.326046
   },
   {
     "workflow_name": "Sipht_1000_48.xml",
-    "arrival_time_seconds": 662.637732
+    "arrival_time_seconds": 1723.479117
   },
   {
     "workflow_name": "Sipht_100_52.xml",
-    "arrival_time_seconds": 668.757378
+    "arrival_time_seconds": 1755.575837
   },
   {
     "workflow_name": "Sipht_1000_26.xml",
-    "arrival_time_seconds": 670.434797
+    "arrival_time_seconds": 1830.159287
   },
   {
     "workflow_name": "Sipht_1000_63.xml",
-    "arrival_time_seconds": 722.124894
+    "arrival_time_seconds": 1850.926446
   },
   {
     "workflow_name": "Inspiral_1000_22.xml",
-    "arrival_time_seconds": 836.488494
+    "arrival_time_seconds": 2161.192604
   },
   {
     "workflow_name": "CyberShake_1000_42.xml",
-    "arrival_time_seconds": 839.375626
+    "arrival_time_seconds": 2170.614805
   },
   {
     "workflow_name": "CyberShake_1000_44.xml",
-    "arrival_time_seconds": 858.383439
+    "arrival_time_seconds": 2209.40038
   },
   {
     "workflow_name": "Inspiral_100_42.xml",
-    "arrival_time_seconds": 890.166784
+    "arrival_time_seconds": 2229.147433
   },
   {
     "workflow_name": "Montage_100_45.xml",
-    "arrival_time_seconds": 918.122533
+    "arrival_time_seconds": 2277.526535
   },
   {
     "workflow_name": "CyberShake_1000_7.xml",
-    "arrival_time_seconds": 924.926202
+    "arrival_time_seconds": 2319.234949
   },
   {
     "workflow_name": "Montage_1000_25.xml",
-    "arrival_time_seconds": 980.084575
+    "arrival_time_seconds": 2375.085681
   },
   {
     "workflow_name": "Sipht_100_17.xml",
-    "arrival_time_seconds": 983.519054
+    "arrival_time_seconds": 2389.385303
   },
   {
     "workflow_name": "Inspiral_1000_6.xml",
-    "arrival_time_seconds": 984.328885
+    "arrival_time_seconds": 2633.723691
   },
   {
     "workflow_name": "Montage_100_13.xml",
-    "arrival_time_seconds": 1009.535756
+    "arrival_time_seconds": 2690.785499
   },
   {
     "workflow_name": "Inspiral_100_21.xml",
-    "arrival_time_seconds": 1017.317345
+    "arrival_time_seconds": 2703.957844
   },
   {
     "workflow_name": "Sipht_1000_11.xml",
-    "arrival_time_seconds": 1038.118415
+    "arrival_time_seconds": 2805.252596
   },
   {
     "workflow_name": "Inspiral_1000_59.xml",
-    "arrival_time_seconds": 1076.630513
+    "arrival_time_seconds": 2814.639904
   },
   {
     "workflow_name": "Montage_100_37.xml",
-    "arrival_time_seconds": 1090.04105
+    "arrival_time_seconds": 2980.395841
   },
   {
     "workflow_name": "CyberShake_1000_19.xml",
-    "arrival_time_seconds": 1130.393699
+    "arrival_time_seconds": 3082.197468
   },
   {
     "workflow_name": "Montage_1000_27.xml",
-    "arrival_time_seconds": 1140.017611
+    "arrival_time_seconds": 3211.091754
   },
   {
     "workflow_name": "Sipht_1000_59.xml",
-    "arrival_time_seconds": 1140.60344
+    "arrival_time_seconds": 3292.393506
   },
   {
     "workflow_name": "Montage_100_10.xml",
-    "arrival_time_seconds": 1157.461758
+    "arrival_time_seconds": 3396.732701
   },
   {
     "workflow_name": "Sipht_100_6.xml",
-    "arrival_time_seconds": 1247.895671
+    "arrival_time_seconds": 3507.524979
   },
   {
     "workflow_name": "Sipht_100_57.xml",
-    "arrival_time_seconds": 1295.059857
+    "arrival_time_seconds": 3576.808456
   },
   {
     "workflow_name": "CyberShake_100_38.xml",
-    "arrival_time_seconds": 1369.3754
+    "arrival_time_seconds": 3893.712034
   },
   {
     "workflow_name": "Montage_1000_8.xml",
-    "arrival_time_seconds": 1373.229915
+    "arrival_time_seconds": 3896.271447
   },
   {
     "workflow_name": "Montage_100_8.xml",
-    "arrival_time_seconds": 1393.212411
+    "arrival_time_seconds": 3939.416855
   },
   {
     "workflow_name": "CyberShake_1000_53.xml",
-    "arrival_time_seconds": 1410.355661
+    "arrival_time_seconds": 3969.777142
   },
   {
     "workflow_name": "Sipht_1000_60.xml",
-    "arrival_time_seconds": 1436.52779
+    "arrival_time_seconds": 3993.482778
   },
   {
     "workflow_name": "Sipht_1000_38.xml",
-    "arrival_time_seconds": 1439.864208
+    "arrival_time_seconds": 3995.21763
   },
   {
     "workflow_name": "Inspiral_100_24.xml",
-    "arrival_time_seconds": 1483.961424
+    "arrival_time_seconds": 4257.615359
   },
   {
     "workflow_name": "CyberShake_1000_45.xml",
-    "arrival_time_seconds": 1501.421195
+    "arrival_time_seconds": 4269.960804
   },
   {
     "workflow_name": "Sipht_100_42.xml",
-    "arrival_time_seconds": 1523.81634
+    "arrival_time_seconds": 4289.342811
   },
   {
     "workflow_name": "Montage_1000_49.xml",
-    "arrival_time_seconds": 1527.601766
+    "arrival_time_seconds": 4333.578452
   },
   {
     "workflow_name": "Montage_100_24.xml",
-    "arrival_time_seconds": 1538.620433
+    "arrival_time_seconds": 4343.460441
   },
   {
     "workflow_name": "Montage_1000_21.xml",
-    "arrival_time_seconds": 1561.118166
+    "arrival_time_seconds": 4482.528667
   },
   {
     "workflow_name": "CyberShake_1000_29.xml",
-    "arrival_time_seconds": 1578.768212
+    "arrival_time_seconds": 4580.16131
   },
   {
     "workflow_name": "Montage_1000_35.xml",
-    "arrival_time_seconds": 1656.954904
+    "arrival_time_seconds": 4597.768537
   },
   {
     "workflow_name": "CyberShake_100_15.xml",
-    "arrival_time_seconds": 1700.509568
+    "arrival_time_seconds": 4605.668555
   },
   {
     "workflow_name": "Sipht_1000_46.xml",
-    "arrival_time_seconds": 1743.198567
+    "arrival_time_seconds": 4783.635574
   },
   {
     "workflow_name": "Inspiral_1000_55.xml",
-    "arrival_time_seconds": 1764.616357
+    "arrival_time_seconds": 4811.429795
   },
   {
     "workflow_name": "Montage_1000_16.xml",
-    "arrival_time_seconds": 1782.567199
+    "arrival_time_seconds": 4836.144681
   },
   {
     "workflow_name": "Sipht_1000_18.xml",
-    "arrival_time_seconds": 1823.939951
+    "arrival_time_seconds": 4944.26742
   },
   {
     "workflow_name": "Montage_100_50.xml",
-    "arrival_time_seconds": 1853.380196
+    "arrival_time_seconds": 5084.775943
   },
   {
     "workflow_name": "Inspiral_1000_48.xml",
-    "arrival_time_seconds": 1915.621781
+    "arrival_time_seconds": 5150.789903
   },
   {
     "workflow_name": "Montage_1000_36.xml",
-    "arrival_time_seconds": 1933.886726
+    "arrival_time_seconds": 5230.265766
   },
   {
     "workflow_name": "Sipht_100_43.xml",
-    "arrival_time_seconds": 1959.00311
+    "arrival_time_seconds": 5396.146317
   },
   {
     "workflow_name": "CyberShake_100_6.xml",
-    "arrival_time_seconds": 2082.415177
+    "arrival_time_seconds": 5519.076944
   },
   {
     "workflow_name": "Montage_100_20.xml",
-    "arrival_time_seconds": 2107.817869
+    "arrival_time_seconds": 5535.258838
   },
   {
     "workflow_name": "Montage_1000_26.xml",
-    "arrival_time_seconds": 2139.653761
+    "arrival_time_seconds": 5561.238918
   },
   {
     "workflow_name": "Montage_100_46.xml",
-    "arrival_time_seconds": 2184.198256
+    "arrival_time_seconds": 5648.598662
   },
   {
     "workflow_name": "CyberShake_100_58.xml",
-    "arrival_time_seconds": 2200.97263
+    "arrival_time_seconds": 5713.528959
   },
   {
     "workflow_name": "CyberShake_100_16.xml",
-    "arrival_time_seconds": 2271.324714
+    "arrival_time_seconds": 5824.377051
   },
   {
     "workflow_name": "Montage_100_36.xml",
-    "arrival_time_seconds": 2276.852656
+    "arrival_time_seconds": 5900.088149
   },
   {
     "workflow_name": "CyberShake_100_22.xml",
-    "arrival_time_seconds": 2284.390216
+    "arrival_time_seconds": 5976.896999
   },
   {
     "workflow_name": "Montage_100_17.xml",
-    "arrival_time_seconds": 2297.509493
+    "arrival_time_seconds": 6033.808774
   },
   {
     "workflow_name": "CyberShake_100_53.xml",
-    "arrival_time_seconds": 2349.025266
+    "arrival_time_seconds": 6044.03251
   },
   {
     "workflow_name": "Sipht_1000_2.xml",
-    "arrival_time_seconds": 2350.504991
+    "arrival_time_seconds": 6059.79808
   },
   {
     "workflow_name": "CyberShake_1000_8.xml",
-    "arrival_time_seconds": 2433.636682
+    "arrival_time_seconds": 6102.922037
   },
   {
     "workflow_name": "Sipht_100_18.xml",
-    "arrival_time_seconds": 2455.539589
+    "arrival_time_seconds": 6319.56867
   },
   {
     "workflow_name": "Inspiral_100_39.xml",
-    "arrival_time_seconds": 2516.209724
+    "arrival_time_seconds": 6415.386298
   },
   {
     "workflow_name": "CyberShake_100_14.xml",
-    "arrival_time_seconds": 2538.194755
+    "arrival_time_seconds": 6439.561393
   },
   {
     "workflow_name": "Montage_100_15.xml",
-    "arrival_time_seconds": 2622.905261
+    "arrival_time_seconds": 6481.080023
   },
   {
     "workflow_name": "Sipht_100_2.xml",
-    "arrival_time_seconds": 2658.52729
+    "arrival_time_seconds": 6742.042165
   },
   {
     "workflow_name": "Sipht_100_8.xml",
-    "arrival_time_seconds": 2693.675195
+    "arrival_time_seconds": 6863.360776
   },
   {
     "workflow_name": "Inspiral_100_28.xml",
-    "arrival_time_seconds": 2709.383829
+    "arrival_time_seconds": 6921.998572
   },
   {
     "workflow_name": "Inspiral_1000_60.xml",
-    "arrival_time_seconds": 2726.682063
+    "arrival_time_seconds": 6963.038228
   },
   {
     "workflow_name": "CyberShake_100_50.xml",
-    "arrival_time_seconds": 2752.108446
+    "arrival_time_seconds": 6983.783241
   },
   {
     "workflow_name": "CyberShake_1000_22.xml",
-    "arrival_time_seconds": 2775.858923
+    "arrival_time_seconds": 7014.140891
   },
   {
     "workflow_name": "Montage_1000_6.xml",
-    "arrival_time_seconds": 2792.473211
+    "arrival_time_seconds": 7292.029221
   },
   {
     "workflow_name": "Inspiral_1000_26.xml",
-    "arrival_time_seconds": 2794.756789
+    "arrival_time_seconds": 7396.938814
   },
   {
     "workflow_name": "Sipht_100_13.xml",
-    "arrival_time_seconds": 2811.964129
+    "arrival_time_seconds": 7427.822777
   },
   {
     "workflow_name": "Sipht_1000_61.xml",
-    "arrival_time_seconds": 2825.168501
+    "arrival_time_seconds": 7580.429605
   },
   {
     "workflow_name": "Sipht_100_10.xml",
-    "arrival_time_seconds": 2848.36725
+    "arrival_time_seconds": 7609.027258
   },
   {
     "workflow_name": "Montage_100_49.xml",
-    "arrival_time_seconds": 2848.574459
+    "arrival_time_seconds": 7652.852539
   },
   {
     "workflow_name": "Montage_1000_61.xml",
-    "arrival_time_seconds": 2891.756408
+    "arrival_time_seconds": 7688.049221
   },
   {
     "workflow_name": "Inspiral_100_20.xml",
-    "arrival_time_seconds": 3034.519544
+    "arrival_time_seconds": 7711.824535
   },
   {
     "workflow_name": "Inspiral_1000_37.xml",
-    "arrival_time_seconds": 3060.03782
+    "arrival_time_seconds": 7931.866029
   },
   {
     "workflow_name": "Montage_100_3.xml",
-    "arrival_time_seconds": 3084.273939
+    "arrival_time_seconds": 7958.962149
   },
   {
     "workflow_name": "CyberShake_100_52.xml",
-    "arrival_time_seconds": 3121.313487
+    "arrival_time_seconds": 8030.740105
   },
   {
     "workflow_name": "Sipht_100_45.xml",
-    "arrival_time_seconds": 3241.274436
+    "arrival_time_seconds": 8064.78028
   },
   {
     "workflow_name": "Montage_1000_2.xml",
-    "arrival_time_seconds": 3241.45986
+    "arrival_time_seconds": 8116.192656
   },
   {
     "workflow_name": "Inspiral_1000_20.xml",
-    "arrival_time_seconds": 3249.259043
+    "arrival_time_seconds": 8186.863159
   },
   {
     "workflow_name": "CyberShake_100_36.xml",
-    "arrival_time_seconds": 3252.786567
+    "arrival_time_seconds": 8207.85956
   },
   {
     "workflow_name": "Sipht_1000_53.xml",
-    "arrival_time_seconds": 3258.88954
+    "arrival_time_seconds": 8214.21975
   },
   {
     "workflow_name": "CyberShake_100_47.xml",
-    "arrival_time_seconds": 3259.507717
+    "arrival_time_seconds": 8304.504867
   },
   {
     "workflow_name": "Sipht_1000_41.xml",
-    "arrival_time_seconds": 3302.073882
+    "arrival_time_seconds": 8397.08771
   },
   {
     "workflow_name": "Inspiral_1000_54.xml",
-    "arrival_time_seconds": 3330.38569
+    "arrival_time_seconds": 8432.69894
   },
   {
     "workflow_name": "Montage_100_29.xml",
-    "arrival_time_seconds": 3427.411088
+    "arrival_time_seconds": 8524.952764
   },
   {
     "workflow_name": "Inspiral_1000_27.xml",
-    "arrival_time_seconds": 3462.585919
+    "arrival_time_seconds": 8580.166013
   },
   {
     "workflow_name": "Inspiral_1000_41.xml",
-    "arrival_time_seconds": 3523.812405
+    "arrival_time_seconds": 8588.26663
   },
   {
     "workflow_name": "CyberShake_100_59.xml",
-    "arrival_time_seconds": 3531.397333
+    "arrival_time_seconds": 8627.595315
   },
   {
     "workflow_name": "CyberShake_1000_55.xml",
-    "arrival_time_seconds": 3541.182297
+    "arrival_time_seconds": 8631.417201
   },
   {
     "workflow_name": "CyberShake_1000_36.xml",
-    "arrival_time_seconds": 3583.555566
+    "arrival_time_seconds": 8638.922365
   },
   {
     "workflow_name": "Montage_1000_13.xml",
-    "arrival_time_seconds": 3599.326925
+    "arrival_time_seconds": 8805.052672
   },
   {
     "workflow_name": "Inspiral_1000_8.xml",
-    "arrival_time_seconds": 3603.116905
+    "arrival_time_seconds": 8886.391286
   },
   {
     "workflow_name": "Montage_1000_9.xml",
-    "arrival_time_seconds": 3655.17403
+    "arrival_time_seconds": 8910.569124
   },
   {
     "workflow_name": "Sipht_100_27.xml",
-    "arrival_time_seconds": 3675.152207
+    "arrival_time_seconds": 8923.355815
   },
   {
     "workflow_name": "Montage_1000_32.xml",
-    "arrival_time_seconds": 3715.009552
+    "arrival_time_seconds": 9032.064723
   },
   {
     "workflow_name": "Sipht_1000_39.xml",
-    "arrival_time_seconds": 3729.308591
+    "arrival_time_seconds": 9234.589182
   },
   {
     "workflow_name": "Sipht_100_39.xml",
-    "arrival_time_seconds": 3752.903064
+    "arrival_time_seconds": 9287.84326
   },
   {
     "workflow_name": "CyberShake_1000_62.xml",
-    "arrival_time_seconds": 3753.087563
+    "arrival_time_seconds": 9344.768449
   },
   {
     "workflow_name": "Inspiral_100_6.xml",
-    "arrival_time_seconds": 3815.35624
+    "arrival_time_seconds": 9426.258476
   },
   {
     "workflow_name": "Montage_1000_15.xml",
-    "arrival_time_seconds": 3840.791037
+    "arrival_time_seconds": 9495.381552
   },
   {
     "workflow_name": "CyberShake_100_10.xml",
-    "arrival_time_seconds": 3882.245718
+    "arrival_time_seconds": 9562.439689
   },
   {
     "workflow_name": "CyberShake_100_34.xml",
-    "arrival_time_seconds": 3899.937054
+    "arrival_time_seconds": 9573.898069
   },
   {
     "workflow_name": "CyberShake_1000_26.xml",
-    "arrival_time_seconds": 3966.838457
+    "arrival_time_seconds": 9609.652706
   },
   {
     "workflow_name": "Sipht_100_4.xml",
-    "arrival_time_seconds": 4017.388903
+    "arrival_time_seconds": 9628.947651
   },
   {
     "workflow_name": "CyberShake_1000_52.xml",
-    "arrival_time_seconds": 4037.572306
+    "arrival_time_seconds": 9734.555636
   },
   {
     "workflow_name": "Sipht_1000_58.xml",
-    "arrival_time_seconds": 4070.259669
+    "arrival_time_seconds": 9763.392227
   },
   {
     "workflow_name": "CyberShake_100_13.xml",
-    "arrival_time_seconds": 4077.123505
+    "arrival_time_seconds": 9961.971403
   },
   {
     "workflow_name": "Sipht_100_55.xml",
-    "arrival_time_seconds": 4101.750202
+    "arrival_time_seconds": 10026.822762
   },
   {
     "workflow_name": "Sipht_1000_34.xml",
-    "arrival_time_seconds": 4112.59716
+    "arrival_time_seconds": 10038.865413
   },
   {
     "workflow_name": "CyberShake_1000_28.xml",
-    "arrival_time_seconds": 4127.180236
+    "arrival_time_seconds": 10053.341477
   },
   {
     "workflow_name": "CyberShake_1000_13.xml",
-    "arrival_time_seconds": 4131.787544
+    "arrival_time_seconds": 10127.646227
   },
   {
     "workflow_name": "Sipht_1000_15.xml",
-    "arrival_time_seconds": 4142.801367
+    "arrival_time_seconds": 10156.411447
   },
   {
     "workflow_name": "Sipht_1000_47.xml",
-    "arrival_time_seconds": 4182.032427
+    "arrival_time_seconds": 10327.984741
   },
   {
     "workflow_name": "Sipht_1000_3.xml",
-    "arrival_time_seconds": 4218.221466
+    "arrival_time_seconds": 10578.510891
   },
   {
     "workflow_name": "Inspiral_100_7.xml",
-    "arrival_time_seconds": 4218.874247
+    "arrival_time_seconds": 10659.260708
   },
   {
     "workflow_name": "Montage_1000_41.xml",
-    "arrival_time_seconds": 4236.792332
+    "arrival_time_seconds": 10662.567101
   },
   {
     "workflow_name": "Montage_100_1.xml",
-    "arrival_time_seconds": 4243.351513
+    "arrival_time_seconds": 10779.868589
   },
   {
     "workflow_name": "Montage_1000_62.xml",
-    "arrival_time_seconds": 4267.643967
+    "arrival_time_seconds": 10945.683024
   },
   {
     "workflow_name": "Inspiral_1000_4.xml",
-    "arrival_time_seconds": 4268.391588
+    "arrival_time_seconds": 10986.573805
   },
   {
     "workflow_name": "Inspiral_100_49.xml",
-    "arrival_time_seconds": 4288.394132
+    "arrival_time_seconds": 11036.133675
   },
   {
     "workflow_name": "Sipht_100_19.xml",
-    "arrival_time_seconds": 4334.702899
+    "arrival_time_seconds": 11165.550514
   },
   {
     "workflow_name": "CyberShake_100_31.xml",
-    "arrival_time_seconds": 4354.073664
+    "arrival_time_seconds": 11219.679095
   },
   {
     "workflow_name": "CyberShake_1000_38.xml",
-    "arrival_time_seconds": 4385.278827
+    "arrival_time_seconds": 11340.564766
   },
   {
     "workflow_name": "CyberShake_100_8.xml",
-    "arrival_time_seconds": 4395.102795
+    "arrival_time_seconds": 11351.235136
   },
   {
     "workflow_name": "Montage_100_27.xml",
-    "arrival_time_seconds": 4440.393987
+    "arrival_time_seconds": 11353.645074
   },
   {
     "workflow_name": "Sipht_1000_10.xml",
-    "arrival_time_seconds": 4486.356139
+    "arrival_time_seconds": 11499.688382
   },
   {
     "workflow_name": "CyberShake_100_43.xml",
-    "arrival_time_seconds": 4507.317042
+    "arrival_time_seconds": 11542.15076
   },
   {
     "workflow_name": "Montage_1000_1.xml",
-    "arrival_time_seconds": 4563.810074
+    "arrival_time_seconds": 11654.212868
   },
   {
     "workflow_name": "Montage_1000_31.xml",
-    "arrival_time_seconds": 4599.15319
+    "arrival_time_seconds": 11726.281806
   },
   {
     "workflow_name": "Sipht_100_15.xml",
-    "arrival_time_seconds": 4605.793452
+    "arrival_time_seconds": 11755.575589
   },
   {
     "workflow_name": "Sipht_100_35.xml",
-    "arrival_time_seconds": 4617.172487
+    "arrival_time_seconds": 11757.73546
   },
   {
     "workflow_name": "Sipht_100_20.xml",
-    "arrival_time_seconds": 4653.6708
+    "arrival_time_seconds": 11797.984347
   },
   {
     "workflow_name": "Sipht_100_49.xml",
-    "arrival_time_seconds": 4669.171979
+    "arrival_time_seconds": 11854.931871
   },
   {
     "workflow_name": "CyberShake_100_9.xml",
-    "arrival_time_seconds": 4671.167928
+    "arrival_time_seconds": 11887.842983
   },
   {
     "workflow_name": "Montage_1000_17.xml",
-    "arrival_time_seconds": 4691.278403
+    "arrival_time_seconds": 11893.132652
   },
   {
     "workflow_name": "Sipht_100_41.xml",
-    "arrival_time_seconds": 4704.002765
+    "arrival_time_seconds": 11940.204005
   },
   {
     "workflow_name": "CyberShake_100_60.xml",
-    "arrival_time_seconds": 4714.022514
+    "arrival_time_seconds": 12119.889036
   },
   {
     "workflow_name": "Montage_1000_5.xml",
-    "arrival_time_seconds": 4728.74065
+    "arrival_time_seconds": 12134.188111
   },
   {
     "workflow_name": "Inspiral_100_43.xml",
-    "arrival_time_seconds": 4733.568091
+    "arrival_time_seconds": 12193.310231
   },
   {
     "workflow_name": "Sipht_1000_54.xml",
-    "arrival_time_seconds": 4835.079013
+    "arrival_time_seconds": 12286.884401
   },
   {
     "workflow_name": "Sipht_100_25.xml",
-    "arrival_time_seconds": 4858.194609
+    "arrival_time_seconds": 12452.912825
   },
   {
     "workflow_name": "Montage_1000_14.xml",
-    "arrival_time_seconds": 4887.58383
+    "arrival_time_seconds": 12474.4938
   },
   {
     "workflow_name": "CyberShake_1000_16.xml",
-    "arrival_time_seconds": 4901.485467
+    "arrival_time_seconds": 12494.201775
   },
   {
     "workflow_name": "Sipht_100_44.xml",
-    "arrival_time_seconds": 4910.073934
+    "arrival_time_seconds": 12627.988379
   },
   {
     "workflow_name": "Inspiral_100_4.xml",
-    "arrival_time_seconds": 4931.360568
+    "arrival_time_seconds": 12687.984273
   },
   {
     "workflow_name": "Sipht_1000_29.xml",
-    "arrival_time_seconds": 4948.086029
+    "arrival_time_seconds": 12721.140909
   },
   {
     "workflow_name": "Sipht_1000_1.xml",
-    "arrival_time_seconds": 4981.778266
+    "arrival_time_seconds": 12779.368746
   },
   {
     "workflow_name": "Inspiral_1000_64.xml",
-    "arrival_time_seconds": 5025.719351
+    "arrival_time_seconds": 12806.300743
   },
   {
     "workflow_name": "Inspiral_1000_29.xml",
-    "arrival_time_seconds": 5046.258718
+    "arrival_time_seconds": 12941.295543
   },
   {
     "workflow_name": "CyberShake_100_25.xml",
-    "arrival_time_seconds": 5049.860661
+    "arrival_time_seconds": 12958.377398
   },
   {
     "workflow_name": "CyberShake_100_42.xml",
-    "arrival_time_seconds": 5086.061859
+    "arrival_time_seconds": 12962.103433
   },
   {
     "workflow_name": "Sipht_100_24.xml",
-    "arrival_time_seconds": 5140.256932
+    "arrival_time_seconds": 13000.818712
   },
   {
     "workflow_name": "Inspiral_100_48.xml",
-    "arrival_time_seconds": 5175.689559
+    "arrival_time_seconds": 13039.68615
   },
   {
     "workflow_name": "Inspiral_100_16.xml",
-    "arrival_time_seconds": 5178.00012
+    "arrival_time_seconds": 13089.691196
   },
   {
     "workflow_name": "Sipht_1000_27.xml",
-    "arrival_time_seconds": 5180.334775
+    "arrival_time_seconds": 13336.477286
   },
   {
     "workflow_name": "Sipht_100_59.xml",
-    "arrival_time_seconds": 5191.655363
+    "arrival_time_seconds": 13356.731567
   },
   {
     "workflow_name": "Montage_1000_57.xml",
-    "arrival_time_seconds": 5193.524422
+    "arrival_time_seconds": 13379.690065
   },
   {
     "workflow_name": "Sipht_1000_17.xml",
-    "arrival_time_seconds": 5231.064684
+    "arrival_time_seconds": 13478.194645
   },
   {
     "workflow_name": "Sipht_1000_62.xml",
-    "arrival_time_seconds": 5258.016247
+    "arrival_time_seconds": 13491.259491
   },
   {
     "workflow_name": "Sipht_100_56.xml",
-    "arrival_time_seconds": 5312.09071
+    "arrival_time_seconds": 13572.001505
   },
   {
     "workflow_name": "CyberShake_100_61.xml",
-    "arrival_time_seconds": 5393.958805
+    "arrival_time_seconds": 13574.307194
   },
   {
     "workflow_name": "CyberShake_1000_10.xml",
-    "arrival_time_seconds": 5478.179421
+    "arrival_time_seconds": 13577.747535
   },
   {
     "workflow_name": "Montage_100_51.xml",
-    "arrival_time_seconds": 5502.607644
+    "arrival_time_seconds": 13621.555513
   },
   {
     "workflow_name": "Montage_100_39.xml",
-    "arrival_time_seconds": 5516.975023
+    "arrival_time_seconds": 13827.710018
   },
   {
     "workflow_name": "Inspiral_1000_30.xml",
-    "arrival_time_seconds": 5521.718975
+    "arrival_time_seconds": 13835.619476
   },
   {
     "workflow_name": "CyberShake_1000_15.xml",
-    "arrival_time_seconds": 5532.852244
+    "arrival_time_seconds": 13958.079221
   },
   {
     "workflow_name": "Inspiral_100_57.xml",
-    "arrival_time_seconds": 5588.492466
+    "arrival_time_seconds": 13977.772402
   },
   {
     "workflow_name": "CyberShake_1000_9.xml",
-    "arrival_time_seconds": 5604.992827
+    "arrival_time_seconds": 14013.95037
   },
   {
     "workflow_name": "Montage_1000_34.xml",
-    "arrival_time_seconds": 5623.556412
+    "arrival_time_seconds": 14019.965245
   },
   {
     "workflow_name": "Sipht_1000_28.xml",
-    "arrival_time_seconds": 5630.05743
+    "arrival_time_seconds": 14068.092064
   },
   {
     "workflow_name": "CyberShake_100_26.xml",
-    "arrival_time_seconds": 5650.196989
+    "arrival_time_seconds": 14192.217114
   },
   {
     "workflow_name": "CyberShake_1000_4.xml",
-    "arrival_time_seconds": 5650.723942
+    "arrival_time_seconds": 14214.857812
   },
   {
     "workflow_name": "CyberShake_1000_51.xml",
-    "arrival_time_seconds": 5663.220876
+    "arrival_time_seconds": 14346.30834
   }
 ]

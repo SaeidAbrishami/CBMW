@@ -26,8 +26,10 @@ public final class CBMWEntryOnDemandDeadlineValidationTest {
                 : "Oversized entry task must use on-demand";
         assert Math.abs(workflow.getDeadline() - 180.0) < 1e-9
                 : "Planning must not add a second OPD to an already adjusted deadline";
-        assert Math.abs(workflow.getScheduledStart(1) - 90.0) < 1e-9
-                : "Entry order must follow LST - OPD";
+        assert Math.abs(workflow.getScheduledStart(1) - 150.0) < 1e-9
+                : "SST must denote the on-demand execution start";
+        assert Math.abs(workflow.getPlannedProvisionOrder(1) - 90.0) < 1e-9
+                : "Spt must precede execution by OPD";
         assert Math.abs(workflow.getLFT(1) - 160.0) < 1e-9
                 : "Entry LFT must use the universally adjusted workflow deadline";
     }

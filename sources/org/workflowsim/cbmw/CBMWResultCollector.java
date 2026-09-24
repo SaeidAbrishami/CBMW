@@ -73,6 +73,10 @@ public class CBMWResultCollector {
                 deadlineRate, met, accepted));
         Log.printLine(String.format("Overall success rate     : %.3f (%d / %d)",
                 overallSuccessRate, met, total));
+        Log.printLine(String.format(Locale.US,
+                "Deadline misses         : %d; maximum %.4f s; average %.4f s (missed workflows)",
+                deadlineMissCount(), maximumDeadlineMissSeconds(),
+                averageDeadlineMissSeconds()));
         Log.printLine(String.format("Reserved VM utilization  : %.1f%%",
                 reservedUtil * 100));
         Log.printLine(String.format("On-demand cost ($)       : %.4f", odCost));
@@ -98,11 +102,13 @@ public class CBMWResultCollector {
                 + "runSeed,nosfProfile,"
                 + "total,accepted,rejected,metDeadline,rejectedNegotiation,"
                 + "rejectedPlanning,acceptanceRate,deadlineRate,overallSuccessRate,"
-                + "countViolation,timeViolation,"
-                + "onDemandCost,spotCost,estimatedRawCost,"
+                + "countViolation,timeViolation,deadlineMissCount,"
+                + "maxDeadlineMissSeconds,avgDeadlineMissSeconds,"
+                + "onDemandCost,directMeasuredOnDemandCost,spotCost,estimatedRawCost,"
                 + "offeredPrice,brokerRevenue,brokerProfit,reservedCost,"
                 + "totalCost,marginalCost,makespan,simulationStartTime,simulationDuration,"
                 + "simulationDurationHours,reservedUtil,onDemandUsageRatio,spotUsageRatio,"
+                + "reservedCpuWorkShare,onDemandCpuWorkShare,"
                 + "provisionedOnDemandVms,onDemandVmUtilization,deadlineRiskTasks,"
                 + "reservedInstanceCount,reservedCoresPerInstance,"
                 + "reservedRamMbPerInstance,reservedTotalCores,reservedTotalRamMb,"
@@ -166,13 +172,17 @@ public class CBMWResultCollector {
                 total, accepted, rejected, met,
                 rejectedNegotiation, rejectedPlanning, acceptanceRate,
                 deadlineRate, overallSuccessRate, countViolation, timeViolation,
-                odCost, spotCost, rawEstimate, offeredPrice,
+                odCost, directlyMeasuredOnDemandCost(scenario),
+                spotCost, rawEstimate, offeredPrice,
                 brokerRevenue, brokerProfit, reservedCost,
                 totalCost, Double.NaN, makespan(), start, simulationDuration(),
                 onDemandUsageRatio, spotUsageRatio,
+                accounting.getCpuWorkShare("Reserved"),
+                accounting.getCpuWorkShare("On-Demand"),
                 resources, reportReservedVmCount,
                 accounting.getOnDemandVmUtilization(),
-                accounting.getDeadlineRiskTaskCount());
+                accounting.getDeadlineRiskTaskCount(), deadlineMissCount(),
+                maximumDeadlineMissSeconds(), averageDeadlineMissSeconds());
     }
 
     public static String toCsvRow(ScenarioMetrics metrics) {
@@ -187,7 +197,10 @@ public class CBMWResultCollector {
                 Long.toString(metrics.rejectedPlanning),
                 f4(metrics.acceptanceRate), f4(metrics.deadlineRate),
                 f4(metrics.overallSuccessRate), f4(metrics.countViolation),
-                f4(metrics.timeViolation), f4(metrics.onDemandCost),
+                f4(metrics.timeViolation), Long.toString(metrics.deadlineMissCount),
+                f4(metrics.maxDeadlineMissSeconds),
+                f4(metrics.avgDeadlineMissSeconds), f4(metrics.onDemandCost),
+                optionalF4(metrics.directMeasuredOnDemandCost),
                 f4(metrics.spotCost), f4(metrics.estimatedRawCost),
                 f4(metrics.offeredPrice), f4(metrics.brokerRevenue),
                 f4(metrics.brokerProfit), f2(metrics.reservedCost),
@@ -196,6 +209,8 @@ public class CBMWResultCollector {
                 f2(metrics.simulationStartTime), f2(metrics.simulationDuration),
                 f4(metrics.simulationDurationHours), f4(metrics.reservedUtil),
                 f4(metrics.onDemandUsageRatio), f4(metrics.spotUsageRatio),
+                f4(metrics.reservedCpuWorkShare),
+                f4(metrics.onDemandCpuWorkShare),
                 Integer.toString(metrics.provisionedOnDemandVms),
                 f4(metrics.onDemandVmUtilization),
                 Integer.toString(metrics.deadlineRiskTasks),
@@ -289,9 +304,44 @@ public class CBMWResultCollector {
         return sum / allWorkflows.size();
     }
 
+    private long deadlineMissCount() {
+        return allWorkflows.stream().filter(w -> w.isAccepted()
+                && w.getCompletionTime() < Double.MAX_VALUE
+                && w.getCompletionTime() > w.getDeadline()).count();
+    }
+
+    private double maximumDeadlineMissSeconds() {
+        return allWorkflows.stream().filter(WorkflowRecord::isAccepted)
+                .filter(w -> w.getCompletionTime() < Double.MAX_VALUE)
+                .mapToDouble(w -> Math.max(0.0,
+                        w.getCompletionTime() - w.getDeadline()))
+                .max().orElse(0.0);
+    }
+
+    /** Arithmetic mean over completed, admitted workflows that missed. */
+    private double averageDeadlineMissSeconds() {
+        return allWorkflows.stream().filter(WorkflowRecord::isAccepted)
+                .filter(w -> w.getCompletionTime() < Double.MAX_VALUE)
+                .mapToDouble(w -> Math.max(0.0,
+                        w.getCompletionTime() - w.getDeadline()))
+                .filter(miss -> miss > 0.0).average().orElse(0.0);
+    }
+
     private double totalOnDemandCost() {
         return allWorkflows.stream()
                 .mapToDouble(WorkflowRecord::getTotalOnDemandCost).sum();
+    }
+
+    /** Actual on-demand expenditure by workflows 101 through 400. */
+    private double directlyMeasuredOnDemandCost(String scenario) {
+        if (!scenario.endsWith("_full500") || allWorkflows.size() != 500) {
+            return Double.NaN;
+        }
+        double cost = 0.0;
+        for (int i = 100; i < 400; i++) {
+            cost += allWorkflows.get(i).getTotalOnDemandCost();
+        }
+        return cost;
     }
 
     private double totalSpotCost() {
@@ -385,7 +435,11 @@ public class CBMWResultCollector {
         public final double overallSuccessRate;
         public final double countViolation;
         public final double timeViolation;
+        public final long deadlineMissCount;
+        public final double maxDeadlineMissSeconds;
+        public final double avgDeadlineMissSeconds;
         public final double onDemandCost;
+        public final double directMeasuredOnDemandCost;
         public final double spotCost;
         public final double estimatedRawCost;
         public final double offeredPrice;
@@ -401,6 +455,8 @@ public class CBMWResultCollector {
         public final double reservedUtil;
         public final double onDemandUsageRatio;
         public final double spotUsageRatio;
+        public final double reservedCpuWorkShare;
+        public final double onDemandCpuWorkShare;
         public final int provisionedOnDemandVms;
         public final double onDemandVmUtilization;
         public final int deadlineRiskTasks;
@@ -439,7 +495,9 @@ public class CBMWResultCollector {
                                double acceptanceRate, double deadlineRate,
                                double overallSuccessRate,
                                double countViolation, double timeViolation,
-                               double onDemandCost, double spotCost,
+                               double onDemandCost,
+                               double directMeasuredOnDemandCost,
+                               double spotCost,
                                double estimatedRawCost, double offeredPrice,
                                double brokerRevenue, double brokerProfit,
                                double reservedCost, double totalCost,
@@ -448,10 +506,14 @@ public class CBMWResultCollector {
                                double simulationDuration,
                                double onDemandUsageRatio,
                                double spotUsageRatio,
+                               double reservedCpuWorkShare,
+                               double onDemandCpuWorkShare,
                                ResourceAccountingSummary resourceSummary,
                                int reservedInstanceCount,
                                double onDemandVmUtilization,
-                               int deadlineRiskTasks) {
+                               int deadlineRiskTasks, long deadlineMissCount,
+                               double maxDeadlineMissSeconds,
+                               double avgDeadlineMissSeconds) {
             this.scenario = scenario;
             this.load = load;
             this.deadlineClass = deadlineClass;
@@ -472,7 +534,11 @@ public class CBMWResultCollector {
             this.overallSuccessRate = overallSuccessRate;
             this.countViolation = countViolation;
             this.timeViolation = timeViolation;
+            this.deadlineMissCount = deadlineMissCount;
+            this.maxDeadlineMissSeconds = maxDeadlineMissSeconds;
+            this.avgDeadlineMissSeconds = avgDeadlineMissSeconds;
             this.onDemandCost = onDemandCost;
+            this.directMeasuredOnDemandCost = directMeasuredOnDemandCost;
             this.spotCost = spotCost;
             this.estimatedRawCost = estimatedRawCost;
             this.offeredPrice = offeredPrice;
@@ -487,6 +553,8 @@ public class CBMWResultCollector {
             this.simulationDurationHours = simulationDuration / 3600.0;
             this.onDemandUsageRatio = onDemandUsageRatio;
             this.spotUsageRatio = spotUsageRatio;
+            this.reservedCpuWorkShare = reservedCpuWorkShare;
+            this.onDemandCpuWorkShare = onDemandCpuWorkShare;
             this.resourceSummary = resourceSummary;
             this.reservedInstanceCount = reservedInstanceCount;
             this.reservedCoresPerInstance = reservedInstanceCount > 0

@@ -43,8 +43,9 @@ public final class CBMWPlannedPrecedenceValidationTest {
         assert parentFinish <= childStart + 1e-9
                 : "Parent finish must not exceed child planned start: "
                         + parentFinish + " > " + childStart;
-        assert Math.abs(parentFinish - childStart) < 1e-9
-                : "Regression setup must exercise the tightened boundary";
+        assert workflow.getScheduledStart(1) % HybridVmPool.SCHEDULING_PERIOD == 0
+                && workflow.getScheduledStart(2) % HybridVmPool.SCHEDULING_PERIOD == 0
+                : "Planned execution starts must be dispatch instants";
 
         System.out.println("CBMWPlannedPrecedenceValidationTest: PASS");
     }
@@ -59,11 +60,6 @@ public final class CBMWPlannedPrecedenceValidationTest {
 
     private static double plannedExecutionStart(WorkflowRecord workflow,
                                                 int taskId) {
-        double start = workflow.getScheduledStart(taskId);
-        if (workflow.getAssignedVm(taskId)
-                == CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL) {
-            start += HybridVmPool.ON_DEMAND_PROVISIONING_DELAY;
-        }
-        return start;
+        return workflow.getScheduledStart(taskId);
     }
 }

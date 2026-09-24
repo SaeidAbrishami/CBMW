@@ -56,7 +56,17 @@ public final class ResourceAccountingValidationTest {
 
         validateCapacityOverrides();
         validateLifecycleClipping();
+        validateProvisioningBilling();
         System.out.println("ResourceAccountingValidationTest: PASS");
+    }
+
+    private static void validateProvisioningBilling() {
+        CBMWAccounting accounting = new CBMWAccounting();
+        accounting.markOnDemandOrdered(300, 1, 2048, 0.0, 60.0);
+        accounting.markOnDemandLaunched(300, 0.0);
+        assertClose(accounting.billableDestroyTime(300, 70.0), 70.0);
+        assertClose(accounting.billableDestroyTime(300, 30.0), 60.0);
+        assertClose(accounting.billableDestroyTime(300, 70.2), 71.0);
     }
 
     private static void validateCapacityOverrides() {

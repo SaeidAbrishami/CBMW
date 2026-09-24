@@ -91,9 +91,11 @@ public final class WorkflowLoaderValidationTest {
                 : "EDGE_200 must include the latest 100 workflows";
         assert arrivals.get(199).getDaxPath().endsWith("Workflow_499.xml")
                 : "EDGE_200 must end with the latest workflow";
-        assert arrivals.get(100).getUserDeadline()
-                    - arrivals.get(100).getArrivalTime() == 2.0
-                : "Rebasing must preserve deadline slack";
+        assert Math.abs(arrivals.get(100).getUserDeadline()
+                    - arrivals.get(100).getArrivalTime()
+                    - (HybridVmPool.ON_DEMAND_PROVISIONING_DELAY
+                            + 2.0 * (1.0 + PaperRuntimeModel.PLANNING_ALPHA)))
+                < 1e-9 : "Deadlines must include one OPD and the conservative CP";
 
         List<WorkflowArrivalData> fullAfterEdge = WorkflowLoader.load(
                 root.toString(), "poisson_distribution.json", 2.0,
