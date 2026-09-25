@@ -7,7 +7,7 @@ CBMW manages a hybrid pool of reserved VMs (fixed hourly cost) and on-demand con
 ## Revised CBMW experiments on Linux (8 cores, 8 GiB)
 
 Edit `config/cbmw_experiments.txt`: line 1 selects `CBMW`, line 2 sets the
-maximum number of concurrent experiments, and each subsequent line gives
+number of concurrent experiments, and each subsequent line gives
 `mean_inter_arrival_seconds deadline_factor`. The supplied file has 18
 scenarios: means 15, 30, 45, 60, 75 and 90, with factors 1.2, 2 and 4.
 
@@ -19,8 +19,14 @@ The launcher compiles Java 17 sources and runs each scenario in an isolated
 CloudSim JVM. Each scenario executes the full 500-workflow trace and the
 compressed 200-workflow boundary trace once, preserving the same workflow
 identities and arrival pattern across deadline factors. Full runs on an 8 GiB
-machine use one JVM at a time with a 5120 MiB heap; line 2 is an upper bound.
-Small smoke tests capped at 100 workflows use up to four 1280 MiB JVMs.
+machine use one JVM at a time with a 5120 MiB heap. The supplied config
+sets line 2 to `2` for a 16 GiB machine. A machine with more RAM can use a
+larger number on line 2;
+the launcher uses that number without silently reducing it. It checks physical
+RAM and container limits before starting, reserving 1536 MiB for the OS and
+native processes. If the requested JVM heaps would exceed that limit, it
+reports the largest safe number and stops. Small smoke tests capped at 100
+workflows use 1280 MiB per JVM.
 For example, run `python3 scripts/run_cbmw_config.py
 config/cbmw_experiments.txt --max-workflows 5` for a smoke test.
 

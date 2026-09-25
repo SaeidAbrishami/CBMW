@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 JARS = ":".join(str(path) for path in sorted((ROOT / "lib").glob("*.jar")))
 SUPPORTED = {15, 30, 45, 60, 75, 90}
 FACTORS = {1.2, 2.0, 4.0}
+MEMORY_RESERVE_MIB = 1536  # OS, Python launcher, and JVM native memory
 
 
 def read_config(path):
@@ -40,6 +41,35 @@ def read_config(path):
             raise ValueError(f"Duplicate scenario: {line}")
         scenarios.append((mean, factor))
     return algorithm, workers, scenarios
+
+
+def memory_limit_mib():
+    """Physical RAM or a smaller Linux container limit, when present."""
+    limits = [os.sysconf("SC_PHYS_PAGES")
+              * os.sysconf("SC_PAGE_SIZE") // (1024 * 1024)]
+    for name in ("/sys/fs/cgroup/memory.max",
+                 "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
+        try:
+            value = Path(name).read_text().strip()
+            if value.isdecimal():
+                limits.append(int(value) // (1024 * 1024))
+        except (OSError, ValueError):
+            pass
+    return min(limits)
+
+
+def scenario_workers(requested, scenario_count, heap_mib, memory_mib):
+    """Use the requested concurrency exactly, or explain why it is unsafe."""
+    workers = min(requested, scenario_count)
+    max_safe = max(0, (memory_mib - MEMORY_RESERVE_MIB) // heap_mib)
+    if workers > max_safe:
+        raise ValueError(
+            f"Config requests {workers} concurrent scenarios with "
+            f"{heap_mib} MiB per JVM, but this machine has {memory_mib} MiB "
+            f"of RAM and can safely run at most {max_safe}. "
+            f"Set line 2 of the config to {max_safe} or less, or use "
+            "a machine with more RAM.")
+    return workers
 
 
 def compile_java(base):
@@ -125,14 +155,15 @@ def main():
     args = parser.parse_args()
     algorithm, requested, scenarios = read_config(args.config)
     # Full traces retain hundreds of thousands of task records. Reserve
-    # memory for the OS and native JVM use on an 8 GiB Linux machine.
+    # memory for the OS and native JVM use before accepting concurrency.
     production = args.max_workflows is None or args.max_workflows > 100
     heap_mib = 5120 if production else 1280
-    workers = min(requested, 1 if production else 4, os.cpu_count() or 1)
+    workers = scenario_workers(requested, len(scenarios), heap_mib,
+                               memory_limit_mib())
     base = args.output.resolve()
     base.mkdir(parents=True, exist_ok=True)
     print(f"Compiling; then running {len(scenarios)} scenarios, "
-          f"up to {workers} concurrent JVMs (requested {requested}); "
+          f"up to {workers} concurrent JVMs (configured {requested}); "
           f"heap {heap_mib} MiB per JVM.", flush=True)
     classes = compile_java(base)
     completed = []
