@@ -73,6 +73,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
     private final List<Double>              pendingArrivalTimes = new ArrayList<>();
     private double simEndTime = -1;
     private double pendingPeriodicTick = Double.NaN;
+    private CBMWProgressReporter progressReporter;
     private static final double EPS = 1e-6;
 
     protected AbstractWorkflowBroker(String name, double tightness) throws Exception {
@@ -93,6 +94,9 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
     }
 
     public void setSimEndTime(double time) { this.simEndTime = time; }
+    public void setProgressReporter(CBMWProgressReporter reporter) {
+        this.progressReporter = reporter;
+    }
     public HybridVmPool          getVmPool()      { return vmPool; }
     public List<WorkflowRecord>  getAllWorkflows() { return allWorkflows; }
     public CBMWAccounting        getAccounting() { return accounting; }
@@ -378,6 +382,9 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         cloudletsSubmitted += actuallySubmitted.size();
         for (Cloudlet cl : actuallySubmitted) {
             onTaskSubmitted(cl, provisioner.isOnDemandVm(cl.getVmId()));
+            if (progressReporter != null) {
+                progressReporter.taskStarted(primaryTaskId((Job) cl));
+            }
         }
         onSubmissionBatchComplete();
     }
@@ -460,6 +467,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         allWorkflows.add(wfr);
 
         if (!negotiateWorkflow(wfr)) {
+            if (progressReporter != null) progressReporter.workflowRejected(tasks.size());
             wfr.setRejectionReason("NEGOTIATION_DEADLINE_INFEASIBLE");
             accounting.registerWorkflowTasks(wfr, tasks, tightness, false,
                     "REJECTED_NEGOTIATION_DEADLINE_INFEASIBLE");
@@ -470,6 +478,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         }
 
         if (!planWorkflow(wfr, tasks)) {
+            if (progressReporter != null) progressReporter.workflowRejected(tasks.size());
             wfr.setAccepted(false);
             wfr.setRejectionReason("PLANNING_FAILED");
             accounting.registerWorkflowTasks(wfr, tasks, tightness, false,
@@ -811,6 +820,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         }
         int taskId = primaryTaskId(job);
         wfr.markTaskCompleted(taskId);
+        if (progressReporter != null) progressReporter.taskCompleted(taskId);
         onWorkflowTaskComplete(wfr, taskId, now);
 
         if (wfr.isComplete()) {

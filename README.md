@@ -12,7 +12,7 @@ maximum number of concurrent experiments, and each subsequent line gives
 scenarios: means 15, 30, 45, 60, 75 and 90, with factors 1.2, 2 and 4.
 
 ```bash
-scripts/run_cbmw_config.sh config/cbmw_experiments.txt
+bash scripts/run_cbmw_config.sh config/cbmw_experiments.txt
 ```
 
 The launcher compiles Java 17 sources and runs each scenario in an isolated
@@ -23,6 +23,15 @@ machine use one JVM at a time with a 5120 MiB heap; line 2 is an upper bound.
 Small smoke tests capped at 100 workflows use up to four 1280 MiB JVMs.
 For example, run `python3 scripts/run_cbmw_config.py
 config/cbmw_experiments.txt --max-workflows 5` for a smoke test.
+
+During each dataset, the terminal and that scenario's `run.log` print a
+`[progress]` line every 60 seconds of wall-clock time. It reports distinct
+tasks started, completed tasks, and completion percentage of tasks in accepted
+workflows. Rejected workflows are excluded from the denominator. Each
+configuration reports the full 500 and edge 200 datasets separately, and a
+final progress line appears when each dataset finishes. The progress timer
+can be changed with `-Dcbmw.progress.interval.sec=N` when invoking Java
+directly; the batch launcher uses 60 seconds.
 
 Combined per-scenario metrics, aggregate metrics and planning/dispatch timing
 are written to `Output/batch/combined/`. Individual runs retain their

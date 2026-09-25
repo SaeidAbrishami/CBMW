@@ -85,9 +85,17 @@ def run_scenario(algorithm, mean, factor, base, classes,
         command.append(f"-Dcbmw.max.workflows={max_workflows}")
     command += ["-cp", str(classes) + ":" + JARS,
                 "org.workflowsim.examples.cbmw.CBMWSimulation"]
-    with (dest / "run.log").open("w") as log:
-        subprocess.run(command, cwd=ROOT, stdout=log,
-                       stderr=subprocess.STDOUT, check=True)
+    with (dest / "run.log").open("w", buffering=1) as log:
+        with subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE,
+                              stderr=subprocess.STDOUT, text=True,
+                              bufsize=1) as process:
+            for line in process.stdout:
+                log.write(line)
+                if line.startswith("[progress]"):
+                    print(line, end="", flush=True)
+            exit_code = process.wait()
+        if exit_code:
+            raise subprocess.CalledProcessError(exit_code, command)
     return dest
 
 

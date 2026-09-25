@@ -1,0 +1,274 @@
+diff --git a/README.md b/README.md
+index b1e6e802..1337f297 100644
+--- a/README.md
++++ b/README.md
+@@ -12,7 +12,7 @@ maximum number of concurrent experiments, and each subsequent line gives
+ scenarios: means 15, 30, 45, 60, 75 and 90, with factors 1.2, 2 and 4.
+ 
+ ```bash
+-scripts/run_cbmw_config.sh config/cbmw_experiments.txt
++bash scripts/run_cbmw_config.sh config/cbmw_experiments.txt
+ ```
+ 
+ The launcher compiles Java 17 sources and runs each scenario in an isolated
+@@ -24,6 +24,15 @@ Small smoke tests capped at 100 workflows use up to four 1280 MiB JVMs.
+ For example, run `python3 scripts/run_cbmw_config.py
+ config/cbmw_experiments.txt --max-workflows 5` for a smoke test.
+ 
++During each dataset, the terminal and that scenario's `run.log` print a
++`[progress]` line every 60 seconds of wall-clock time. It reports distinct
++tasks started, completed tasks, and completion percentage of tasks in accepted
++workflows. Rejected workflows are excluded from the denominator. Each
++configuration reports the full 500 and edge 200 datasets separately, and a
++final progress line appears when each dataset finishes. The progress timer
++can be changed with `-Dcbmw.progress.interval.sec=N` when invoking Java
++directly; the batch launcher uses 60 seconds.
++
+ Combined per-scenario metrics, aggregate metrics and planning/dispatch timing
+ are written to `Output/batch/combined/`. Individual runs retain their
+ `task_execution.csv`, run log and performance CSV under
+diff --git a/examples/org/workflowsim/examples/cbmw/CBMWSimulation.java b/examples/org/workflowsim/examples/cbmw/CBMWSimulation.java
+index fe2cef69..5c50ccee 100644
+--- a/examples/org/workflowsim/examples/cbmw/CBMWSimulation.java
++++ b/examples/org/workflowsim/examples/cbmw/CBMWSimulation.java
+@@ -32,6 +32,7 @@ import org.workflowsim.cbmw.CBMWBroker;
+ import org.workflowsim.cbmw.CBMWDetailedResultExporter;
+ import org.workflowsim.cbmw.CBMWLogger;
+ import org.workflowsim.cbmw.CBMWPerformanceMetrics;
++import org.workflowsim.cbmw.CBMWProgressReporter;
+ import org.workflowsim.cbmw.CBMWResultCollector;
+ import org.workflowsim.cbmw.ExperimentRunContext;
+ import org.workflowsim.cbmw.HybridVmPool;
+@@ -303,8 +304,13 @@ public class CBMWSimulation {
+ 
+         CBMWPerformanceMetrics.beginScenario(
+                 scenario, algorithm, arrivals.size(), run);
+-        CloudSim.startSimulation();
+-        CloudSim.stopSimulation();
++        try (CBMWProgressReporter progress =
++                     new CBMWProgressReporter(label, arrivals)) {
++            broker.setProgressReporter(progress);
++            progress.start();
++            CloudSim.startSimulation();
++            CloudSim.stopSimulation();
++        }
+         CBMWPerformanceMetrics.finishScenario();
+         CBMWLogger.close();
+ 
+diff --git a/scripts/run_cbmw_config.py b/scripts/run_cbmw_config.py
+index 1cc7388e..a3103dc5 100644
+--- a/scripts/run_cbmw_config.py
++++ b/scripts/run_cbmw_config.py
+@@ -85,9 +85,17 @@ def run_scenario(algorithm, mean, factor, base, classes,
+         command.append(f"-Dcbmw.max.workflows={max_workflows}")
+     command += ["-cp", str(classes) + ":" + JARS,
+                 "org.workflowsim.examples.cbmw.CBMWSimulation"]
+-    with (dest / "run.log").open("w") as log:
+-        subprocess.run(command, cwd=ROOT, stdout=log,
+-                       stderr=subprocess.STDOUT, check=True)
++    with (dest / "run.log").open("w", buffering=1) as log:
++        with subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE,
++                              stderr=subprocess.STDOUT, text=True,
++                              bufsize=1) as process:
++            for line in process.stdout:
++                log.write(line)
++                if line.startswith("[progress]"):
++                    print(line, end="", flush=True)
++            exit_code = process.wait()
++        if exit_code:
++            raise subprocess.CalledProcessError(exit_code, command)
+     return dest
+ 
+ 
+diff --git a/sources/org/workflowsim/cbmw/AbstractWorkflowBroker.java b/sources/org/workflowsim/cbmw/AbstractWorkflowBroker.java
+index 0e49afd9..a1c58964 100644
+--- a/sources/org/workflowsim/cbmw/AbstractWorkflowBroker.java
++++ b/sources/org/workflowsim/cbmw/AbstractWorkflowBroker.java
+@@ -73,6 +73,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
+     private final List<Double>              pendingArrivalTimes = new ArrayList<>();
+     private double simEndTime = -1;
+     private double pendingPeriodicTick = Double.NaN;
++    private CBMWProgressReporter progressReporter;
+     private static final double EPS = 1e-6;
+ 
+     protected AbstractWorkflowBroker(String name, double tightness) throws Exception {
+@@ -93,6 +94,9 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
+     }
+ 
+     public void setSimEndTime(double time) { this.simEndTime = time; }
++    public void setProgressReporter(CBMWProgressReporter reporter) {
++        this.progressReporter = reporter;
++    }
+     public HybridVmPool          getVmPool()      { return vmPool; }
+     public List<WorkflowRecord>  getAllWorkflows() { return allWorkflows; }
+     public CBMWAccounting        getAccounting() { return accounting; }
+@@ -378,6 +382,9 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
+         cloudletsSubmitted += actuallySubmitted.size();
+         for (Cloudlet cl : actuallySubmitted) {
+             onTaskSubmitted(cl, provisioner.isOnDemandVm(cl.getVmId()));
++            if (progressReporter != null) {
++                progressReporter.taskStarted(primaryTaskId((Job) cl));
++            }
+         }
+         onSubmissionBatchComplete();
+     }
+@@ -460,6 +467,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
+         allWorkflows.add(wfr);
+ 
+         if (!negotiateWorkflow(wfr)) {
++            if (progressReporter != null) progressReporter.workflowRejected(tasks.size());
+             wfr.setRejectionReason("NEGOTIATION_DEADLINE_INFEASIBLE");
+             accounting.registerWorkflowTasks(wfr, tasks, tightness, false,
+                     "REJECTED_NEGOTIATION_DEADLINE_INFEASIBLE");
+@@ -470,6 +478,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
+         }
+ 
+         if (!planWorkflow(wfr, tasks)) {
++            if (progressReporter != null) progressReporter.workflowRejected(tasks.size());
+             wfr.setAccepted(false);
+             wfr.setRejectionReason("PLANNING_FAILED");
+             accounting.registerWorkflowTasks(wfr, tasks, tightness, false,
+@@ -811,6 +820,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
+         }
+         int taskId = primaryTaskId(job);
+         wfr.markTaskCompleted(taskId);
++        if (progressReporter != null) progressReporter.taskCompleted(taskId);
+         onWorkflowTaskComplete(wfr, taskId, now);
+ 
+         if (wfr.isComplete()) {
+diff --git a/sources/org/workflowsim/cbmw/CBMWProgressReporter.java b/sources/org/workflowsim/cbmw/CBMWProgressReporter.java
+new file mode 100644
+index 00000000..f23cbea3
+--- /dev/null
++++ b/sources/org/workflowsim/cbmw/CBMWProgressReporter.java
+@@ -0,0 +1,130 @@
++package org.workflowsim.cbmw;
++
++import java.io.FileInputStream;
++import java.io.InputStream;
++import java.util.HashMap;
++import java.util.HashSet;
++import java.util.List;
++import java.util.Locale;
++import java.util.Map;
++import java.util.Set;
++import java.util.concurrent.Executors;
++import java.util.concurrent.ScheduledExecutorService;
++import java.util.concurrent.ThreadFactory;
++import java.util.concurrent.TimeUnit;
++import java.util.concurrent.atomic.AtomicLong;
++import javax.xml.stream.XMLInputFactory;
++import javax.xml.stream.XMLStreamConstants;
++import javax.xml.stream.XMLStreamReader;
++
++/** Wall-clock progress for one dataset/scenario, independent of simulated time. */
++public final class CBMWProgressReporter implements AutoCloseable {
++    private final String scenario;
++    private final long totalTasks;
++    private volatile long startedAtNanos;
++    private final AtomicLong started = new AtomicLong();
++    private final AtomicLong completed = new AtomicLong();
++    private final AtomicLong rejected = new AtomicLong();
++    // Only the CloudSim simulation thread writes these sets.
++    private final Set<Integer> startedIds = new HashSet<>();
++    private final Set<Integer> completedIds = new HashSet<>();
++    private final ScheduledExecutorService timer;
++
++    public CBMWProgressReporter(String scenario, List<WorkflowArrivalData> arrivals)
++            throws Exception {
++        this.scenario = scenario;
++        this.totalTasks = countTasks(arrivals);
++        ThreadFactory daemon = runnable -> {
++            Thread thread = new Thread(runnable, "cbmw-progress");
++            thread.setDaemon(true);
++            return thread;
++        };
++        timer = Executors.newSingleThreadScheduledExecutor(daemon);
++    }
++
++    public void start() {
++        long interval = Long.getLong("cbmw.progress.interval.sec", 60L);
++        if (interval < 1L) {
++            throw new IllegalArgumentException("cbmw.progress.interval.sec must be positive");
++        }
++        startedAtNanos = System.nanoTime();
++        print("start");
++        timer.scheduleAtFixedRate(() -> print("running"), interval, interval,
++                TimeUnit.SECONDS);
++    }
++
++    public void taskStarted(int taskId) {
++        if (startedIds.add(taskId)) started.incrementAndGet();
++    }
++
++    public void taskCompleted(int taskId) {
++        if (completedIds.add(taskId)) completed.incrementAndGet();
++    }
++
++    public void workflowRejected(int taskCount) {
++        rejected.addAndGet(taskCount);
++    }
++
++    @Override
++    public void close() {
++        timer.shutdownNow();
++        try {
++            timer.awaitTermination(5L, TimeUnit.SECONDS);
++        } catch (InterruptedException e) {
++            Thread.currentThread().interrupt();
++        }
++        print("final");
++    }
++
++    private void print(String phase) {
++        long eligible = Math.max(0L, totalTasks - rejected.get());
++        long done = completed.get();
++        double percent = eligible == 0L ? 100.0
++                : Math.min(100.0, 100.0 * done / eligible);
++        long elapsed = TimeUnit.NANOSECONDS.toSeconds(
++                System.nanoTime() - startedAtNanos);
++        System.out.println(String.format(Locale.US,
++                "[progress] scenario=%s phase=%s elapsed=%ds started=%d"
++                        + " completed=%d/%d (%.2f%%) rejectedTasks=%d",
++                scenario, phase, elapsed, started.get(), done, eligible,
++                percent, rejected.get()));
++    }
++
++    private static long countTasks(List<WorkflowArrivalData> arrivals)
++            throws Exception {
++        Map<String, Integer> cached = new HashMap<>();
++        XMLInputFactory factory = XMLInputFactory.newFactory();
++        factory.setProperty(XMLInputFactory.SUPPORT_DTD, false);
++        factory.setProperty(XMLInputFactory.IS_SUPPORTING_EXTERNAL_ENTITIES, false);
++        long count = 0L;
++        for (WorkflowArrivalData arrival : arrivals) {
++            String path = arrival.getDaxPath();
++            Integer jobs = cached.get(path);
++            if (jobs == null) {
++                jobs = countDaxJobs(factory, path);
++                cached.put(path, jobs);
++            }
++            count += jobs;
++        }
++        return count;
++    }
++
++    private static int countDaxJobs(XMLInputFactory factory, String path)
++            throws Exception {
++        try (InputStream input = new FileInputStream(path)) {
++            XMLStreamReader reader = factory.createXMLStreamReader(input);
++            int jobs = 0;
++            try {
++                while (reader.hasNext()) {
++                    if (reader.next() == XMLStreamConstants.START_ELEMENT
++                            && "job".equalsIgnoreCase(reader.getLocalName())) {
++                        jobs++;
++                    }
++                }
++            } finally {
++                reader.close();
++            }
++            return jobs;
++        }
++    }
++}

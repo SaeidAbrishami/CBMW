@@ -32,6 +32,7 @@ import org.workflowsim.cbmw.CBMWBroker;
 import org.workflowsim.cbmw.CBMWDetailedResultExporter;
 import org.workflowsim.cbmw.CBMWLogger;
 import org.workflowsim.cbmw.CBMWPerformanceMetrics;
+import org.workflowsim.cbmw.CBMWProgressReporter;
 import org.workflowsim.cbmw.CBMWResultCollector;
 import org.workflowsim.cbmw.ExperimentRunContext;
 import org.workflowsim.cbmw.HybridVmPool;
@@ -303,8 +304,13 @@ public class CBMWSimulation {
 
         CBMWPerformanceMetrics.beginScenario(
                 scenario, algorithm, arrivals.size(), run);
-        CloudSim.startSimulation();
-        CloudSim.stopSimulation();
+        try (CBMWProgressReporter progress =
+                     new CBMWProgressReporter(label, arrivals)) {
+            broker.setProgressReporter(progress);
+            progress.start();
+            CloudSim.startSimulation();
+            CloudSim.stopSimulation();
+        }
         CBMWPerformanceMetrics.finishScenario();
         CBMWLogger.close();
 
