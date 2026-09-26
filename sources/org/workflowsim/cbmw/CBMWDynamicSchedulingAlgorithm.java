@@ -148,8 +148,9 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
 
         // Failure for one task does not preclude another task with different
         // resource requirements from starting on reserved capacity.
+        Set<Cloudlet> selectedSet = new HashSet<>(selected);
         for (Cloudlet cl : readyJobs) {
-            if (selected.contains(cl)) continue;
+            if (selectedSet.contains(cl)) continue;
             Job job = (Job) cl;
             int taskId = getPrimaryTaskId(job);
             WorkflowRecord wfr = activeWorkflows.get(getWorkflowId(job));
@@ -179,6 +180,7 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
             }
             select(job, reserved.getId(), selected,
                     pendingCores, pendingRamMb);
+            selectedSet.add(cl);
         }
         getScheduledList().addAll(selected);
     }

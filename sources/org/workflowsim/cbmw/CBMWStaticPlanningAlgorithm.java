@@ -123,7 +123,7 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
                     taskCores, taskRamMb);
             if (slot < 0.0) continue;
 
-            int load = pool.getBookings(vm.getId()).size();
+            int load = pool.getBookingCount(vm.getId());
             if (slot > bestSlot + 1e-9
                     || (slot >= bestSlot - 1e-9 && load < bestLoad)) {
                 bestSlot = slot;
@@ -138,11 +138,11 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
             wfr.setScheduledStart(taskId, bestSlot);
             pool.bookSlot(bestVm, taskId, bestSlot, bestSlot + dur,
                     taskCores, taskRamMb);
-            CBMWLogger.log("PLAN-ASSIGN-RESERVED",
-                    String.format("wf=%d task=%d est=%.4f lst=%.4f lft=%.4f"
-                                    + " -> vm=%d slot=[%.4f, %.4f]",
-                            wfr.getWorkflowId(), taskId, est, lst, lft,
-                            bestVm, bestSlot, bestSlot + dur));
+            CBMWLogger.logf("PLAN-ASSIGN-RESERVED",
+                    "wf=%d task=%d est=%.4f lst=%.4f lft=%.4f"
+                            + " -> vm=%d slot=[%.4f, %.4f]",
+                    wfr.getWorkflowId(), taskId, est, lst, lft,
+                    bestVm, bestSlot, bestSlot + dur);
             return;
         }
 
@@ -163,10 +163,10 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
         wfr.setPlannedContainerReady(taskId,
                 spt + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
 
-        CBMWLogger.log("PLAN-ASSIGN-ONDEMAND",
-                String.format("wf=%d task=%d est=%.4f lft=%.4f sst=%.4f"
-                                + " request=%.4f dur=%.4f",
-                        wfr.getWorkflowId(), taskId, est, lft, sst, spt, dur));
+        CBMWLogger.logf("PLAN-ASSIGN-ONDEMAND",
+                "wf=%d task=%d est=%.4f lft=%.4f sst=%.4f"
+                        + " request=%.4f dur=%.4f",
+                wfr.getWorkflowId(), taskId, est, lft, sst, spt, dur);
     }
 
     /**

@@ -24,7 +24,8 @@ public final class CBMWProgressReporter implements AutoCloseable {
     private volatile long startedAtNanos;
     private final AtomicLong started = new AtomicLong();
     private final AtomicLong completed = new AtomicLong();
-    private final AtomicLong rejected = new AtomicLong();
+    private final AtomicLong rejectedTasks = new AtomicLong();
+    private final AtomicLong rejectedWorkflows = new AtomicLong();
     // Only the CloudSim simulation thread writes these sets.
     private final Set<Integer> startedIds = new HashSet<>();
     private final Set<Integer> completedIds = new HashSet<>();
@@ -62,7 +63,8 @@ public final class CBMWProgressReporter implements AutoCloseable {
     }
 
     public void workflowRejected(int taskCount) {
-        rejected.addAndGet(taskCount);
+        rejectedTasks.addAndGet(taskCount);
+        rejectedWorkflows.incrementAndGet();
     }
 
     @Override
@@ -77,7 +79,7 @@ public final class CBMWProgressReporter implements AutoCloseable {
     }
 
     private void print(String phase) {
-        long eligible = Math.max(0L, totalTasks - rejected.get());
+        long eligible = Math.max(0L, totalTasks - rejectedTasks.get());
         long done = completed.get();
         double percent = eligible == 0L ? 100.0
                 : Math.min(100.0, 100.0 * done / eligible);
@@ -85,9 +87,9 @@ public final class CBMWProgressReporter implements AutoCloseable {
                 System.nanoTime() - startedAtNanos);
         System.out.println(String.format(Locale.US,
                 "[progress] scenario=%s phase=%s elapsed=%ds started=%d"
-                        + " completed=%d/%d (%.2f%%) rejectedTasks=%d",
+                        + " completed=%d/%d (%.2f%%) rejectedWorkflows=%d",
                 scenario, phase, elapsed, started.get(), done, eligible,
-                percent, rejected.get()));
+                percent, rejectedWorkflows.get()));
     }
 
     private static long countTasks(List<WorkflowArrivalData> arrivals)

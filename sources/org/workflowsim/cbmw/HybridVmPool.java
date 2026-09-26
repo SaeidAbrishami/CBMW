@@ -3,6 +3,7 @@ package org.workflowsim.cbmw;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -84,8 +85,9 @@ public class HybridVmPool {
     private int nextOnDemandId = NUM_RESERVED;
 
     // Persistent slot bookings for reserved VMs across all workflow planning calls.
-    // vmId -> list of [start, end, cores, ramMb, taskId] intervals
-    private final Map<Integer, List<double[]>> reservedBookings = new HashMap<>();
+    // vmId -> taskId -> [start, end, cores, ramMb, taskId]. Insertion order
+    // preserves the existing getBookings snapshot order while allowing direct removal.
+    private final Map<Integer, Map<Integer, double[]>> reservedBookings = new HashMap<>();
     // vmId -> interval-start -> [used cores, used RAM] until the next entry.
     private final Map<Integer, TreeMap<Double, int[]>> reservedProfiles = new HashMap<>();
     // taskId -> [vmId, start, end, cores, ramMb] so we can release by taskId
@@ -111,7 +113,7 @@ public class HybridVmPool {
                     new CloudletSchedulerSpaceShared());
             reservedVms.add(vm);
             vmsById.put(i, vm);
-            reservedBookings.put(i, new ArrayList<>());
+            reservedBookings.put(i, new LinkedHashMap<>());
             TreeMap<Double, int[]> profile = new TreeMap<>();
             profile.put(0.0, new int[]{0, 0});
             reservedProfiles.put(i, profile);
@@ -286,13 +288,13 @@ public class HybridVmPool {
     /** Records a time-slot booking for a reserved VM task. */
     public void bookSlot(int vmId, int taskId, double start, double end,
                          int cores, int ramMb) {
-        List<double[]> list = reservedBookings.computeIfAbsent(vmId, k -> new ArrayList<>());
-        list.add(new double[]{start, end, cores, ramMb, taskId});
+        Map<Integer, double[]> bookings = reservedBookings.computeIfAbsent(
+                vmId, k -> new LinkedHashMap<>());
+        bookings.put(taskId, new double[]{start, end, cores, ramMb, taskId});
         updateProfile(vmId, start, end, cores, ramMb);
         taskBookingIndex.put(taskId, new double[]{vmId, start, end, cores, ramMb});
-        CBMWLogger.log("BOOK-SLOT",
-                String.format("vm=%d task=%d [%.4f, %.4f] totalBookings=%d",
-                        vmId, taskId, start, end, list.size()));
+        CBMWLogger.logf("BOOK-SLOT", "vm=%d task=%d [%.4f, %.4f] totalBookings=%d",
+                vmId, taskId, start, end, bookings.size());
     }
 
     /** Replaces any existing booking for taskId with the actual reserved slot. */
@@ -305,16 +307,9 @@ public class HybridVmPool {
     /** Tests an early start while ignoring only this task's old booking. */
     public boolean canMoveBookingNow(int taskId, int vmId,
                                      double start, double end) {
-        double[] old = taskBookingIndex.get(taskId);
-        double[] saved = old == null ? null : old.clone();
-        if (saved != null) releaseSlot(taskId);
-        try {
-            return hasBookedCapacity(vmId, start, end,
-                    getTaskCores(taskId), getTaskRamMb(taskId));
-        } finally {
-            if (saved != null) bookSlot((int) saved[0], taskId,
-                    saved[1], saved[2], (int) saved[3], (int) saved[4]);
-        }
+        return hasBookedCapacityIgnoringTask(vmId, start, end,
+                getTaskCores(taskId), getTaskRamMb(taskId),
+                taskBookingIndex.get(taskId));
     }
 
     /** Replace this task's booking only after checking all other commitments. */
@@ -375,8 +370,13 @@ public class HybridVmPool {
 
     /** Returns a snapshot of booked [start, end] intervals for a reserved VM. */
     public List<double[]> getBookings(int vmId) {
-        List<double[]> list = reservedBookings.get(vmId);
-        return list != null ? new ArrayList<>(list) : new ArrayList<>();
+        Map<Integer, double[]> bookings = reservedBookings.get(vmId);
+        return bookings != null ? new ArrayList<>(bookings.values()) : new ArrayList<>();
+    }
+
+    public int getBookingCount(int vmId) {
+        Map<Integer, double[]> bookings = reservedBookings.get(vmId);
+        return bookings == null ? 0 : bookings.size();
     }
 
     public boolean hasRuntimeCapacity(int vmId, int taskId) {
@@ -547,6 +547,37 @@ public class HybridVmPool {
         return true;
     }
 
+    /** Capacity check that excludes the task's own reservation without
+     * changing the booking profile. A profile segment can cross an old booking
+     * boundary when adjacent segments have equal usage, so visit both bounds. */
+    private boolean hasBookedCapacityIgnoringTask(int vmId, double start,
+                                                   double end, int cores,
+                                                   int ramMb, double[] old) {
+        if (old == null || (int) old[0] != vmId) {
+            return hasBookedCapacity(vmId, start, end, cores, ramMb);
+        }
+        if (cores > RESERVED_CORES || ramMb > RESERVED_RAM_MB) return false;
+        TreeMap<Double, int[]> profile = reservedProfiles.get(vmId);
+        if (profile == null) return false;
+        double cursor = start;
+        while (cursor < end - 1e-9) {
+            Map.Entry<Double, int[]> segment = profile.floorEntry(cursor);
+            if (segment == null) return false;
+            boolean ownSlot = cursor >= old[1] && cursor < old[2];
+            int[] used = segment.getValue();
+            if (used[0] - (ownSlot ? (int) old[3] : 0) + cores > RESERVED_CORES
+                    || used[1] - (ownSlot ? (int) old[4] : 0) + ramMb > RESERVED_RAM_MB) {
+                return false;
+            }
+            Double next = profile.higherKey(segment.getKey());
+            if (cursor < old[1] && (next == null || old[1] < next)) next = old[1];
+            if (cursor < old[2] && (next == null || old[2] < next)) next = old[2];
+            if (next == null || next >= end) break;
+            cursor = Math.max(cursor + 1e-9, next);
+        }
+        return true;
+    }
+
     public double findLatestFeasibleSlot(int vmId, double earliest, double lft,
                                          double duration, int cores, int ramMb) {
         if (duration < 0.0 || cores > RESERVED_CORES || ramMb > RESERVED_RAM_MB) {
@@ -662,9 +693,9 @@ public class HybridVmPool {
     public void releaseSlot(int taskId) {
         double[] entry = taskBookingIndex.remove(taskId);
         if (entry == null) {
-            CBMWLogger.log("RELEASE-SLOT",
-                    String.format("task=%d NOT FOUND in booking index (on-demand or already released)",
-                            taskId));
+            CBMWLogger.logf("RELEASE-SLOT",
+                    "task=%d NOT FOUND in booking index (on-demand or already released)",
+                    taskId);
             return;
         }
         int vmId = (int) entry[0];
@@ -672,15 +703,13 @@ public class HybridVmPool {
         int cores = entry.length > 3 ? (int) entry[3] : TASK_CORES;
         int ramMb = entry.length > 4 ? (int) entry[4] : TASK_RAM_MB;
         updateProfile(vmId, start, end, -cores, -ramMb);
-        List<double[]> slots = reservedBookings.get(vmId);
-        int before = (slots != null) ? slots.size() : 0;
-        if (slots != null) {
-            slots.removeIf(s -> s.length > 4 && (int) s[4] == taskId);
-        }
-        int after = (slots != null) ? slots.size() : 0;
-        CBMWLogger.log("RELEASE-SLOT",
-                String.format("task=%d vm=%d [%.4f, %.4f] freed bookings=%d->%d",
-                        taskId, vmId, start, end, before, after));
+        Map<Integer, double[]> bookings = reservedBookings.get(vmId);
+        int before = bookings != null ? bookings.size() : 0;
+        if (bookings != null) bookings.remove(taskId);
+        CBMWLogger.logf("RELEASE-SLOT",
+                "task=%d vm=%d [%.4f, %.4f] freed bookings=%d->%d",
+                taskId, vmId, start, end, before,
+                bookings != null ? bookings.size() : 0);
     }
 
     public boolean isReserved(int vmId) { return vmId < NUM_RESERVED; }
