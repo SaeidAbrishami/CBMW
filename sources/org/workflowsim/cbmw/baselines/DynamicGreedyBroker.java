@@ -1,7 +1,6 @@
 package org.workflowsim.cbmw.baselines;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -17,27 +16,45 @@ import org.workflowsim.Task;
 import org.workflowsim.WorkflowSimTags;
 import org.workflowsim.cbmw.AbstractWorkflowBroker;
 import org.workflowsim.cbmw.CBMWLogger;
+import org.workflowsim.cbmw.CBMWStaticPlanningAlgorithm;
 import org.workflowsim.cbmw.HybridVmPool;
+import org.workflowsim.cbmw.PaperRuntimeModel;
 import org.workflowsim.cbmw.WorkflowRecord;
 
-/** Event-driven dynamic greedy baseline from new_experiments_text.txt. */
+/**
+ * Reserved-first, event-driven greedy baseline. A task becomes eligible for
+ * placement only after all predecessors finish. If reserved capacity remains
+ * unavailable at LST - OPD, order a dedicated container while continuing to
+ * check reserved capacity until the task actually starts.
+ */
 public class DynamicGreedyBroker extends AbstractWorkflowBroker {
 
     private static final double EPS = 1e-9;
 
-    /** Ready tasks waiting for reserved capacity, keyed by task ID. */
-    private final Map<Integer, Cloudlet> delayedReady = new HashMap<>();
-    /** Task ID to its irrevocably rented dedicated on-demand container. */
-    private final Map<Integer, Integer> lockedOnDemand = new HashMap<>();
+    /** Ready tasks that have not yet started (including tasks being provisioned). */
+    private final Map<Integer, Cloudlet> waitingReady = new HashMap<>();
+    /** An on-demand request never precedes readiness and is issued only once. */
+    private final Map<Integer, Integer> orderedOnDemand = new HashMap<>();
     private final Set<Integer> newlyReadyTaskIds = new HashSet<>();
-    private final Set<Integer> scheduledSstWakeups = new HashSet<>();
-    private int completionEventsPending;
+    private final Set<Integer> thresholdWakeups = new HashSet<>();
+    private final Set<Integer> dueThresholds = new HashSet<>();
+    private boolean reservedCapacityReleased;
 
     public DynamicGreedyBroker(String name, double tightness) throws Exception {
         super(name, tightness);
     }
 
-    /** DynamicGreedy schedules every valid workflow without CBMW admission. */
+    @Override
+    protected double estimatePlanningRuntime(double meanExecutionTime) {
+        return PaperRuntimeModel.conservativeEstimate(meanExecutionTime);
+    }
+
+    @Override
+    protected boolean billProvisioningDelay() {
+        return true;
+    }
+
+    /** The baseline accepts every valid arrival and records actual misses. */
     @Override
     protected boolean negotiateWorkflow(WorkflowRecord wfr) {
         double cp = negotiation.computeCriticalPath(wfr);
@@ -48,29 +65,23 @@ public class DynamicGreedyBroker extends AbstractWorkflowBroker {
         return true;
     }
 
-    /** This baseline reacts directly to events instead of periodic ticks. */
     @Override
     protected boolean usesPeriodicScheduling() {
         return false;
     }
 
-    /** Computes each task's OPD-adjusted latest on-demand order threshold. */
+    /** Calculate continuous-time deadline bounds, without assigning resources. */
     @Override
     protected boolean planWorkflow(WorkflowRecord wfr, List<Task> tasks) {
         Map<Integer, Double> remainingCPs = negotiation.computeRemainingCPs(wfr);
-        double deadline = wfr.getDeadline();
-        double arrival = wfr.getArrivalTime();
-
         for (Task task : tasks) {
             int taskId = task.getCloudletId();
             task.setWorkflowId(wfr.getWorkflowId());
-            double remainingCP = remainingCPs.getOrDefault(taskId, 0.0);
-            double lst = deadline - remainingCP;
-            double sst = Math.max(arrival,
-                    lst - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
+            double lst = wfr.getDeadline()
+                    - remainingCPs.getOrDefault(taskId, 0.0);
             wfr.setLST(taskId, lst);
             wfr.setLFT(taskId, lst + wfr.getEstimatedExecTime(taskId));
-            wfr.setScheduledStart(taskId, sst);
+            task.setLatestStartTime(lst);
         }
         return true;
     }
@@ -88,7 +99,13 @@ public class DynamicGreedyBroker extends AbstractWorkflowBroker {
     @Override
     public void processEvent(SimEvent ev) {
         if (ev.getTag() == WorkflowSimTags.DYNAMIC_GREEDY_SST_REACHED) {
-            processSstReached((Integer) ev.getData());
+            int taskId = (Integer) ev.getData();
+            thresholdWakeups.remove(taskId);
+            if (waitingReady.containsKey(taskId)
+                    && !orderedOnDemand.containsKey(taskId)) {
+                dueThresholds.add(taskId);
+                sendNow(getId(), WorkflowSimTags.CLOUDLET_UPDATE);
+            }
             return;
         }
         super.processEvent(ev);
@@ -97,162 +114,124 @@ public class DynamicGreedyBroker extends AbstractWorkflowBroker {
     @Override
     protected void onTaskReturned(Cloudlet cloudlet, boolean onDemand) {
         int taskId = primaryTaskId((Job) cloudlet);
-        delayedReady.remove(taskId);
-        lockedOnDemand.remove(taskId);
+        waitingReady.remove(taskId);
+        orderedOnDemand.remove(taskId);
         newlyReadyTaskIds.remove(taskId);
-        scheduledSstWakeups.remove(taskId);
-        completionEventsPending++;
+        thresholdWakeups.remove(taskId);
+        dueThresholds.remove(taskId);
+        if (!onDemand) reservedCapacityReleased = true;
     }
 
     @Override
     @SuppressWarnings("unchecked")
     protected void processCloudletUpdate(SimEvent ev) {
         recordReadyQueue((List<Cloudlet>) getCloudletList());
-
-        // A rented container owns its task permanently. Container-ready events
-        // return here and dispatch it without reconsidering reserved resources.
-        dispatchReadyLockedOnDemandTasks();
-
-        // Event (b): after one task completion, start only the first delayed
-        // task (ascending SST) whose reserved requirements can be satisfied.
-        int completions = completionEventsPending;
-        completionEventsPending = 0;
-        for (int i = 0; i < completions; i++) {
-            dispatchFirstExecutableDelayedTask();
-        }
-
-        // Event (a): each newly ready task immediately tries reserved capacity.
-        List<Integer> newlyReady = new ArrayList<>(newlyReadyTaskIds);
+        Set<Integer> candidates = new HashSet<>(newlyReadyTaskIds);
         newlyReadyTaskIds.clear();
-        Collections.sort(newlyReady);
-        for (Integer taskId : newlyReady) {
-            Cloudlet cloudlet = findReadyTask(taskId);
-            if (cloudlet != null
-                    && !delayedReady.containsKey(taskId)
-                    && !lockedOnDemand.containsKey(taskId)) {
-                processNewlyReadyTask(cloudlet);
+        candidates.addAll(dueThresholds);
+        dueThresholds.clear();
+
+        // Record readiness before making any placement or provisioning decision.
+        for (Cloudlet cloudlet : getCloudletList()) {
+            int taskId = primaryTaskId((Job) cloudlet);
+            if (waitingReady.putIfAbsent(taskId, cloudlet) == null) {
+                candidates.add(taskId);
             }
         }
+        if (reservedCapacityReleased) {
+            candidates.addAll(waitingReady.keySet());
+            reservedCapacityReleased = false;
+        }
+        // A container-ready event needs no periodic scan. Only requests whose
+        // containers have become ready can now dispatch on-demand.
+        for (int taskId : orderedOnDemand.keySet()) {
+            if (isLogicalContainerReady(taskId)) candidates.add(taskId);
+        }
 
-        // Defensive classification for jobs delivered without the usual
-        // CLOUDLET_SUBMIT callback.
-        List<Cloudlet> unclassified = new ArrayList<>((List<Cloudlet>) getCloudletList());
-        unclassified.sort(Comparator.comparingInt(Cloudlet::getCloudletId));
-        for (Cloudlet cloudlet : unclassified) {
-            int taskId = primaryTaskId((Job) cloudlet);
-            if (!delayedReady.containsKey(taskId)
-                    && !lockedOnDemand.containsKey(taskId)) {
-                processNewlyReadyTask(cloudlet);
+        List<Integer> orderedCandidates = new ArrayList<>(candidates);
+        orderedCandidates.sort(Comparator
+                .comparingDouble(this::latestStart)
+                .thenComparingInt(Integer::intValue));
+        for (int taskId : orderedCandidates) {
+            Cloudlet cloudlet = waitingReady.get(taskId);
+            if (cloudlet != null) {
+                considerReadyTask(cloudlet);
             }
         }
     }
 
-    private void processNewlyReadyTask(Cloudlet cloudlet) {
+    private void considerReadyTask(Cloudlet cloudlet) {
         Job job = (Job) cloudlet;
         int taskId = primaryTaskId(job);
+        double now = CloudSim.clock();
+        WorkflowRecord workflow = activeWorkflows.get(workflowIdForJob(job));
+        if (workflow == null) return;
+
         CondorVM reserved = vmPool.getAnyIdleReservedVm(taskId);
         if (reserved != null) {
+            // The request has already started billing, even if it has not
+            // finished provisioning. Retain that cost when switching.
+            if (orderedOnDemand.remove(taskId) != null) {
+                cancelLogicalOnDemandContainer(taskId);
+            }
             cloudlet.setVmId(reserved.getId());
-            dispatchOne(cloudlet);
+            workflow.setAssignedVm(taskId, reserved.getId());
+            workflow.setScheduledStart(taskId, now);
+            dispatchScheduledJobs(java.util.Collections.singletonList(cloudlet));
+            waitingReady.remove(taskId);
+            thresholdWakeups.remove(taskId);
             CBMWLogger.logf("DG-DISPATCH",
-                    "event=READY wf=%d task=%d -> reserved vm=%d",
-                    workflowIdForJob(job), taskId, reserved.getId());
+                    "wf=%d task=%d -> reserved vm=%d at %.4f",
+                    workflow.getWorkflowId(), taskId, reserved.getId(), now);
             return;
         }
 
-        double sst = getSst(job);
-        if (CloudSim.clock() + EPS >= sst) {
-            rentOnDemand(cloudlet, "READY_AFTER_SST");
+        if (orderedOnDemand.containsKey(taskId)) {
+            if (isLogicalContainerReady(taskId)) {
+                int vmId = orderedOnDemand.get(taskId);
+                cloudlet.setVmId(vmId);
+                workflow.setAssignedVm(taskId,
+                        CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL);
+                workflow.setScheduledStart(taskId, now);
+                dispatchScheduledJobs(java.util.Collections.singletonList(cloudlet));
+                waitingReady.remove(taskId);
+                orderedOnDemand.remove(taskId);
+                thresholdWakeups.remove(taskId);
+                CBMWLogger.logf("DG-DISPATCH",
+                        "wf=%d task=%d -> on-demand vm=%d at %.4f",
+                        workflow.getWorkflowId(), taskId, vmId, now);
+            }
             return;
         }
 
-        delayedReady.put(taskId, cloudlet);
-        if (scheduledSstWakeups.add(taskId)) {
-            schedule(getId(), sst - CloudSim.clock(),
+        double orderThreshold = workflow.getLST(taskId)
+                - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY;
+        if (now + EPS >= orderThreshold) {
+            CondorVM container = orderLogicalOnDemandContainer(taskId);
+            orderedOnDemand.put(taskId, container.getId());
+            workflow.setAssignedVm(taskId,
+                    CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL);
+            workflow.setPlannedProvisionOrder(taskId, now);
+            workflow.setPlannedContainerReady(taskId,
+                    projectedOnDemandReadyTime(now));
+            if (projectedOnDemandReadyTime(now) > workflow.getLST(taskId) + EPS) {
+                accounting.markDeadlineRisk(taskId);
+            }
+            CBMWLogger.logf("DG-ORDER",
+                    "wf=%d task=%d requested at %.4f ready at %.4f LST=%.4f",
+                    workflow.getWorkflowId(), taskId, now,
+                    projectedOnDemandReadyTime(now), workflow.getLST(taskId));
+        } else if (thresholdWakeups.add(taskId)) {
+            schedule(getId(), orderThreshold - now,
                     WorkflowSimTags.DYNAMIC_GREEDY_SST_REACHED, taskId);
         }
-        CBMWLogger.logf("DG-DELAY",
-                "wf=%d task=%d delayed until sst=%.2f",
-                workflowIdForJob(job), taskId, sst);
     }
 
-    private void dispatchFirstExecutableDelayedTask() {
-        List<Cloudlet> delayed = new ArrayList<>(delayedReady.values());
-        delayed.sort(Comparator
-                .comparingDouble((Cloudlet cl) -> getSst((Job) cl))
-                .thenComparingInt(Cloudlet::getCloudletId));
-
-        for (Cloudlet cloudlet : delayed) {
-            int taskId = primaryTaskId((Job) cloudlet);
-            if (findReadyTask(taskId) == null) {
-                delayedReady.remove(taskId);
-                continue;
-            }
-            CondorVM reserved = vmPool.getAnyIdleReservedVm(taskId);
-            if (reserved == null) continue;
-
-            delayedReady.remove(taskId);
-            scheduledSstWakeups.remove(taskId);
-            cloudlet.setVmId(reserved.getId());
-            dispatchOne(cloudlet);
-            CBMWLogger.logf("DG-DISPATCH",
-                    "event=COMPLETE wf=%d task=%d -> reserved vm=%d",
-                    workflowIdForJob((Job) cloudlet), taskId, reserved.getId());
-            return;
-        }
-    }
-
-    private void processSstReached(int taskId) {
-        scheduledSstWakeups.remove(taskId);
-        Cloudlet cloudlet = findReadyTask(taskId);
-        if (cloudlet == null || lockedOnDemand.containsKey(taskId)) return;
-        delayedReady.remove(taskId);
-        rentOnDemand(cloudlet, "SST_REACHED");
-    }
-
-    private void rentOnDemand(Cloudlet cloudlet, String reason) {
-        Job job = (Job) cloudlet;
-        int taskId = primaryTaskId(job);
-        CondorVM container = orderLogicalOnDemandContainer(taskId);
-        lockedOnDemand.put(taskId, container.getId());
-        delayedReady.remove(taskId);
-        scheduledSstWakeups.remove(taskId);
-        cloudlet.setVmId(container.getId());
-        if (vmPool.isOnDemandContainerActive(container.getId())) {
-            dispatchOne(cloudlet);
-        }
-        CBMWLogger.logf("DG-DISPATCH",
-                "event=%s wf=%d task=%d -> on-demand vm=%d",
-                reason, workflowIdForJob(job), taskId, container.getId());
-    }
-
-    private void dispatchReadyLockedOnDemandTasks() {
-        List<Cloudlet> ready = new ArrayList<>();
-        for (Cloudlet cloudlet : getCloudletList()) {
-            int taskId = primaryTaskId((Job) cloudlet);
-            Integer vmId = lockedOnDemand.get(taskId);
-            if (vmId != null && vmPool.isOnDemandContainerActive(vmId)) {
-                cloudlet.setVmId(vmId);
-                ready.add(cloudlet);
-            }
-        }
-        for (Cloudlet cloudlet : ready) dispatchOne(cloudlet);
-    }
-
-    private void dispatchOne(Cloudlet cloudlet) {
-        dispatchScheduledJobs(Collections.singletonList(cloudlet));
-    }
-
-    private Cloudlet findReadyTask(int taskId) {
-        for (Cloudlet cloudlet : getCloudletList()) {
-            if (primaryTaskId((Job) cloudlet) == taskId) return cloudlet;
-        }
-        return null;
-    }
-
-    private double getSst(Job job) {
-        WorkflowRecord workflow = activeWorkflows.get(workflowIdForJob(job));
-        return workflow != null
-                ? workflow.getScheduledStart(primaryTaskId(job)) : 0.0;
+    private double latestStart(int taskId) {
+        Cloudlet cloudlet = waitingReady.get(taskId);
+        WorkflowRecord workflow = cloudlet == null ? null
+                : activeWorkflows.get(workflowIdForJob((Job) cloudlet));
+        return workflow == null ? Double.POSITIVE_INFINITY
+                : workflow.getLST(taskId);
     }
 }

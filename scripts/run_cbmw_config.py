@@ -4,6 +4,7 @@ import argparse
 import csv
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -14,6 +15,11 @@ ROOT = Path(__file__).resolve().parents[1]
 JARS = ":".join(str(path) for path in sorted((ROOT / "lib").glob("*.jar")))
 SUPPORTED = {15, 30, 45, 60, 75, 90}
 FACTORS = {1.2, 2.0, 4.0}
+ALGORITHMS = {
+    "CBMW": "CBMW", "SG": "StaticGreedy", "DG": "DynamicGreedy",
+    "STATICGREEDY": "StaticGreedy", "DYNAMICGREEDY": "DynamicGreedy",
+    "NOSF": "NOSF", "CEWB": "CEWB",
+}
 MEMORY_RESERVE_MIB = 1536  # OS, Python launcher, and JVM native memory
 
 
@@ -22,10 +28,15 @@ def read_config(path):
              for line in path.read_text().splitlines()]
     lines = [line for line in lines if line]
     if len(lines) < 3:
-        raise ValueError("Expected algorithm, thread limit, and at least one scenario")
-    algorithm = lines[0]
-    if algorithm != "CBMW":
-        raise ValueError("This batch launcher implements CBMW; baselines are separate")
+        raise ValueError("Expected algorithms, thread limit, and at least one scenario")
+    algorithms = []
+    for token in re.split(r"[\s,]+", lines[0]):
+        name = ALGORITHMS.get(token.upper())
+        if name is None:
+            raise ValueError(f"Unknown algorithm {token!r}; use CBMW, SG, DG, NOSF, or CEWB")
+        if name in algorithms:
+            raise ValueError(f"Duplicate algorithm: {token}")
+        algorithms.append(name)
     workers = int(lines[1])
     if workers < 1:
         raise ValueError("Concurrent experiment limit must be positive")
@@ -40,7 +51,7 @@ def read_config(path):
         if (mean, factor) in scenarios:
             raise ValueError(f"Duplicate scenario: {line}")
         scenarios.append((mean, factor))
-    return algorithm, workers, scenarios
+    return algorithms, workers, scenarios
 
 
 def memory_limit_mib():
@@ -92,14 +103,14 @@ def compile_java(base):
 
 
 
-def run_scenario(algorithm, mean, factor, base, classes,
+def run_scenario(algorithms, mean, factor, base, classes,
                  max_workflows, heap_mib):
     label = f"arrival{mean}_alpha{factor:g}"
     dest = base / label
     dest.mkdir(parents=True, exist_ok=True)
     command = [
         "java", "-Xms128m", f"-Xmx{heap_mib}m",
-        f"-Dcbmw.algorithms={algorithm}",
+        f"-Dcbmw.algorithms={','.join(algorithms)}",
         f"-Dcbmw.scenarios={label}_full500,{label}_edge200",
         f"-Dcbmw.output.dir={dest}",
         "-Dcbmw.export.details=false",
@@ -153,7 +164,7 @@ def main():
     parser.add_argument("--max-workflows", type=int,
                         help="Smoke test cap (production: omit)")
     args = parser.parse_args()
-    algorithm, requested, scenarios = read_config(args.config)
+    algorithms, requested, scenarios = read_config(args.config)
     # Full traces retain hundreds of thousands of task records. Reserve
     # memory for the OS and native JVM use before accepting concurrency.
     production = args.max_workflows is None or args.max_workflows > 100
@@ -162,13 +173,14 @@ def main():
                                memory_limit_mib())
     base = args.output.resolve()
     base.mkdir(parents=True, exist_ok=True)
-    print(f"Compiling; then running {len(scenarios)} scenarios, "
+    print(f"Compiling; then running {len(scenarios)} scenarios for "
+          f"{', '.join(algorithms)} (500 and 200 workflows per scenario), "
           f"up to {workers} concurrent JVMs (configured {requested}); "
           f"heap {heap_mib} MiB per JVM.", flush=True)
     classes = compile_java(base)
     completed = []
     with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = {executor.submit(run_scenario, algorithm, mean, factor,
+        futures = {executor.submit(run_scenario, algorithms, mean, factor,
                                    base, classes, args.max_workflows,
                                    heap_mib): (mean, factor)
                    for mean, factor in scenarios}
@@ -188,8 +200,13 @@ def main():
     merged = base / "combined"
     merged.mkdir(exist_ok=True)
     for filename in ("results.csv", "results_aggregate.csv"):
-        combine_csv([folder / "algorithms" / algorithm / filename
-                     for folder in completed], merged / filename)
+        for algorithm in algorithms:
+            per_algorithm = merged / algorithm
+            per_algorithm.mkdir(exist_ok=True)
+            combine_csv([folder / "algorithms" / algorithm / filename
+                         for folder in completed], per_algorithm / filename)
+        combine_csv([merged / algorithm / filename for algorithm in algorithms],
+                    merged / filename)
     combine_csv([folder / "performance_metrics.csv" for folder in completed],
                 merged / "performance_metrics.csv")
     print(f"Results: {merged}", flush=True)

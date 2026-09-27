@@ -16,6 +16,7 @@ import org.workflowsim.cbmw.AbstractWorkflowBroker;
 import org.workflowsim.cbmw.CBMWLogger;
 import org.workflowsim.cbmw.CBMWStaticPlanningAlgorithm;
 import org.workflowsim.cbmw.HybridVmPool;
+import org.workflowsim.cbmw.PaperRuntimeModel;
 import org.workflowsim.cbmw.WorkflowRecord;
 
 /**
@@ -24,8 +25,8 @@ import org.workflowsim.cbmw.WorkflowRecord;
  * Each valid workflow is fully planned when it arrives. Tasks are considered
  * by descending upward rank and assigned to their earliest deadline-feasible
  * reserved slot. A dedicated on-demand container is selected only when no
- * reserved slot exists in that window. Runtime execution keeps every planned
- * resource assignment fixed; actual runtimes may only delay the plan.
+ * reserved slot exists in that window. Runtime execution keeps each planned
+ * resource and exact start fixed, even if predecessors finish early.
  */
 public class StaticGreedyBroker extends AbstractWorkflowBroker {
 
@@ -58,19 +59,31 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
     }
 
     @Override
+    protected double estimatePlanningRuntime(double meanExecutionTime) {
+        return PaperRuntimeModel.conservativeEstimate(meanExecutionTime);
+    }
+
+    @Override
+    protected boolean billProvisioningDelay() {
+        return true;
+    }
+
+    @Override
     protected boolean planWorkflow(WorkflowRecord wfr, List<Task> tasks) {
         double arrival = wfr.getArrivalTime();
         Map<Integer, Double> upwardRank = negotiation.computeRemainingCPs(wfr);
+
+        Map<Integer, Double> lftMemo = new HashMap<>();
+        for (Task task : tasks) computeLFT(task, wfr, lftMemo);
 
         List<Task> sorted = new ArrayList<>(tasks);
         sorted.sort(Comparator
                 .comparingDouble((Task task) -> upwardRank.getOrDefault(
                         task.getCloudletId(), 0.0))
                 .reversed()
+                .thenComparingDouble(task -> wfr.getLFT(task.getCloudletId())
+                        - wfr.getEstimatedExecTime(task))
                 .thenComparingInt(Task::getCloudletId));
-
-        Map<Integer, Double> lftMemo = new HashMap<>();
-        for (Task task : tasks) computeLFT(task, wfr, lftMemo);
 
         Map<Integer, Double> plannedEnd = new HashMap<>();
         for (Task task : sorted) {
@@ -81,8 +94,12 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
 
             double est = arrival;
             for (Task parent : task.getParentList()) {
-                est = Math.max(est,
-                        plannedEnd.getOrDefault(parent.getCloudletId(), arrival));
+                Double parentFinish = plannedEnd.get(parent.getCloudletId());
+                if (parentFinish == null) {
+                    throw new IllegalStateException("Upward-rank order placed child "
+                            + taskId + " before parent " + parent.getCloudletId());
+                }
+                est = Math.max(est, parentFinish);
             }
             double lft = wfr.getLFT(taskId);
             wfr.setEST(taskId, est);
@@ -117,10 +134,16 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
                         wfr.getWorkflowId(), taskId, bestVm,
                         bestStart, bestStart + duration);
             } else {
-                double orderTime = Math.max(arrival,
-                        est - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
+                double plannedStart = Math.max(est, arrival
+                        + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
+                double orderTime = plannedStart
+                        - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY;
                 double readyTime = projectedOnDemandReadyTime(orderTime);
-                double plannedStart = Math.max(est, readyTime);
+                // Accept every workflow and record a task whose earliest
+                // provisionable execution already exceeds its latest start.
+                if (plannedStart > lft - duration + EPS) {
+                    accounting.markDeadlineRisk(taskId);
+                }
 
                 task.setVmId(CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL);
                 wfr.setAssignedVm(taskId,
