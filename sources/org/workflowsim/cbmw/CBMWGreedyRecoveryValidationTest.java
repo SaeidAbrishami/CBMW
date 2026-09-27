@@ -26,7 +26,7 @@ public final class CBMWGreedyRecoveryValidationTest {
         List<Task> tasks = Arrays.asList(parent, child);
         WorkflowRecord workflow = new WorkflowRecord(1, "recovery.xml", 0.0);
         workflow.setTaskList(tasks);
-        workflow.setDeadline(120.0); // 60 + 1.2 * (30 + 20)
+        workflow.setDeadline(120.25);
         workflow.setEstimatedExecTime(1, 30.0);
         workflow.setEstimatedExecTime(2, 20.0);
         workflow.setTaskResources(1, 1, 1, "VALIDATION");
@@ -45,12 +45,17 @@ public final class CBMWGreedyRecoveryValidationTest {
                 || childFinish > workflow.getDeadline() + 1e-9
                 || workflow.getLFT(1) > workflow.getScheduledStart(2) + 1e-9
                 || workflow.getLFT(2) > workflow.getDeadline() + 1e-9
-                || workflow.getScheduledStart(1) % 5.0 != 0.0
-                || workflow.getScheduledStart(2) % 5.0 != 0.0
                 || workflow.getAssignedVm(2)
                         != CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL
-                || workflow.getPlannedProvisionOrder(2) < 0.0) {
-            throw new AssertionError("Recovery failed to build a feasible periodic plan");
+                || Math.abs(workflow.getScheduledStart(2) - 90.0) > 1e-9
+                || Math.abs(workflow.getScheduledStart(2)
+                    - workflow.getPlannedProvisionOrder(2)
+                    - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY) > 1e-9) {
+            throw new AssertionError("Recovery failed to preserve an exact-time feasible plan:"
+                    + " parent=" + workflow.getScheduledStart(1)
+                    + " child=" + workflow.getScheduledStart(2)
+                    + " order=" + workflow.getPlannedProvisionOrder(2)
+                    + " assigned=" + workflow.getAssignedVm(2));
         }
         System.out.println("CBMWGreedyRecoveryValidationTest: PASS");
     }

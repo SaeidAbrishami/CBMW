@@ -139,7 +139,7 @@ public class CBMWBroker extends AbstractWorkflowBroker {
                 this::cancelLogicalOnDemandContainer,
                 this::isLogicalContainerReady);
         CBMWLogger.logf("CONFIG",
-                "periodicDispatch=true interval=%.1f opd=%.1f",
+                "exactSstDispatch=true advanceInterval=%.1f opd=%.1f",
                 HybridVmPool.SCHEDULING_PERIOD,
                 HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
     }
@@ -187,9 +187,10 @@ public class CBMWBroker extends AbstractWorkflowBroker {
                     != CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL) {
                 continue;
             }
-            double orderTime = CBMWStaticPlanningAlgorithm.floorTick(
-                    wfr.getScheduledStart(taskId)
-                    - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
+            double orderTime = wfr.hasPlannedProvisionOrder(taskId)
+                    ? wfr.getPlannedProvisionOrder(taskId)
+                    : wfr.getScheduledStart(taskId)
+                        - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY;
             plannedOrders.add(new PlannedOrder(taskId, orderTime));
             schedule(getId(), Math.max(0.0, orderTime - now),
                     WorkflowSimTags.CBMW_ON_DEMAND_ORDER, taskId);
@@ -236,8 +237,17 @@ public class CBMWBroker extends AbstractWorkflowBroker {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     protected void processCloudletUpdate(SimEvent ev) {
+        dispatchReady(true);
+    }
+
+    @Override
+    protected void onDeferredCloudletUpdate(SimEvent ev) {
+        dispatchReady(false);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void dispatchReady(boolean advanceFuture) {
         try {
             immediateReservedCapacityWake = false;
             List<Cloudlet> ready = (List<Cloudlet>) getCloudletList();
@@ -249,7 +259,11 @@ public class CBMWBroker extends AbstractWorkflowBroker {
             long dispatchStart = CBMWPerformanceMetrics.isEnabled()
                     ? System.nanoTime() : 0L;
             try {
-                dynamicScheduler.run();
+                if (advanceFuture) {
+                    dynamicScheduler.run();
+                } else {
+                    dynamicScheduler.runDueOnly();
+                }
                 dispatchScheduledJobs(dynamicScheduler.getScheduledList());
                 launchDueContainers();
             } catch (Exception e) {
@@ -277,13 +291,30 @@ public class CBMWBroker extends AbstractWorkflowBroker {
         }
     }
 
-    /**
-     * Retained as an inert compatibility hook for earlier wake-up tests.
-     */
     @SuppressWarnings("unchecked")
     private void scheduleNextReservedSstWake() {
-        // The base broker schedules the next five-second tick when an event
-        // arrives between ticks. No immediate SST dispatch is permitted.
+        List<Cloudlet> ready = (List<Cloudlet>) getCloudletList();
+        double now = CloudSim.clock();
+        int low = 0;
+        int high = ready.size();
+        while (low < high) {
+            int middle = (low + high) >>> 1;
+            if (scheduledStart(ready.get(middle)) <= now + SST_WAKE_EPSILON) {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        if (low == ready.size()) {
+            reservedSstWakeController.clear();
+            return;
+        }
+        double nextSst = scheduledStart(ready.get(low));
+        ReservedSstWake wake = reservedSstWakeController.arm(nextSst);
+        if (wake != null) {
+            schedule(getId(), nextSst - now,
+                    WorkflowSimTags.CBMW_RESERVED_SST_WAKE, wake);
+        }
     }
 
     /**
@@ -603,6 +634,10 @@ public class CBMWBroker extends AbstractWorkflowBroker {
     @Override
     public void processEvent(SimEvent ev) {
         if (ev.getTag() == WorkflowSimTags.CBMW_RESERVED_SST_WAKE) {
+            if (reservedSstWakeController.consume(
+                    (ReservedSstWake) ev.getData())) {
+                sendNow(getId(), WorkflowSimTags.CLOUDLET_UPDATE);
+            }
             return;
         }
         if (ev.getTag() == CloudSimTags.CLOUDLET_CANCEL) {
@@ -610,9 +645,7 @@ public class CBMWBroker extends AbstractWorkflowBroker {
             return;
         }
         if (ev.getTag() == WorkflowSimTags.CBMW_ON_DEMAND_ORDER) {
-            // Wake the periodic scheduler; requests are issued after its
-            // ready-task passes, whether or not the task is ready.
-            sendNow(getId(), WorkflowSimTags.CLOUDLET_UPDATE);
+            launchDueContainers();
             return;
         }
         super.processEvent(ev);

@@ -87,7 +87,7 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
             double lft = computeLFT(task, lftMemo, deadline);
             double dur = duration(task);
             double est = eft - dur;
-            double lst = floorTick(lft - dur);
+            double lst = lft - dur;
 
             wfr.setEST(task.getCloudletId(), est);
             wfr.setEFT(task.getCloudletId(), eft);
@@ -103,7 +103,7 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
         double est = wfr.getEST(taskId);
         double dur = duration(task);
         double lft = effectiveLatestFinish(task);
-        double lst = floorTick(lft - dur);
+        double lst = lft - dur;
 
         // The paper timing sweep is resource-agnostic. Once a child has been
         // placed, tighten its parents against the child's selected execution
@@ -147,11 +147,11 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
         }
 
         // SST denotes execution start on both resource types. The order is
-        // placed at the preceding tick, one OPD before this execution slot.
+        // placed exactly one OPD before this execution slot.
         double sst = lst;
-        double spt = floorTick(sst - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
-        if (sst + 1e-9 < ceilTick(est)
-                || spt + 1e-9 < ceilTick(wfr.getArrivalTime())) {
+        double spt = sst - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY;
+        if (sst + 1e-9 < est
+                || spt + 1e-9 < wfr.getArrivalTime()) {
             throw new IllegalStateException("No feasible on-demand request for task "
                     + taskId + " (execution=" + sst + ", request=" + spt + ")");
         }
@@ -170,14 +170,14 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
     }
 
     /**
-     * Recovery plan: provision each task no earlier than the next periodic
-     * tick after arrival, and use a reserved slot only if it can finish no
-     * later than that task's earliest on-demand alternative. Thus a reserved
-     * decision cannot make any dependency path slower than the on-demand plan.
+     * Recovery plan: consider provisioning from arrival and place the actual
+     * request exactly one OPD before execution. Use a reserved slot only if
+     * it starts no later than that task's earliest on-demand alternative,
+     * so reserved placement cannot slow down a dependency path.
      */
     private void planEarliestFeasible(List<Task> tasks) {
         Map<Integer, Double> finishes = new HashMap<>();
-        double order = ceilTick(Math.max(wfr.getArrivalTime(), CloudSim.clock()));
+        double order = Math.max(wfr.getArrivalTime(), CloudSim.clock());
         double ready = order + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY;
         for (Task task : tasks) {
             placeEarliest(task, finishes, order, ready);
@@ -195,32 +195,26 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
                     placeEarliest(parent, finishes, order, ready));
         }
         double dur = duration(task);
-        double onDemandStart = ceilTick(Math.max(dependencyReady, ready));
+        double onDemandStart = Math.max(dependencyReady, ready);
         int bestVm = ON_DEMAND_SENTINEL;
         double bestStart = onDemandStart;
         int cores = wfr.getTaskCores(id);
         int ramMb = wfr.getTaskRamMb(id);
-        // Examine only ticks that could improve on the on-demand start.
-        // Scanning the whole future booking profile here is unbounded under
-        // contention, while the useful window is at most one OPD long.
-        double earliestReserved = ceilTick(Math.max(dependencyReady,
-                CloudSim.clock()));
-        for (double slot = earliestReserved;
-                slot <= onDemandStart + 1e-9 && bestVm == ON_DEMAND_SENTINEL;
-                slot += HybridVmPool.SCHEDULING_PERIOD) {
-            for (CondorVM vm : pool.getReservedVms()) {
-                if (pool.hasBookedCapacity(vm.getId(), slot,
-                        slot + dur, cores, ramMb)) {
-                    bestVm = vm.getId();
-                    bestStart = slot;
-                    break;
-                }
+        double earliestReserved = Math.max(dependencyReady, CloudSim.clock());
+        for (CondorVM vm : pool.getReservedVms()) {
+            double slot = pool.findEarliestFeasibleSlot(vm.getId(),
+                    earliestReserved, onDemandStart + dur, dur, cores, ramMb);
+            if (slot < bestStart - 1e-9
+                    || (bestVm == ON_DEMAND_SENTINEL
+                        && slot <= bestStart + 1e-9)) {
+                bestVm = vm.getId();
+                bestStart = slot;
             }
         }
         double finish = bestStart + dur;
         if (finish > wfr.getDeadline() + 1e-9) {
             throw new IllegalStateException(String.format(
-                    "No periodic plan by deadline for workflow %d task %d"
+                    "No feasible plan by deadline for workflow %d task %d"
                             + " (finish=%.4f deadline=%.4f)",
                     wfr.getWorkflowId(), id, finish, wfr.getDeadline()));
         }
@@ -228,8 +222,9 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
         wfr.setAssignedVm(id, bestVm);
         wfr.setScheduledStart(id, bestStart);
         if (bestVm == ON_DEMAND_SENTINEL) {
-            wfr.setPlannedProvisionOrder(id, order);
-            wfr.setPlannedContainerReady(id, ready);
+            wfr.setPlannedProvisionOrder(id,
+                    bestStart - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
+            wfr.setPlannedContainerReady(id, bestStart);
         } else {
             pool.bookSlot(bestVm, id, bestStart, finish, cores, ramMb);
         }
@@ -246,10 +241,10 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
                         wfr.getScheduledStart(child.getCloudletId()));
             }
             // The initial sweep is resource-independent and can have less
-            // space than a feasible tick-aligned execution. Preserve the
+            // space than a feasible execution. Preserve the
             // actual conservative finish as this task's lower bound.
             lft = Math.max(lft, wfr.getScheduledStart(id) + duration(task));
-            double lst = floorTick(lft - duration(task));
+            double lst = lft - duration(task);
             wfr.setLFT(id, lft);
             wfr.setLST(id, lst);
             task.setLatestStartTime(lst);
@@ -318,23 +313,9 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
      */
     private double findLatestFeasibleSlot(int vmId, double est, double lft,
                                           double dur, int cores, int ramMb) {
-        double earliest = ceilTick(Math.max(est, CloudSim.clock()));
-        // Search the event profile backward, then verify each tick-aligned
-        // candidate over its exact conservative execution interval.
-        double upper = lft;
-        while (upper + 1e-9 >= earliest + dur) {
-            double raw = pool.findLatestFeasibleSlot(
-                    vmId, earliest, upper, dur, cores, ramMb);
-            if (raw < 0.0) return -1.0;
-            double candidate = floorTick(raw);
-            if (candidate + 1e-9 >= earliest
-                    && pool.hasBookedCapacity(vmId, candidate,
-                            candidate + dur, cores, ramMb)) {
-                return candidate;
-            }
-            upper = candidate + dur - 1e-6;
-        }
-        return -1.0;
+        double earliest = Math.max(est, CloudSim.clock());
+        return pool.findLatestFeasibleSlot(vmId, earliest, lft,
+                dur, cores, ramMb);
     }
 
     private double computeEFT(Task task, Map<Integer, Double> memo) {
@@ -357,8 +338,8 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
 
         double lft = deadline;
         for (Task child : task.getChildList()) {
-            lft = Math.min(lft, floorTick(
-                    computeLFT(child, memo, deadline) - duration(child)));
+            lft = Math.min(lft,
+                    computeLFT(child, memo, deadline) - duration(child));
         }
 
         memo.put(taskId, lft);
@@ -367,15 +348,5 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
 
     private double duration(Task task) {
         return wfr.getEstimatedExecTime(task);
-    }
-
-    static double floorTick(double time) {
-        double period = HybridVmPool.SCHEDULING_PERIOD;
-        return period * Math.floor((time + 1e-9) / period);
-    }
-
-    static double ceilTick(double time) {
-        double period = HybridVmPool.SCHEDULING_PERIOD;
-        return period * Math.ceil((time - 1e-9) / period);
     }
 }

@@ -16,9 +16,8 @@ import org.workflowsim.WorkflowSimTags;
 import org.workflowsim.scheduling.BaseSchedulingAlgorithm;
 
 /**
- * Periodic dispatcher: due ready tasks first, then all remaining ready tasks
- * for an earlier reserved start. The broker launches due containers after
- * these two passes. SST denotes planned execution start on both resource types.
+ * Dispatch due ready tasks on SST events; only periodic passes examine future
+ * tasks for an earlier reserved start. SST is the planned execution start.
  */
 public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
 
@@ -94,8 +93,17 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public void run() {
+        run(true);
+    }
+
+    /** Exact-time wakes use the due pass without scanning every future task. */
+    public void runDueOnly() {
+        run(false);
+    }
+
+    @SuppressWarnings("unchecked")
+    private void run(boolean advanceFuture) {
         if (pool == null) return;
         double now = CloudSim.clock();
         List<Cloudlet> readyJobs = (List<Cloudlet>) getCloudletList();
@@ -144,6 +152,11 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                     }
                 }
             }
+        }
+
+        if (!advanceFuture) {
+            getScheduledList().addAll(selected);
+            return;
         }
 
         // Failure for one task does not preclude another task with different

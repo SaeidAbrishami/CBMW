@@ -4,6 +4,39 @@ Implementation of the **CBMW** (Cost-efficient Broker for Multiple Workflows) al
 
 CBMW manages a hybrid pool of reserved VMs (fixed hourly cost) and on-demand containers (per-second cost) to schedule dynamically arriving scientific workflows while meeting user-specified deadlines at minimum cost.
 
+This `codex/cbmw-exact-sst-paper` branch tests exact-time CBMW starts against
+the optimized periodic baseline on `codex/cbmw-config-concurrency`. A ready task
+can dispatch when its planned SST arrives, and a static on-demand order is
+issued at its planned SPT (`SST - 60 seconds`). Completion or container readiness
+can also dispatch an overdue task between ticks. Only attempts to advance tasks
+*before* their SST scan the full ready queue every five seconds. Static LFT/LST
+and reserved bookings use continuous time. Compare the two branches using the
+same scenario, workflow cap, runtime seed, JVM heap, and machine before choosing
+which method to report in the paper.
+
+### Preliminary matched comparison
+
+Both versions were run sequentially on `arrival15_alpha1.2_full500`, with
+the same first 20 or 100 workflows, TXT runtimes, default resources, one
+repetition, 2 GiB JVM heap, and details/charts disabled. The times below
+include loading the 500-workflow manifest. These capped runs establish
+correctness and give an early performance indication; they are not the
+full 500/200 paper experiment.
+
+| Workflows | Version | Deadlines met | Wall time | Total cost | Simulated makespan |
+|-----------|---------|---------------|-----------|------------|--------------------|
+| 20 | Optimized periodic | 20/20 | 28.26 s | 40.9458 | 4790 s |
+| 20 | Exact SST | 20/20 | 26.97 s | 41.1113 | 4790 s |
+| 100 | Optimized periodic | 100/100 | 82.48 s | 78.9987 | 7760 s |
+| 100 | Exact SST | 100/100 | 52.94 s | 79.9981 | 7880 s |
+
+The 100-workflow exact-SST run started 4,226 tasks at fractional SSTs, and
+its planned on-demand orders occurred exactly 60 seconds before SST. Its
+runtime was lower in this single run, while total cost was higher because
+reserved rental covered an additional 120 simulated seconds. Repeat the full
+scenario pairs and compare both deadline success and cost before selecting the
+paper result.
+
 ## Revised CBMW experiments on Linux (8 cores, 8 GiB)
 
 Edit `config/cbmw_experiments.txt`: line 1 selects `CBMW`, line 2 sets the
@@ -33,9 +66,10 @@ config/cbmw_experiments.txt --max-workflows 5` for a smoke test.
 During each dataset, the terminal and that scenario's `run.log` print a
 `[progress]` line every 60 seconds of wall-clock time. It reports distinct
 tasks started, completed tasks, and completion percentage of tasks in accepted
-workflows. Rejected workflows are excluded from the denominator. Each
-configuration reports the full 500 and edge 200 datasets separately, and a
-final progress line appears when each dataset finishes. The progress timer
+workflows. `rejectedWorkflows` counts rejected workflows; their tasks are
+excluded from the completion denominator. Each configuration reports the full
+500 and edge 200 datasets separately, and a final progress line appears when
+each dataset finishes. The progress timer
 can be changed with `-Dcbmw.progress.interval.sec=N` when invoking Java
 directly; the batch launcher uses 60 seconds.
 
@@ -53,21 +87,20 @@ Use `python3 scripts/prepare_cbmw_manifests.py` to reproduce the 75/90-second
 traces and the corrected compressed boundary traces. The simulation assumes
 one bounded-uniform runtime sample per task from the supplied TXT files, a
 20% conservative planning margin, one 60-second allowance in generated
-deadlines, 5-second dispatch ticks and 60-second billable provisioning for
+deadlines, 5-second advancement checks and 60-second billable provisioning for
 each on-demand container.
 
-The 60-second allowance covers the earliest on-demand order placed at the
-next scheduling tick after arrival; the 1.2 factor provides additional room
-over the conservative critical path. Neither value alone guarantees
-admission under periodic ticks and reserved-capacity contention. If CBMW's
+The 60-second allowance covers an on-demand order placed at workflow arrival;
+the 1.2 factor provides additional room over the conservative critical path.
+Neither value alone guarantees admission under reserved-capacity contention. If CBMW's
 backward reserved-slot pass cannot place a workflow, it releases that
-workflow's tentative bookings and tries an earliest feasible periodic plan.
+workflow's tentative bookings and tries an earliest feasible continuous plan.
 This recovery uses reserved capacity only when it starts no later than the
 task's on-demand alternative, and rejects a workflow if the resulting plan
 still exceeds its deadline. Recovery may raise on-demand cost.
 If an earlier task occupies a reserved VM past a committed start, the ready
-task waits for a later periodic dispatch; measured deadline misses include
-any resulting delay.
+task waits until capacity is released; measured deadline misses include any
+resulting delay.
 
 ### Task Runtime Meaning
 
@@ -138,18 +171,18 @@ CBMW processes each workflow arrival through four sequential modules:
 |--------|-------|------|
 | 1. Negotiation | `NegotiationModule` | Uses the static planner as its admission test, quotes the planned cost, and accepts the quote |
 | 2. Static Planning | `CBMWStaticPlanningAlgorithm` | Backward sweep assigns each task a reserved VM slot at its Latest Start Time (LST = deadline − remainingCP) |
-| 3. Dynamic Scheduling | `CBMWDynamicSchedulingAlgorithm` | Dispatches on five-second ticks while honoring committed reserved bookings |
+| 3. Dynamic Scheduling | `CBMWDynamicSchedulingAlgorithm` | Dispatches ready tasks at SST and scans future tasks for advancement every five seconds |
 | 4. Provisioning | `ProvisioningModule` | Spins up and terminates on-demand VMs; tracks per-task costs |
 
 The backward sweep in Module 2 deliberately defers reservations to the latest feasible slot, keeping earlier capacity free for workflows that have not yet arrived.
 
 When reserved placement fails, SST is the on-demand task's planned execution
-start at LST. The request is issued at the aligned time `Spt =
-floor_tick(SST - opd)`. The planner rejects a plan if that request would
-precede the first tick after arrival or if execution would precede the task's
-precedence bound. On each tick the dynamic scheduler first serves due ready
-tasks, then tries every other ready task on reserved capacity, and finally
-issues all due on-demand requests, including tasks that are not yet ready.
+start at LST. The request is issued at `Spt = SST - opd`. The planner rejects
+a plan if that request would precede workflow arrival or if execution would
+precede the task's precedence bound. An exact-time wake dispatches due ready
+tasks; on each five-second tick the dynamic scheduler also tries to advance
+future ready tasks on reserved capacity. On-demand orders are issued at their
+planned request time, including for tasks that are not yet ready.
 Previously committed reserved slots remain available at their planned start;
 an early start replaces only the task's own future booking.
 

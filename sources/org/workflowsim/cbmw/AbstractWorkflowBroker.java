@@ -158,6 +158,7 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
                 processPendingVmCreations();
                 if (usesPeriodicScheduling() && !isSchedulingMoment()) {
                     CBMWPerformanceMetrics.recordPeriodicDeferral();
+                    onDeferredCloudletUpdate(ev);
                     return;
                 }
                 CBMWPerformanceMetrics.recordSchedulingPass(getCloudletList().size());
@@ -440,6 +441,9 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
 
     /** Dispatch ready jobs to VMs. Triggered on every CLOUDLET_UPDATE event. */
     protected abstract void processCloudletUpdate(SimEvent ev);
+
+    /** Optional due-task dispatch after readiness changes between full scans. */
+    protected void onDeferredCloudletUpdate(SimEvent ev) {}
 
     // -----------------------------------------------------------------------
     // Workflow arrival — template method
