@@ -3,19 +3,24 @@ package org.workflowsim.cbmw.baselines;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import org.cloudbus.cloudsim.Cloudlet;
-import org.cloudbus.cloudsim.Log;
 import org.cloudbus.cloudsim.core.CloudSim;
 import org.cloudbus.cloudsim.core.SimEvent;
 import org.workflowsim.CondorVM;
+import org.workflowsim.Job;
 import org.workflowsim.Task;
 import org.workflowsim.WorkflowSimTags;
 import org.workflowsim.cbmw.AbstractWorkflowBroker;
 import org.workflowsim.cbmw.CBMWLogger;
 import org.workflowsim.cbmw.CBMWStaticPlanningAlgorithm;
 import org.workflowsim.cbmw.HybridVmPool;
+import org.workflowsim.cbmw.IndexedCloudletQueue;
 import org.workflowsim.cbmw.PaperRuntimeModel;
 import org.workflowsim.cbmw.WorkflowRecord;
 
@@ -31,14 +36,23 @@ import org.workflowsim.cbmw.WorkflowRecord;
 public class StaticGreedyBroker extends AbstractWorkflowBroker {
 
     private static final double EPS = 1e-9;
-    private final StaticGreedySchedulingAlgorithm dispatcher;
+    private final Map<Integer, Cloudlet> readyTasks = new HashMap<>();
+    private final TreeMap<Double, List<Cloudlet>> futureReady = new TreeMap<>();
+    private final Comparator<Cloudlet> plannedOrder = Comparator
+            .comparingDouble((Cloudlet cl) -> plannedStart((Job) cl))
+            .thenComparingInt(Cloudlet::getCloudletId);
+    private final TreeSet<Cloudlet> dueReserved = new TreeSet<>(plannedOrder);
+    private final TreeSet<Cloudlet> dueOnDemand = new TreeSet<>(plannedOrder);
+    private final Set<Cloudlet> newlyDue = new HashSet<>();
+    private final Set<Integer> containersReady = new HashSet<>();
+    private final Map<Integer, Integer> taskByContainer = new HashMap<>();
+    private boolean reservedReleased;
     private long wakeGeneration;
     private double scheduledWakeTime = Double.POSITIVE_INFINITY;
 
     public StaticGreedyBroker(String name, double tightness) throws Exception {
         super(name, tightness);
-        this.dispatcher = new StaticGreedySchedulingAlgorithm(
-                vmPool, activeWorkflows, provisioner);
+        setCloudletList(new IndexedCloudletQueue());
     }
 
     /** StaticGreedy has no CBMW admission gate: every valid arrival is planned. */
@@ -119,6 +133,9 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
                     bestStart = start;
                     bestVm = vm.getId();
                 }
+                // No VM can start earlier than EST; reserved VMs are in ID
+                // order, so this is also the best possible tie break.
+                if (bestStart <= est + EPS) break;
             }
 
             task.setWorkflowId(wfr.getWorkflowId());
@@ -186,7 +203,8 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
     public void processEvent(SimEvent ev) {
         if (ev.getTag() == WorkflowSimTags.STATIC_GREEDY_ON_DEMAND_ORDER) {
             int taskId = (Integer) ev.getData();
-            orderLogicalOnDemandContainer(taskId);
+            CondorVM container = orderLogicalOnDemandContainer(taskId);
+            taskByContainer.put(container.getId(), taskId);
             return;
         }
         if (ev.getTag() == WorkflowSimTags.STATIC_GREEDY_SCHEDULE_WAKE) {
@@ -202,20 +220,100 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
 
     @Override
     @SuppressWarnings("unchecked")
-    protected void processCloudletUpdate(SimEvent ev) {
-        recordReadyQueue((List<Cloudlet>) getCloudletList());
-        dispatcher.setCloudletList(getCloudletList());
-        dispatcher.setVmList(getVmsCreatedList());
-        dispatcher.getScheduledList().clear();
-        try {
-            dispatcher.run();
-        } catch (Exception e) {
-            Log.printLine("StaticGreedy dispatcher error: " + e.getMessage());
+    protected void processCloudletSubmit(SimEvent ev) {
+        List<Cloudlet> jobs = (List<Cloudlet>) ev.getData();
+        recordReadyQueue(jobs);
+        double now = CloudSim.clock();
+        for (Cloudlet cl : jobs) {
+            readyTasks.put(cl.getCloudletId(), cl);
+            double start = plannedStart((Job) cl);
+            if (start <= now + EPS) {
+                addDue(cl);
+                newlyDue.add(cl);
+            } else {
+                futureReady.computeIfAbsent(start,
+                        ignored -> new ArrayList<>()).add(cl);
+            }
         }
-        dispatchScheduledJobs(dispatcher.getScheduledList());
+        super.processCloudletSubmit(ev);
+    }
 
-        double nextWake = dispatcher.getNextWakeTime();
-        scheduleNextWake(nextWake);
+    @Override
+    protected void onLogicalContainerReady(int vmId) {
+        Integer taskId = taskByContainer.get(vmId);
+        if (taskId != null) containersReady.add(taskId);
+    }
+
+    @Override
+    protected void onTaskSubmitted(Cloudlet cl, boolean onDemand) {
+        readyTasks.remove(cl.getCloudletId());
+        dueReserved.remove(cl);
+        dueOnDemand.remove(cl);
+        if (onDemand) taskByContainer.remove(cl.getVmId());
+    }
+
+    @Override
+    protected void processCloudletUpdate(SimEvent ev) {
+        double now = CloudSim.clock();
+        TreeSet<Cloudlet> candidates = new TreeSet<>(plannedOrder);
+        candidates.addAll(newlyDue);
+        newlyDue.clear();
+
+        while (!futureReady.isEmpty()
+                && futureReady.firstKey() <= now + EPS) {
+            for (Cloudlet cl : futureReady.pollFirstEntry().getValue()) {
+                addDue(cl);
+                candidates.add(cl);
+            }
+        }
+        if (reservedReleased) {
+            candidates.addAll(dueReserved);
+            reservedReleased = false;
+        }
+        for (int taskId : containersReady) {
+            Cloudlet cl = readyTasks.get(taskId);
+            if (cl != null && dueOnDemand.contains(cl)) candidates.add(cl);
+        }
+        containersReady.clear();
+
+        List<Cloudlet> scheduled = new ArrayList<>();
+        for (Cloudlet cl : candidates) {
+            int taskId = cl.getCloudletId();
+            Job job = (Job) cl;
+            WorkflowRecord wfr = activeWorkflows.get(workflowIdForJob(job));
+            if (wfr == null || !readyTasks.containsKey(taskId)) continue;
+            int plannedVm = wfr.getAssignedVm(taskId);
+            if (plannedVm != CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL) {
+                if (vmPool.hasRuntimeCapacity(plannedVm, taskId)) {
+                    job.setVmId(plannedVm);
+                    scheduled.add(job);
+                }
+            } else {
+                CondorVM container = provisioner.getProvisionedVm(taskId);
+                if (container != null
+                        && vmPool.isOnDemandContainerActive(container.getId())) {
+                    job.setVmId(container.getId());
+                    scheduled.add(job);
+                }
+            }
+        }
+        dispatchScheduledJobs(scheduled);
+        scheduleNextWake(futureReady.isEmpty()
+                ? Double.POSITIVE_INFINITY : futureReady.firstKey());
+    }
+
+    private void addDue(Cloudlet cl) {
+        WorkflowRecord wfr = activeWorkflows.get(workflowIdForJob((Job) cl));
+        if (wfr == null) return;
+        (wfr.getAssignedVm(cl.getCloudletId())
+                == CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL
+                ? dueOnDemand : dueReserved).add(cl);
+    }
+
+    private double plannedStart(Job job) {
+        WorkflowRecord wfr = activeWorkflows.get(workflowIdForJob(job));
+        return wfr == null ? Double.POSITIVE_INFINITY
+                : wfr.getScheduledStart(primaryTaskId(job));
     }
 
     /** Keeps at most one effective future plan wake; older events become stale. */
@@ -233,5 +331,6 @@ public class StaticGreedyBroker extends AbstractWorkflowBroker {
     @Override
     protected void onTaskComplete(Cloudlet cl) {
         vmPool.releaseSlot(cl.getCloudletId());
+        reservedReleased = true;
     }
 }

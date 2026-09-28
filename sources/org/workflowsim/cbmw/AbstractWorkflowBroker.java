@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeMap;
 import javax.xml.parsers.DocumentBuilderFactory;
 import org.cloudbus.cloudsim.Cloudlet;
 import org.cloudbus.cloudsim.Log;
@@ -66,6 +67,8 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
     // Logical on-demand containers waiting for their OPD to expire.
     // vmId -> simTime at which the dedicated container becomes available.
     private final Map<Integer, Double> pendingVmCreations = new HashMap<>();
+    private final TreeMap<Double, Set<Integer>> pendingCreationsByReadyTime =
+            new TreeMap<>();
     private final Set<Integer> readyOnDemandContainers = new HashSet<>();
     private final Set<Integer> submittedVmIds = new HashSet<>();
 
@@ -308,23 +311,24 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
      */
     private void processPendingVmCreations() {
         double now = CloudSim.clock();
-        List<Integer>  toRemove  = new ArrayList<>();
         List<CondorVM> readyContainers = new ArrayList<>();
-        for (Map.Entry<Integer, Double> e : pendingVmCreations.entrySet()) {
-            if (now >= e.getValue()) {
-                CondorVM vm = vmPool.getVmById(e.getKey());
+        while (!pendingCreationsByReadyTime.isEmpty()
+                && pendingCreationsByReadyTime.firstKey() <= now) {
+            Set<Integer> dueIds = pendingCreationsByReadyTime.pollFirstEntry().getValue();
+            for (int vmId : dueIds) {
+                pendingVmCreations.remove(vmId);
+                CondorVM vm = vmPool.getVmById(vmId);
                 if (vm != null && !submittedVmIds.contains(vm.getId())) {
                     readyContainers.add(vm);
                 }
-                toRemove.add(e.getKey());
             }
         }
-        toRemove.forEach(pendingVmCreations::remove);
         if (!readyContainers.isEmpty()) {
             for (CondorVM container : readyContainers) {
                 readyOnDemandContainers.add(container.getId());
                 vmPool.activateOnDemandContainer(container.getId());
                 accounting.markOnDemandLaunched(container.getId(), now);
+                onLogicalContainerReady(container.getId());
             }
             accounting.snapshotUtilization(vmPool);
             CBMWLogger.logf("VM-PROVISION-READY",
@@ -333,6 +337,9 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
                     HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
         }
     }
+
+    /** Lets event-driven brokers consider only the container that became ready. */
+    protected void onLogicalContainerReady(int vmId) {}
 
     protected void dispatchScheduledJobs(List<Cloudlet> toSchedule) {
         List<Cloudlet> actuallySubmitted = new ArrayList<>();
@@ -376,8 +383,12 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         }
 
         if (!actuallySubmitted.isEmpty()) {
-            Set<Cloudlet> submitted = new HashSet<>(actuallySubmitted);
-            getCloudletList().removeIf(submitted::contains);
+            if (getCloudletList() instanceof IndexedCloudletQueue) {
+                for (Cloudlet cl : actuallySubmitted) getCloudletList().remove(cl);
+            } else {
+                Set<Cloudlet> submitted = new HashSet<>(actuallySubmitted);
+                getCloudletList().removeIf(submitted::contains);
+            }
         }
         getCloudletSubmittedList().addAll(actuallySubmitted);
         cloudletsSubmitted += actuallySubmitted.size();
@@ -709,6 +720,8 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         double orderedAt = CloudSim.clock();
         double readyAt = projectedOnDemandReadyTime(orderedAt);
         pendingVmCreations.put(vmId, readyAt);
+        pendingCreationsByReadyTime.computeIfAbsent(readyAt,
+                ignored -> new HashSet<>()).add(vmId);
         accounting.markOnDemandOrdered(vmId, vm.getNumberOfPes(), vm.getRam(),
                 orderedAt, readyAt);
         if (billProvisioningDelay()) {
@@ -741,7 +754,14 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         CondorVM vm = provisioner.jobCompleted(taskId);
         if (vm == null) return;
         int vmId = vm.getId();
-        pendingVmCreations.remove(vmId);
+        Double readyAt = pendingVmCreations.remove(vmId);
+        if (readyAt != null) {
+            Set<Integer> pendingAtTime = pendingCreationsByReadyTime.get(readyAt);
+            if (pendingAtTime != null) {
+                pendingAtTime.remove(vmId);
+                if (pendingAtTime.isEmpty()) pendingCreationsByReadyTime.remove(readyAt);
+            }
+        }
         readyOnDemandContainers.remove(vmId);
         double destroyAt = accounting.billableDestroyTime(vmId, CloudSim.clock());
         accounting.markOnDemandDestroyed(vmId, destroyAt);

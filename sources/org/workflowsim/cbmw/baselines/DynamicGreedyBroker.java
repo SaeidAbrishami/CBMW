@@ -4,9 +4,11 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import org.cloudbus.cloudsim.Cloudlet;
 import org.cloudbus.cloudsim.core.CloudSim;
 import org.cloudbus.cloudsim.core.SimEvent;
@@ -18,6 +20,7 @@ import org.workflowsim.cbmw.AbstractWorkflowBroker;
 import org.workflowsim.cbmw.CBMWLogger;
 import org.workflowsim.cbmw.CBMWStaticPlanningAlgorithm;
 import org.workflowsim.cbmw.HybridVmPool;
+import org.workflowsim.cbmw.IndexedCloudletQueue;
 import org.workflowsim.cbmw.PaperRuntimeModel;
 import org.workflowsim.cbmw.WorkflowRecord;
 
@@ -33,15 +36,23 @@ public class DynamicGreedyBroker extends AbstractWorkflowBroker {
 
     /** Ready tasks that have not yet started (including tasks being provisioned). */
     private final Map<Integer, Cloudlet> waitingReady = new HashMap<>();
+    private final Map<Integer, Double> latestStarts = new HashMap<>();
+    private final TreeSet<Integer> waitingByLatestStart = new TreeSet<>(Comparator
+            .comparingDouble(this::latestStart)
+            .thenComparingInt(Integer::intValue));
     /** An on-demand request never precedes readiness and is issued only once. */
     private final Map<Integer, Integer> orderedOnDemand = new HashMap<>();
+    private final Map<Integer, Integer> taskByContainer = new HashMap<>();
+    private final Map<Integer, Cloudlet> newlyReadyJobs = new HashMap<>();
     private final Set<Integer> newlyReadyTaskIds = new HashSet<>();
+    private final Set<Integer> containersReady = new HashSet<>();
     private final Set<Integer> thresholdWakeups = new HashSet<>();
     private final Set<Integer> dueThresholds = new HashSet<>();
     private boolean reservedCapacityReleased;
 
     public DynamicGreedyBroker(String name, double tightness) throws Exception {
         super(name, tightness);
+        setCloudletList(new IndexedCloudletQueue());
     }
 
     @Override
@@ -91,9 +102,18 @@ public class DynamicGreedyBroker extends AbstractWorkflowBroker {
     protected void processCloudletSubmit(SimEvent ev) {
         List<? extends Cloudlet> jobs = (List<? extends Cloudlet>) ev.getData();
         for (Cloudlet cloudlet : jobs) {
-            newlyReadyTaskIds.add(primaryTaskId((Job) cloudlet));
+            int taskId = primaryTaskId((Job) cloudlet);
+            newlyReadyJobs.put(taskId, cloudlet);
+            newlyReadyTaskIds.add(taskId);
         }
+        recordReadyQueue((List<Cloudlet>) jobs);
         super.processCloudletSubmit(ev);
+    }
+
+    @Override
+    protected void onLogicalContainerReady(int vmId) {
+        Integer taskId = taskByContainer.get(vmId);
+        if (taskId != null) containersReady.add(taskId);
     }
 
     @Override
@@ -114,9 +134,14 @@ public class DynamicGreedyBroker extends AbstractWorkflowBroker {
     @Override
     protected void onTaskReturned(Cloudlet cloudlet, boolean onDemand) {
         int taskId = primaryTaskId((Job) cloudlet);
+        waitingByLatestStart.remove(taskId);
         waitingReady.remove(taskId);
-        orderedOnDemand.remove(taskId);
+        latestStarts.remove(taskId);
+        Integer vmId = orderedOnDemand.remove(taskId);
+        if (vmId != null) taskByContainer.remove(vmId);
+        newlyReadyJobs.remove(taskId);
         newlyReadyTaskIds.remove(taskId);
+        containersReady.remove(taskId);
         thresholdWakeups.remove(taskId);
         dueThresholds.remove(taskId);
         if (!onDemand) reservedCapacityReleased = true;
@@ -125,29 +150,36 @@ public class DynamicGreedyBroker extends AbstractWorkflowBroker {
     @Override
     @SuppressWarnings("unchecked")
     protected void processCloudletUpdate(SimEvent ev) {
-        recordReadyQueue((List<Cloudlet>) getCloudletList());
         Set<Integer> candidates = new HashSet<>(newlyReadyTaskIds);
         newlyReadyTaskIds.clear();
         candidates.addAll(dueThresholds);
         dueThresholds.clear();
 
-        // Record readiness before making any placement or provisioning decision.
-        for (Cloudlet cloudlet : getCloudletList()) {
-            int taskId = primaryTaskId((Job) cloudlet);
-            if (waitingReady.putIfAbsent(taskId, cloudlet) == null) {
-                candidates.add(taskId);
-            }
+        waitingReady.putAll(newlyReadyJobs);
+        for (int taskId : newlyReadyJobs.keySet()) {
+            latestStarts.put(taskId, latestStart(taskId));
         }
-        if (reservedCapacityReleased) {
-            candidates.addAll(waitingReady.keySet());
-            reservedCapacityReleased = false;
-        }
-        // A container-ready event needs no periodic scan. Only requests whose
-        // containers have become ready can now dispatch on-demand.
-        for (int taskId : orderedOnDemand.keySet()) {
-            if (isLogicalContainerReady(taskId)) candidates.add(taskId);
-        }
+        waitingByLatestStart.addAll(newlyReadyJobs.keySet());
+        newlyReadyJobs.clear();
+        candidates.addAll(containersReady);
+        containersReady.clear();
 
+        if (reservedCapacityReleased) {
+            // This set stays ordered as tasks arrive. A completion can check
+            // waiting tasks without re-sorting the entire queue each time.
+            reservedCapacityReleased = false;
+            for (Iterator<Integer> it = waitingByLatestStart.iterator();
+                    it.hasNext();) {
+                int taskId = it.next();
+                Cloudlet cloudlet = waitingReady.get(taskId);
+                if (cloudlet != null) considerReadyTask(cloudlet);
+                if (!waitingReady.containsKey(taskId)) {
+                    it.remove();
+                    latestStarts.remove(taskId);
+                }
+            }
+            return;
+        }
         List<Integer> orderedCandidates = new ArrayList<>(candidates);
         orderedCandidates.sort(Comparator
                 .comparingDouble(this::latestStart)
@@ -156,6 +188,10 @@ public class DynamicGreedyBroker extends AbstractWorkflowBroker {
             Cloudlet cloudlet = waitingReady.get(taskId);
             if (cloudlet != null) {
                 considerReadyTask(cloudlet);
+                if (!waitingReady.containsKey(taskId)) {
+                    waitingByLatestStart.remove(taskId);
+                    latestStarts.remove(taskId);
+                }
             }
         }
     }
@@ -171,7 +207,9 @@ public class DynamicGreedyBroker extends AbstractWorkflowBroker {
         if (reserved != null) {
             // The request has already started billing, even if it has not
             // finished provisioning. Retain that cost when switching.
-            if (orderedOnDemand.remove(taskId) != null) {
+            Integer cancelledVm = orderedOnDemand.remove(taskId);
+            if (cancelledVm != null) {
+                taskByContainer.remove(cancelledVm);
                 cancelLogicalOnDemandContainer(taskId);
             }
             cloudlet.setVmId(reserved.getId());
@@ -196,6 +234,7 @@ public class DynamicGreedyBroker extends AbstractWorkflowBroker {
                 dispatchScheduledJobs(java.util.Collections.singletonList(cloudlet));
                 waitingReady.remove(taskId);
                 orderedOnDemand.remove(taskId);
+                taskByContainer.remove(vmId);
                 thresholdWakeups.remove(taskId);
                 CBMWLogger.logf("DG-DISPATCH",
                         "wf=%d task=%d -> on-demand vm=%d at %.4f",
@@ -209,6 +248,7 @@ public class DynamicGreedyBroker extends AbstractWorkflowBroker {
         if (now + EPS >= orderThreshold) {
             CondorVM container = orderLogicalOnDemandContainer(taskId);
             orderedOnDemand.put(taskId, container.getId());
+            taskByContainer.put(container.getId(), taskId);
             workflow.setAssignedVm(taskId,
                     CBMWStaticPlanningAlgorithm.ON_DEMAND_SENTINEL);
             workflow.setPlannedProvisionOrder(taskId, now);
@@ -228,6 +268,8 @@ public class DynamicGreedyBroker extends AbstractWorkflowBroker {
     }
 
     private double latestStart(int taskId) {
+        Double cached = latestStarts.get(taskId);
+        if (cached != null) return cached;
         Cloudlet cloudlet = waitingReady.get(taskId);
         WorkflowRecord workflow = cloudlet == null ? null
                 : activeWorkflows.get(workflowIdForJob((Job) cloudlet));

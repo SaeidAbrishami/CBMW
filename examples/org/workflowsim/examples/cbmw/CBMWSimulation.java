@@ -279,6 +279,10 @@ public class CBMWSimulation {
 
         WorkflowPlanner planner = new WorkflowPlanner("planner_0", 1);
         WorkflowEngine  engine  = planner.getWorkflowEngine();
+        if ("StaticGreedy".equals(algorithm)
+                || "DynamicGreedy".equals(algorithm)) {
+            engine.enableIndexedDependencies();
+        }
 
         String scenario = experiment.name + "_" + datasetTag(datasetMode);
         String label = scenario + "_" + algorithm + "_t" + experiment.alpha

@@ -16,12 +16,15 @@
 package org.workflowsim;
 
 import java.util.ArrayList;
+import java.util.AbstractList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.TreeSet;
 import org.cloudbus.cloudsim.Cloudlet;
 import org.cloudbus.cloudsim.Log;
 import org.cloudbus.cloudsim.Vm;
@@ -55,6 +58,15 @@ public final class WorkflowEngine extends SimEntity {
      */
     protected List<? extends Cloudlet> jobsReceivedList;
     private final Set<Integer> jobsReceivedIds = new HashSet<>();
+    private boolean indexedDependencies;
+    private final Map<Integer, Integer> unresolvedParents = new HashMap<>();
+    private final Map<Integer, List<Integer>> childrenByParent = new HashMap<>();
+    private final Map<Integer, Long> jobArrivalOrder = new HashMap<>();
+    private long nextJobOrder;
+    private final TreeSet<Integer> newlyReadyJobs = new TreeSet<>((a, b) -> {
+        int order = Long.compare(jobArrivalOrder.get(a), jobArrivalOrder.get(b));
+        return order != 0 ? order : Integer.compare(a, b);
+    });
     /**
      * The job submitted.
      */
@@ -114,6 +126,15 @@ public final class WorkflowEngine extends SimEntity {
         externalScheduler.setWorkflowEngineId(getId());
     }
 
+    /** Index dependencies for large, event-driven greedy workflow runs. */
+    public void enableIndexedDependencies() {
+        if (!getJobsList().isEmpty()) {
+            throw new IllegalStateException("Enable dependency indexing before arrivals");
+        }
+        indexedDependencies = true;
+        setJobsList(new IndexedJobList());
+    }
+
     /**
      * This method is used to send to the broker the list with virtual machines
      * that must be created.
@@ -151,6 +172,7 @@ public final class WorkflowEngine extends SimEntity {
      */
     public void submitCloudletList(List<? extends Cloudlet> list) {
         getJobsList().addAll(list);
+        if (indexedDependencies) indexJobs(list);
     }
 
     /**
@@ -222,6 +244,7 @@ public final class WorkflowEngine extends SimEntity {
     protected void processJobSubmit(SimEvent ev) {
         List<? extends Cloudlet> list = (List) ev.getData();
         getJobsList().addAll(list);
+        if (indexedDependencies) indexJobs(list);
         sendNow(getId(), CloudSimTags.CLOUDLET_SUBMIT, null);
     }
 
@@ -238,15 +261,19 @@ public final class WorkflowEngine extends SimEntity {
         if (job.getCloudletStatus() == Cloudlet.FAILED) {
             // Reclusteringengine will add retry job to jobList
             int newId = getJobsList().size() + getJobsSubmittedList().size();
-            getJobsList().addAll(ReclusteringEngine.process(job, newId));
+            List<Job> retryJobs = ReclusteringEngine.process(job, newId);
+            getJobsList().addAll(retryJobs);
+            if (indexedDependencies) indexJobs(retryJobs);
         }
 
         getJobsReceivedList().add(job);
         jobsReceivedIds.add(job.getCloudletId());
+        if (indexedDependencies) releaseIndexedChildren(job.getCloudletId());
         jobsSubmitted--;
         if (getJobsList().isEmpty() && jobsSubmitted == 0 && simulationComplete) {
             tryTerminate();
-        } else if (!getJobsList().isEmpty() || jobsSubmitted > 0) {
+        } else if (indexedDependencies ? !newlyReadyJobs.isEmpty()
+                : !getJobsList().isEmpty() || jobsSubmitted > 0) {
             sendNow(this.getId(), CloudSimTags.CLOUDLET_SUBMIT, null);
         }
     }
@@ -316,31 +343,44 @@ public final class WorkflowEngine extends SimEntity {
             List<Job> submittedList = new ArrayList<>();
             allocationList.put(getSchedulerId(i), submittedList);
         }
-        for (Iterator<Job> it = list.iterator(); it.hasNext();) {
-            Job job = it.next();
-            //Dont use job.isFinished() it is not right
-            if (!hasJobBeenReceived(job.getCloudletId())) {
-                List<Job> parentList = job.getParentList();
-                boolean flag = true;
-                for (Job parent : parentList) {
-                    if (!hasJobBeenReceived(parent.getCloudletId())) {
-                        flag = false;
-                        break;
+        if (indexedDependencies) {
+            IndexedJobList pending = (IndexedJobList) jobsList;
+            for (int jobId : newlyReadyJobs) {
+                Job job = pending.removeById(jobId);
+                if (job == null) continue;
+                unresolvedParents.remove(jobId);
+                jobArrivalOrder.remove(jobId);
+                allocationList.get(job.getUserId()).add(job);
+                jobsSubmitted++;
+                getJobsSubmittedList().add(job);
+            }
+            newlyReadyJobs.clear();
+        } else {
+            for (Iterator<Job> it = list.iterator(); it.hasNext();) {
+                Job job = it.next();
+                //Dont use job.isFinished() it is not right
+                if (!hasJobBeenReceived(job.getCloudletId())) {
+                    List<Job> parentList = job.getParentList();
+                    boolean flag = true;
+                    for (Job parent : parentList) {
+                        if (!hasJobBeenReceived(parent.getCloudletId())) {
+                            flag = false;
+                            break;
+                        }
+                    }
+                    /**
+                     * This job's parents have all completed successfully. Should
+                     * submit.
+                     */
+                    if (flag) {
+                        List submittedList = allocationList.get(job.getUserId());
+                        submittedList.add(job);
+                        jobsSubmitted++;
+                        getJobsSubmittedList().add(job);
+                        it.remove();
                     }
                 }
-                /**
-                 * This job's parents have all completed successfully. Should
-                 * submit.
-                 */
-                if (flag) {
-                    List submittedList = allocationList.get(job.getUserId());
-                    submittedList.add(job);
-                    jobsSubmitted++;
-                    getJobsSubmittedList().add(job);
-                    it.remove();
-                }
             }
-
         }
         /**
          * If we have multiple schedulers. Divide them equally.
@@ -377,6 +417,75 @@ public final class WorkflowEngine extends SimEntity {
             } else if (!submittedList.isEmpty()) {
                 sendNow(this.getSchedulerId(i), CloudSimTags.CLOUDLET_SUBMIT, submittedList);
             }
+        }
+    }
+
+    private void indexJobs(List<? extends Cloudlet> jobs) {
+        for (Cloudlet cl : jobs) {
+            Job job = (Job) cl;
+            int jobId = job.getCloudletId();
+            jobArrivalOrder.put(jobId, nextJobOrder++);
+            int remaining = 0;
+            for (Object parentObject : job.getParentList()) {
+                int parentId = ((Job) parentObject).getCloudletId();
+                if (jobsReceivedIds.contains(parentId)) continue;
+                remaining++;
+                childrenByParent.computeIfAbsent(parentId,
+                        ignored -> new ArrayList<>()).add(jobId);
+            }
+            unresolvedParents.put(jobId, remaining);
+            if (remaining == 0) newlyReadyJobs.add(jobId);
+        }
+    }
+
+    private void releaseIndexedChildren(int parentId) {
+        List<Integer> children = childrenByParent.remove(parentId);
+        if (children == null) return;
+        for (int childId : children) {
+            Integer remaining = unresolvedParents.get(childId);
+            if (remaining == null) continue;
+            if (remaining == 1) {
+                unresolvedParents.put(childId, 0);
+                newlyReadyJobs.add(childId);
+            } else {
+                unresolvedParents.put(childId, remaining - 1);
+            }
+        }
+    }
+
+    /** Pending jobs with insertion-order iteration and constant-time removal. */
+    private static final class IndexedJobList extends AbstractList<Cloudlet> {
+        private final LinkedHashMap<Integer, Job> jobs = new LinkedHashMap<>();
+
+        @Override
+        public int size() { return jobs.size(); }
+
+        @Override
+        public Cloudlet get(int index) {
+            if (index < 0 || index >= size()) throw new IndexOutOfBoundsException();
+            Iterator<Job> it = jobs.values().iterator();
+            for (int i = 0; i < index; i++) it.next();
+            return it.next();
+        }
+
+        @Override
+        public void add(int index, Cloudlet cloudlet) {
+            if (index != size()) throw new UnsupportedOperationException(
+                    "Indexed jobs can only be appended");
+            Job job = (Job) cloudlet;
+            jobs.put(job.getCloudletId(), job);
+        }
+
+        Job removeById(int jobId) { return jobs.remove(jobId); }
+
+        @Override
+        public Iterator<Cloudlet> iterator() {
+            Iterator<Job> it = jobs.values().iterator();
+            return new Iterator<Cloudlet>() {
+                public boolean hasNext() { return it.hasNext(); }
+                public Cloudlet next() { return it.next(); }
+                public void remove() { it.remove(); }
+            };
         }
     }
 
