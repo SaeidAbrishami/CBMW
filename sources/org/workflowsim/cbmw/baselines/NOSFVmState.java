@@ -1,10 +1,28 @@
 package org.workflowsim.cbmw.baselines;
 
+import java.util.ArrayDeque;
+import java.util.Deque;
 import org.workflowsim.CondorVM;
 import org.workflowsim.Job;
+import org.workflowsim.cbmw.WorkflowRecord;
 
-/** One paper NOSF VM: at most one running and one waiting task. */
+/** One NOSF VM: one running task and any number of FIFO waiting tasks. */
 final class NOSFVmState {
+    static final class QueuedTask {
+        final Job job;
+        final WorkflowRecord workflow;
+        final int taskId;
+        final double dataReadyTime;
+
+        QueuedTask(Job job, WorkflowRecord workflow, int taskId,
+                   double dataReadyTime) {
+            this.job = job;
+            this.workflow = workflow;
+            this.taskId = taskId;
+            this.dataReadyTime = dataReadyTime;
+        }
+    }
+
     final CondorVM vm;
     final NOSFVmType type;
     final double orderTime;
@@ -12,13 +30,13 @@ final class NOSFVmState {
     double plannedAvailableTime;
     double chargedCost;
     double busyTime;
-    double waitingDataReadyTime = Double.NaN;
+    double runningPredictedFinish;
     double releaseAt = Double.POSITIVE_INFINITY;
     int completedTasks;
     boolean launched;
     boolean released;
     Job running;
-    Job waiting;
+    final Deque<QueuedTask> waiting = new ArrayDeque<>();
 
     NOSFVmState(CondorVM vm, NOSFVmType type, double orderTime, double readyTime) {
         this.vm = vm;
@@ -29,7 +47,19 @@ final class NOSFVmState {
     }
 
     boolean canAcceptWaitingTask() {
-        return !released && waiting == null;
+        return !released;
+    }
+
+    void replan(double now) {
+        double cursor = running == null ? Math.max(now, readyTime)
+                : Math.max(now, runningPredictedFinish);
+        for (QueuedTask queued : waiting) {
+            double start = Math.max(cursor, queued.dataReadyTime);
+            queued.workflow.setScheduledStart(queued.taskId, start);
+            cursor = start + type.runtime(
+                    queued.workflow.getEstimatedExecTime(queued.taskId));
+        }
+        plannedAvailableTime = cursor;
     }
 
     double billedCost(double shutdown, double quantum) {

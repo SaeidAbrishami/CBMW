@@ -216,23 +216,31 @@ scheduler:
    weight `w(lambda)=mu+sigma`, calculate EST/EFT/LCT with Eqs. 8-10, find PCP
    paths, assign Eq. 11 sub-deadlines, and retain each task's delta from Eq. 12.
 2. **Resource allocation (Algorithm 3):** order ready tasks by paper priority,
-   allow at most one waiting task per VM, select a sub-deadline-feasible active
+   allow any number of FIFO waiting tasks per VM, select a sub-deadline-feasible active
    VM by minimum `price * predicted execution` and then minimum idle time, or
    provision a suitable new type. If none is feasible, provision the
    highest-ranking compatible type and mark the task deadline-risk.
 3. **Feedback (Algorithm 2):** update only immediate successors that have become
    ready and apply Eqs. 16-18, preserving the original delta and LCT cap.
 
-The article is inconsistent about whether initial priority is EST or EFT.
-`nosf.priority.policy=EST` is the documented default because it follows
-Algorithm 3's operational prose; `EFT` is available for sensitivity analysis.
+The default priority is `EFT` as selected for the comparison; `EST` remains
+an optional sensitivity policy.
 NOSF has two explicit experiment profiles:
 
-- `COMMON_MARKET` (default) uses one configurable homogeneous VM type,
-  60-second billing, common shared storage, and one run.
-- `PAPER_ALIGNED` uses the paper's seven Table 2 EC2 types and slowdown
-  factors, hourly billing, 100-Mbps network transfers with zero same-VM edge
-  cost, and 30 independent seeded repetitions.
+- `COMMON_MARKET` (default) uses the paper's seven named historical VM types
+  and their CPU/RAM capacities, priced with current Ohio Linux on-demand
+  proxies, hourly billing, common shared storage, and one run.
+- `PAPER_ALIGNED` retains that seven-type catalog, hourly billing, 100-Mbps
+  paper network transfers, and a default of 30 repetitions. It is an adapted
+  paper profile because tasks remain rigid and prices use Ohio proxies.
+
+Rigid tasks run for the same TXT sampled duration on every compatible VM;
+the paper's speed weights are disabled. Planning still uses `mu+sigma` and
+VM eligibility checks both task cores and RAM. One task runs per VM at a time.
+Historical M1/M2 capacities are kept in the simulator, while the price proxies
+are r5.2xlarge, r5.xlarge, m5.xlarge, r5.large, m5.large, t2.medium,
+and t2.small respectively. M1/M2 are not offered in Ohio. See
+`docs/nosf_ohio_middle300.md` for capacities and prices.
 
 The paper-aligned profile deliberately retains the common comparison controls:
 the project's three deadline factors, the same workflow population, the shared
@@ -378,15 +386,15 @@ paper's historical AWS price trace.
 
 ### Baseline Certification Status
 
-The NOSF scheduling logic is implemented from the original publication, while
-its default run intentionally uses this repository's common comparison market.
+The NOSF scheduling logic follows the original publication and is adapted to
+this repository's rigid-task Ohio comparison market.
 CEWB remains a reconstructed baseline because its complete reference market
 and implementation are not available here.
 
 - **NOSF** implements the published Algorithms 1-3 and Eqs. 1, 8-18. Its
   default `COMMON_MARKET` profile supports controlled CBMW comparison, while
-  `PAPER_ALIGNED` restores the paper's VM catalog, hourly billing, network
-  model, and 30-repetition protocol subject to the documented shared controls.
+  `PAPER_ALIGNED` keeps Ohio price proxies and rigid task times while selecting
+  paper network transfers and the 30-repetition default.
 - **CEWB** implements PCP sub-deadlines, absolute interruption-penalty slack
   classes, shared spot and on-demand physical VM containers, periodic
   provisioning, progress-preserving recovery, and reconstructed pricing.
@@ -412,9 +420,9 @@ experiments remain reproducible:
 | CBMW safety factor `beta` | `1.0` | The paper requires `beta >= 1` but does not publish the experimental value. |
 | CBMW price markup `gamma` | `1.0` | The paper defines the markup but does not publish the experimental value. |
 | Reserved-container startup | `0 s` separately | It is unknown whether the supplied runtime measurements already include this delay. |
-| Task cores and RAM | `1 core`, `1 MB` | The supplied DAX files do not contain task resource metadata. |
-| NOSF original priority | `EST` | The paper's preprocessing text says EFT while Algorithm 3's operational description says EST; `EFT` is available as a sensitivity policy. |
-| NOSF experiment profile | `COMMON_MARKET` | Select `PAPER_ALIGNED` for the paper VM catalog, hourly billing, network model, and repetition protocol. |
+| Task cores and RAM | `1 core`, `2048 MB` | Synthetic defaults when DAX task resource metadata is absent. |
+| NOSF priority | `EFT` | Selected for the comparison; `EST` is available for sensitivity analysis. |
+| NOSF experiment profile | `COMMON_MARKET` | Seven historical-capacity VM types with Ohio price proxies and hourly billing; `PAPER_ALIGNED` selects paper network transfers and repetition default. |
 | CEWB spot classes, prices, capacities, and reliability | Current documented spot-market defaults | The original experimental market constants are unavailable. |
 
 Every reported experiment must state these values and any JVM-property
@@ -489,14 +497,12 @@ Use JVM properties such as
 `-Dcbmw.algorithms=CBMW`, `-Dcbmw.max.workflows=5`, and
 `-Dcbmw.max.scenarios=1` to restrict smoke or diagnostic runs.
 
-Run the twelve full-dataset NOSF scenarios with the paper-aligned market and 30
-repetitions:
+Run the same isolated middle 300 manifests used for the Ohio CEWB experiment
+(all 18 arrival/tightness configurations, one shared TXT sample per task):
 
-```powershell
-java '-Dcbmw.algorithms=NOSF' '-Dnosf.profile=PAPER_ALIGNED' `
-  '-Dcbmw.output.dir=Output/nosf_paper_aligned' `
-  '-Dcbmw.export.details=false' '-Dcbmw.detail.log=false' '-Dcbmw.quiet=true' `
-  -cp "bin;lib/*" org.workflowsim.examples.cbmw.CBMWSimulation
+```bash
+python3 scripts/run_nosf_ohio_middle300.py --all \
+  --workflow-dir test_workflows/workflows
 ```
 
 ---
@@ -520,16 +526,16 @@ java '-Dcbmw.algorithms=NOSF' '-Dnosf.profile=PAPER_ALIGNED' `
 | `cbmw.ondemand.memory.per.gb.sec` | `0.000001` | Default memory price per GB-second |
 | `cbmw.ondemand.delay.sec` | `60.0` | On-demand provisioning delay (`opd`) |
 | `cbmw.ondemand.min.billing.sec` | `60.0` | Minimum on-demand billing duration |
-| `nosf.profile` | `COMMON_MARKET` | `PAPER_ALIGNED` selects the paper NOSF market and repetition defaults |
+| `nosf.profile` | `COMMON_MARKET` | `PAPER_ALIGNED` selects paper network transfers and repetition default while retaining Ohio proxies and rigid runtimes |
 | `cbmw.repetitions` | profile default: `1` or `30` | Independent repetitions of every scenario/algorithm |
 | `cbmw.run.start` | `0` | First exported run number, useful when extending an experiment |
 | `cbmw.seed.base` | `20260716` | Base seed used to derive a deterministic seed per repetition |
 | `cbmw.runtime.planning.alpha` | `0.20` | CBMW additive planning margin; `cet = mu + alpha * mu` |
 | `cbmw.runtime.stddev.ratio` | `0.05` | Normal-resampling and NOSF sigma/mu; does not affect CBMW planning |
 | `cbmw.runtime.resample` | false (use matching TXT files) | Resample task runtimes per run; algorithms share samples within a run |
-| `nosf.billing.quantum.sec` | profile default: `60` or `3600` | Reusable NOSF VM billing quantum |
+| `nosf.billing.quantum.sec` | `3600` | Reusable NOSF VM billing quantum |
 | `nosf.transfer.mode` | profile default | `COMMON_SHARED_STORAGE` or `PAPER_NETWORK` |
-| `nosf.vm.type.count` | profile default: `1` or `7` | Explicit value overrides the profile VM catalog |
+| `nosf.vm.type.count` | `7` | Explicit value overrides the Ohio proxy catalog; all custom MIPS must match shared CBMW MIPS |
 
 ---
 

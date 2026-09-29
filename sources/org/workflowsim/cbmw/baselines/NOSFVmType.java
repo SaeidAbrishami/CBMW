@@ -7,7 +7,6 @@ import org.workflowsim.cbmw.HybridVmPool;
 
 /** Configurable on-demand VM type used only by the NOSF baseline. */
 final class NOSFVmType {
-    private static final int PAPER_UNCONSTRAINED_RAM_MB = 1_000_000_000;
     final String name;
     final int cores;
     final int ramMb;
@@ -33,15 +32,16 @@ final class NOSFVmType {
     }
 
     double runtime(double baseRuntime) {
-        return baseRuntime * HybridVmPool.RESERVED_MIPS / mipsPerCore;
+        // Rigid CBMW tasks take the same time on every eligible VM.
+        return baseRuntime;
     }
 
     static List<NOSFVmType> configuredTypes() {
         String configuredCount = System.getProperty("nosf.vm.type.count");
-        if (configuredCount == null && NOSFConfiguration.isPaperAligned()) {
-            return paperTypes();
+        if (configuredCount == null) {
+            return ohioProxyTypes();
         }
-        int count = Integer.parseInt(configuredCount == null ? "1" : configuredCount);
+        int count = Integer.parseInt(configuredCount);
         if (count <= 0) throw new IllegalArgumentException("nosf.vm.type.count must be positive");
         List<NOSFVmType> result = new ArrayList<>();
         for (int i = 0; i < count; i++) {
@@ -52,6 +52,9 @@ final class NOSFVmType {
                     Integer.toString(HybridVmPool.TASK_RAM_MB)));
             double mips = Double.parseDouble(System.getProperty(prefix + "mips",
                     Double.toString(HybridVmPool.RESERVED_MIPS)));
+            if (Math.abs(mips - HybridVmPool.RESERVED_MIPS) > 1e-9) {
+                throw new IllegalArgumentException(prefix + "mips must equal the shared rigid-task MIPS");
+            }
             double defaultPrice = HybridVmPool.onDemandPricePerSecond(cores, ram);
             double price = Double.parseDouble(System.getProperty(prefix + "price.per.sec",
                     Double.toString(defaultPrice)));
@@ -61,22 +64,25 @@ final class NOSFVmType {
         return Collections.unmodifiableList(result);
     }
 
-    /** Table 2 from the NOSF paper; RAM is non-limiting because it is unspecified. */
-    static List<NOSFVmType> paperTypes() {
+    /** NOSF Table 2 names and historical capacities, with us-east-2 Linux
+     * on-demand proxy prices. The proxy is a price reference, not a replacement
+     * for the simulated type's original CPU/RAM capacity.
+     */
+    static List<NOSFVmType> ohioProxyTypes() {
         List<NOSFVmType> result = new ArrayList<>();
-        result.add(paperType("m2.4xlarge", 8, 0.980, 1.0));
-        result.add(paperType("m2.2xlarge", 4, 0.490, 1.2));
-        result.add(paperType("m1.xlarge", 4, 0.350, 1.3));
-        result.add(paperType("m2.xlarge", 2, 0.245, 1.4));
-        result.add(paperType("m1.large", 2, 0.175, 1.6));
-        result.add(paperType("m1.medium", 1, 0.087, 1.8));
-        result.add(paperType("m1.small", 1, 0.044, 2.0));
+        result.add(proxyType("m2.4xlarge", 8, 68.4, 0.504)); // r5.2xlarge
+        result.add(proxyType("m2.2xlarge", 4, 34.2, 0.252)); // r5.xlarge
+        result.add(proxyType("m1.xlarge", 4, 15.0, 0.192)); // m5.xlarge
+        result.add(proxyType("m2.xlarge", 2, 17.1, 0.126)); // r5.large
+        result.add(proxyType("m1.large", 2, 7.5, 0.096)); // m5.large
+        result.add(proxyType("m1.medium", 1, 3.7, 0.0464)); // t2.medium
+        result.add(proxyType("m1.small", 1, 1.7, 0.023)); // t2.small
         return Collections.unmodifiableList(result);
     }
 
-    private static NOSFVmType paperType(String name, int cores,
-                                        double hourlyPrice, double weight) {
-        return new NOSFVmType(name, cores, PAPER_UNCONSTRAINED_RAM_MB,
-                HybridVmPool.RESERVED_MIPS / weight, hourlyPrice / 3600.0);
+    private static NOSFVmType proxyType(String name, int cores,
+                                        double gib, double hourlyPrice) {
+        return new NOSFVmType(name, cores, (int) Math.round(gib * 1024),
+                HybridVmPool.RESERVED_MIPS, hourlyPrice / 3600.0);
     }
 }

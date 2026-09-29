@@ -50,7 +50,7 @@ try {
     $logText = Get-Content -Raw $detailLog.FullName
     if ($logText -notmatch 'reused=yes') { throw 'NOSF smoke did not demonstrate VM reuse' }
     if ($logText -notmatch 'estimator=MU_PLUS_SIGMA') { throw 'NOSF did not log the paper runtime estimator' }
-    if ($logText -notmatch 'priority=EST') { throw 'NOSF did not use the documented paper priority policy' }
+    if ($logText -notmatch 'priority=EFT') { throw 'NOSF did not use EFT priority' }
     if ($logText -notmatch 'provisioningDelay=60\.0') { throw 'NOSF did not inherit the default CBMW provisioning delay' }
 
     $paperOutput = 'Output/smoke_tests/NOSF_paper_aligned'
@@ -65,6 +65,7 @@ try {
     & java `
         '-Dcbmw.algorithms=NOSF' `
         '-Dnosf.profile=PAPER_ALIGNED' `
+        '-Dcbmw.runtime.resample=true' `
         '-Dcbmw.max.workflows=2' `
         '-Dcbmw.max.scenarios=2' `
         "-Dcbmw.output.dir=$paperOutput" `

@@ -22,7 +22,7 @@ import org.workflowsim.cbmw.HybridVmPool;
 import org.workflowsim.cbmw.WorkflowRecord;
 import org.workflowsim.utils.Parameters;
 
-/** Paper-faithful NOSF Algorithms 1-3 in the project's common market. */
+/** NOSF Algorithms 1-3 adapted to the shared CBMW rigid-task experiment. */
 public class NOSFBroker extends AbstractWorkflowBroker {
 
     private static final double EPS = 1e-9;
@@ -170,16 +170,16 @@ public class NOSFBroker extends AbstractWorkflowBroker {
                         NOSFResourceSelector.Choice choice) {
         if (!state.canAcceptWaitingTask()) {
             throw new IllegalStateException("NOSF VM " + state.vm.getId()
-                    + " already has a waiting task");
+                    + " is released");
         }
         int taskId = primaryTaskId(job);
         job.setVmId(state.vm.getId());
         if (!job.getTaskList().isEmpty()) {
             job.getTaskList().get(0).setVmId(state.vm.getId());
         }
-        state.waiting = job;
-        state.waitingDataReadyTime = choice.dataReadyTime;
-        state.plannedAvailableTime = choice.finish;
+        state.waiting.addLast(new NOSFVmState.QueuedTask(job, workflow,
+                taskId, choice.dataReadyTime));
+        state.replan(CloudSim.clock());
         state.releaseAt = Double.POSITIVE_INFINITY;
         workflow.setAssignedVm(taskId, state.vm.getId());
         workflow.setScheduledStart(taskId, choice.start);
@@ -212,12 +212,10 @@ public class NOSFBroker extends AbstractWorkflowBroker {
     }
 
     private void startWaitingIfReady(NOSFVmState state, double now) {
-        if (!state.launched || state.running != null || state.waiting == null) return;
-        WorkflowRecord workflow = activeWorkflows.get(
-                workflowIdForJob(state.waiting));
-        if (workflow == null) return;
+        if (!state.launched || state.running != null || state.waiting.isEmpty()) return;
+        NOSFVmState.QueuedTask next = state.waiting.peekFirst();
         double readyTime = Math.max(state.readyTime,
-                state.waitingDataReadyTime);
+                next.dataReadyTime);
         if (now + EPS < readyTime) {
             schedule(getId(), readyTime - now,
                     WorkflowSimTags.CLOUDLET_UPDATE);
@@ -227,12 +225,10 @@ public class NOSFBroker extends AbstractWorkflowBroker {
     }
 
     private void startNext(NOSFVmState state, double now) {
-        Job job = state.waiting;
-        state.waiting = null;
-        state.waitingDataReadyTime = Double.NaN;
-        int taskId = primaryTaskId(job);
-        WorkflowRecord workflow = activeWorkflows.get(workflowIdForJob(job));
-        if (workflow == null) return;
+        NOSFVmState.QueuedTask next = state.waiting.removeFirst();
+        Job job = next.job;
+        int taskId = next.taskId;
+        WorkflowRecord workflow = next.workflow;
         double queueDelay = Parameters.getOverheadParams().getQueueDelay() != null
                 ? Parameters.getOverheadParams().getQueueDelay(job) : 0.0;
         double actualRuntime = HybridVmPool.executionTimeSeconds(
@@ -249,8 +245,9 @@ public class NOSFBroker extends AbstractWorkflowBroker {
         }
         state.running = job;
         state.releaseAt = Double.POSITIVE_INFINITY;
-        state.plannedAvailableTime = now + queueDelay
+        state.runningPredictedFinish = now + queueDelay
                 + state.type.runtime(workflow.getEstimatedExecTime(taskId));
+        state.replan(now);
         state.vm.setState(WorkflowSimTags.VM_STATUS_BUSY);
         vmPool.taskStarted(state.vm.getId(), taskId);
         accounting.markTaskConfiguration(taskId, state.type.name,
@@ -278,8 +275,8 @@ public class NOSFBroker extends AbstractWorkflowBroker {
                 workflowIdForJob((Job) cloudlet));
         if (workflow != null) workflow.addOnDemandCost(delta);
 
-        state.plannedAvailableTime = now;
-        if (state.waiting != null) {
+        state.replan(now);
+        if (!state.waiting.isEmpty()) {
             startWaitingIfReady(state, now);
         } else {
             scheduleRelease(state, now);
@@ -302,7 +299,7 @@ public class NOSFBroker extends AbstractWorkflowBroker {
         for (Iterator<NOSFVmState> iterator = vmStates.iterator();
              iterator.hasNext();) {
             NOSFVmState state = iterator.next();
-            if (state.released || state.running != null || state.waiting != null
+            if (state.released || state.running != null || !state.waiting.isEmpty()
                     || now + EPS < state.releaseAt) continue;
             state.released = true;
             accounting.markOnDemandDestroyed(state.vm.getId(), state.releaseAt);
@@ -323,7 +320,7 @@ public class NOSFBroker extends AbstractWorkflowBroker {
         double now = CloudSim.clock();
         for (NOSFVmState state : new ArrayList<>(vmStates)) {
             if (state.released) continue;
-            if (state.running != null || state.waiting != null) {
+            if (state.running != null || !state.waiting.isEmpty()) {
                 throw new IllegalStateException(
                         "NOSF simulation ended with work on VM " + state.vm.getId());
             }

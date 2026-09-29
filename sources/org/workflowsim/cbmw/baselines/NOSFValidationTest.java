@@ -19,10 +19,10 @@ public final class NOSFValidationTest {
     public static void main(String[] args) {
         testRuntimeWeight();
         testProfileDefaults();
-        testPaperVmTypes();
+        testOhioProxyVmTypes();
         testSharedProvisioningDelay();
         testPaperResourceSelection();
-        testOneWaitingTaskAndBootBilling();
+        testUnboundedWaitingAndBootBilling();
         testPaperNetworkTransfer();
         testReplicateRuntimeSampling();
         testPcpPreprocessingAndFeedback();
@@ -35,11 +35,13 @@ public final class NOSFValidationTest {
         String previousBilling = System.getProperty("nosf.billing.quantum.sec");
         String previousTransfer = System.getProperty("nosf.transfer.mode");
         String previousTypeCount = System.getProperty("nosf.vm.type.count");
+        String previousPriority = System.getProperty("nosf.priority.policy");
         try {
             System.setProperty("nosf.profile", "PAPER_ALIGNED");
             System.clearProperty("nosf.billing.quantum.sec");
             System.clearProperty("nosf.transfer.mode");
             System.clearProperty("nosf.vm.type.count");
+            System.clearProperty("nosf.priority.policy");
             require(NOSFConfiguration.defaultRepetitions() == 30,
                     "paper profile must default to 30 repetitions");
             require(close(NOSFConfiguration.billingQuantumSeconds(), 3600.0),
@@ -48,31 +50,45 @@ public final class NOSFValidationTest {
                     "paper profile must default to paper network transfers");
             require(NOSFVmType.configuredTypes().size() == 7,
                     "paper profile must default to seven VM types");
+            require(new NOSFWorkflowPlanner().getPriorityPolicy()
+                            == NOSFWorkflowPlanner.PriorityPolicy.EFT,
+                    "NOSF must default to EFT priority");
+            System.setProperty("nosf.profile", "COMMON_MARKET");
+            require(NOSFVmType.configuredTypes().size() == 7,
+                    "comparison profile must retain seven paper types");
+            require(close(NOSFConfiguration.billingQuantumSeconds(), 3600.0),
+                    "comparison profile must retain hourly billing");
         } finally {
             restoreProperty("nosf.profile", previousProfile);
             restoreProperty("nosf.billing.quantum.sec", previousBilling);
             restoreProperty("nosf.transfer.mode", previousTransfer);
             restoreProperty("nosf.vm.type.count", previousTypeCount);
+            restoreProperty("nosf.priority.policy", previousPriority);
         }
     }
 
-    private static void testPaperVmTypes() {
-        java.util.List<NOSFVmType> types = NOSFVmType.paperTypes();
-        require(types.size() == 7, "paper profile must expose seven VM rankings");
+    private static void testOhioProxyVmTypes() {
+        java.util.List<NOSFVmType> types = NOSFVmType.ohioProxyTypes();
+        require(types.size() == 7, "default must expose seven NOSF VM types");
         String[] names = {"m2.4xlarge", "m2.2xlarge", "m1.xlarge",
                 "m2.xlarge", "m1.large", "m1.medium", "m1.small"};
         int[] cores = {8, 4, 4, 2, 2, 1, 1};
-        double[] hourly = {0.980, 0.490, 0.350, 0.245, 0.175, 0.087, 0.044};
-        double[] weights = {1.0, 1.2, 1.3, 1.4, 1.6, 1.8, 2.0};
+        double[] hourly = {0.504, 0.252, 0.192, 0.126, 0.096, 0.0464, 0.023};
+        double[] memoryGib = {68.4, 34.2, 15.0, 17.1, 7.5, 3.7, 1.7};
         for (int i = 0; i < types.size(); i++) {
             NOSFVmType type = types.get(i);
             require(names[i].equals(type.name) && cores[i] == type.cores,
                     "paper VM identity or vCPU count differs at index " + i);
+            require(type.ramMb == (int) Math.round(memoryGib[i] * 1024),
+                    "historical VM RAM differs at index " + i);
             require(close(type.pricePerSecond * 3600.0, hourly[i]),
-                    "paper VM hourly price differs at index " + i);
-            require(close(type.runtime(100.0), 100.0 * weights[i]),
-                    "paper VM processing weight differs at index " + i);
+                    "Ohio proxy hourly price differs at index " + i);
+            require(close(type.runtime(100.0), 100.0)
+                            && close(type.mipsPerCore, HybridVmPool.RESERVED_MIPS),
+                    "rigid runtime must be independent of VM class");
         }
+        require(!types.get(6).canRun(1, HybridVmPool.TASK_RAM_MB),
+                "m1.small cannot hold a default 2 GiB CBMW task");
     }
 
     private static void testRuntimeWeight() {
@@ -110,6 +126,16 @@ public final class NOSFValidationTest {
                 "must reuse a feasible active VM");
         require(close(reuse.incrementalRentalCost, 0.0),
                 "reuse inside a paid minute must add no rental cost");
+        WorkflowRecord queuedWorkflow = workflow(4, 0.0, 100.0,
+                task(50, 10.0));
+        state.waiting.addLast(new NOSFVmState.QueuedTask(new Job(50, 1000),
+                queuedWorkflow, 50, 20.0));
+        state.replan(20.0);
+        NOSFResourceSelector.Choice behindQueue = selector.choose(20.0,
+                10.0, 1, 1, 100.0, Arrays.asList(state), Arrays.asList(type));
+        require(behindQueue != null && behindQueue.vm == state
+                        && close(behindQueue.start, 30.5),
+                "selector must consider an active VM with waiting work");
 
         NOSFResourceSelector.Choice risk = selector.choose(20.0, 10.0, 1, 1,
                 25.0, Arrays.asList(state), Arrays.asList(type));
@@ -125,15 +151,28 @@ public final class NOSFValidationTest {
                 "incompatible VM types must not be selected");
     }
 
-    private static void testOneWaitingTaskAndBootBilling() {
+    private static void testUnboundedWaitingAndBootBilling() {
         NOSFVmType type = new NOSFVmType("test", 1, 1024, 1000.0, 0.01);
         NOSFVmState state = new NOSFVmState(vm(7, type), type, 0.0, 90.0);
         require(close(state.billedCost(100.0, 60.0), 1.20),
                 "boot time must be included in the leased/billed interval");
-        require(state.canAcceptWaitingTask(), "empty VM must accept one waiting task");
-        state.waiting = new Job(77, 1000);
-        require(!state.canAcceptWaitingTask(),
-                "VM with a waiting task must reject another waiting task");
+        WorkflowRecord workflow = workflow(3, 0.0, 300.0,
+                task(77, 10.0), task(78, 10.0), task(79, 10.0));
+        state.waiting.addLast(new NOSFVmState.QueuedTask(new Job(77, 1000),
+                workflow, 77, 90.0));
+        state.waiting.addLast(new NOSFVmState.QueuedTask(new Job(78, 1000),
+                workflow, 78, 115.0));
+        state.waiting.addLast(new NOSFVmState.QueuedTask(new Job(79, 1000),
+                workflow, 79, 90.0));
+        state.replan(90.0);
+        require(state.canAcceptWaitingTask() && state.waiting.size() == 3,
+                "VM must accept unbounded FIFO waiting tasks");
+        require(close(state.plannedAvailableTime, 136.0),
+                "queue forecast must include readiness and sequential runtimes");
+        state.waiting.removeFirst();
+        state.replan(110.0);
+        require(close(state.plannedAvailableTime, 136.0),
+                "queue forecast must be repaired after actual completion");
 
         NOSFVmState paperBilling = new NOSFVmState(vm(8, type), type, 0.0, 90.0);
         require(close(paperBilling.billedCost(100.0, 3600.0), 36.0),

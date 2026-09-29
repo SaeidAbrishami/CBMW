@@ -41,18 +41,13 @@ final class NOSFWorkflowPlanner {
             throw new IllegalArgumentException("NOSF requires at least one VM type");
         }
 
-        double fastestScale = Double.POSITIVE_INFINITY;
-        for (NOSFVmType type : vmTypes) {
-            fastestScale = Math.min(fastestScale, type.runtime(1.0));
-        }
-
         NOSFWorkflowState state = new NOSFWorkflowState(workflow.getWorkflowId());
         Map<Integer, Node> nodes = new HashMap<>();
         for (Task task : tasks) {
             int taskId = task.getCloudletId();
             double mean = workflow.getNominalExecTime(taskId);
             double weight = NOSFRuntimeModel.weight(mean);
-            double fastestDuration = weight * fastestScale;
+            double fastestDuration = weight; // Rigid runtime on every eligible VM.
             NOSFTaskState taskState = new NOSFTaskState(task, mean,
                     NOSFRuntimeModel.sigma(mean), weight, fastestDuration);
             if (state.tasks.put(taskId, taskState) != null) {
@@ -212,7 +207,7 @@ final class NOSFWorkflowPlanner {
 
     private static PriorityPolicy readPriorityPolicy() {
         return PriorityPolicy.valueOf(System.getProperty(
-                "nosf.priority.policy", PriorityPolicy.EST.name())
+                "nosf.priority.policy", PriorityPolicy.EFT.name())
                 .trim().toUpperCase());
     }
 
