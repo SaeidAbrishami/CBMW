@@ -71,3 +71,8 @@ For one configuration, use for example
 launched by this runner. Override `--repetitions` only when performing
 additional runs; TXT runtime resampling stays off so all algorithms use the
 same per-task samples.
+
+The runner displays a live task progress bar for each scenario and keeps the
+full Java output in that scenario's `run.log`. The bar updates every 10 seconds
+of wall time by default; use `--progress-interval-sec N` to change this.
+With `--all`, the prefix also shows the current scenario out of 18.

@@ -100,6 +100,9 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
     public void setProgressReporter(CBMWProgressReporter reporter) {
         this.progressReporter = reporter;
     }
+    protected final void reportTaskStarted(int taskId) {
+        if (progressReporter != null) progressReporter.taskStarted(taskId);
+    }
     public HybridVmPool          getVmPool()      { return vmPool; }
     public List<WorkflowRecord>  getAllWorkflows() { return allWorkflows; }
     public CBMWAccounting        getAccounting() { return accounting; }

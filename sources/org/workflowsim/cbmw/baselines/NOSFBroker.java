@@ -250,6 +250,7 @@ public class NOSFBroker extends AbstractWorkflowBroker {
         state.replan(now);
         state.vm.setState(WorkflowSimTags.VM_STATUS_BUSY);
         vmPool.taskStarted(state.vm.getId(), taskId);
+        reportTaskStarted(taskId);
         accounting.markTaskConfiguration(taskId, state.type.name,
                 state.type.pricePerSecond);
         accounting.markTaskSubmitted(job, "On-Demand");
