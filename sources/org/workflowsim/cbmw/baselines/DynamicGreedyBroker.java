@@ -81,20 +81,41 @@ public class DynamicGreedyBroker extends AbstractWorkflowBroker {
         return false;
     }
 
-    /** Calculate continuous-time deadline bounds, without assigning resources. */
+    /**
+     * Calculate deadline bounds assuming every successor along the remaining
+     * path may need a fresh on-demand container after becoming ready. The
+     * current task's own OPD is subtracted only when scheduling its request.
+     */
     @Override
     protected boolean planWorkflow(WorkflowRecord wfr, List<Task> tasks) {
-        Map<Integer, Double> remainingCPs = negotiation.computeRemainingCPs(wfr);
+        Map<Integer, Double> lstMemo = new HashMap<>();
         for (Task task : tasks) {
             int taskId = task.getCloudletId();
             task.setWorkflowId(wfr.getWorkflowId());
-            double lst = wfr.getDeadline()
-                    - remainingCPs.getOrDefault(taskId, 0.0);
+            double lst = provisionAwareLatestStart(task, wfr, lstMemo);
             wfr.setLST(taskId, lst);
             wfr.setLFT(taskId, lst + wfr.getEstimatedExecTime(taskId));
             task.setLatestStartTime(lst);
         }
         return true;
+    }
+
+    private double provisionAwareLatestStart(Task task, WorkflowRecord wfr,
+                                             Map<Integer, Double> memo) {
+        int taskId = task.getCloudletId();
+        Double previous = memo.get(taskId);
+        if (previous != null) return previous;
+
+        double runtime = wfr.getEstimatedExecTime(taskId);
+        double lst = wfr.getDeadline() - runtime;
+        for (Task child : task.getChildList()) {
+            // Provisioning of a child cannot start until its predecessors
+            // finish; reserve OPD along each possible remaining path.
+            lst = Math.min(lst, provisionAwareLatestStart(child, wfr, memo)
+                    - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY - runtime);
+        }
+        memo.put(taskId, lst);
+        return lst;
     }
 
     @Override
