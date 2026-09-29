@@ -3,5 +3,8 @@
 Output/
 .codex_work/
 outputs/
+build_classes/
+build_middle_classes/
+__pycache__/
 .secrets/
 *.pem

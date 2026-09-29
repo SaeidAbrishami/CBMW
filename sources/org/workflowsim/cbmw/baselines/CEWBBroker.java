@@ -16,6 +16,7 @@ import org.workflowsim.Task;
 import org.workflowsim.WorkflowSimTags;
 import org.workflowsim.cbmw.AbstractWorkflowBroker;
 import org.workflowsim.cbmw.CBMWLogger;
+import org.workflowsim.cbmw.ExperimentRunContext;
 import org.workflowsim.cbmw.HybridVmPool;
 import org.workflowsim.cbmw.TaskExecutionRecord;
 import org.workflowsim.cbmw.UtilizationSnapshot;
@@ -118,7 +119,9 @@ public class CEWBBroker extends AbstractWorkflowBroker {
                         && Boolean.parseBoolean(System.getProperty(
                                 "cbmw.cewb.reference.resume.progress", "true"));
         this.spotMarket = new CEWBSpotMarket(
-                Long.getLong("cbmw.cewb.seed", 42L),
+                Long.getLong("cbmw.cewb.seed", "SYNTHETIC".equalsIgnoreCase(
+                        System.getProperty("cbmw.cewb.spot.mode", ""))
+                        ? ExperimentRunContext.getSeed() : 42L),
                 policyMode != CEWBPolicyMode.RECONSTRUCTED);
         this.onDemandPool = new CEWBOnDemandPool();
         this.taskPolicy = !policyMode.usesTaskPolicy() ? null
@@ -126,7 +129,7 @@ public class CEWBBroker extends AbstractWorkflowBroker {
                         || policyMode.usesReferenceTaskPolicy()
                         ? new CEWBReferenceTaskPolicy()
                         : new CEWBCriticalityPolicy();
-        this.pricingPolicy = policyMode.usesPaperPricing()
+        this.pricingPolicy = policyMode.usesPaperPricing() && !spotMarket.isPhysicalMode()
                 ? new CEWBPricingPolicy() : null;
         if (!Double.isFinite(SNAPSHOT_DELAY_SECONDS)
                 || SNAPSHOT_DELAY_SECONDS < 0.0) {
@@ -268,7 +271,7 @@ public class CEWBBroker extends AbstractWorkflowBroker {
 
     @Override
     protected void finalizeWorkflowNegotiation(WorkflowRecord wfr) {
-        if (policyMode.usesPaperPricing()) pricingPolicy.quoteBeforeExecution(wfr);
+        if (pricingPolicy != null) pricingPolicy.quoteBeforeExecution(wfr);
     }
 
     @Override
@@ -346,7 +349,9 @@ public class CEWBBroker extends AbstractWorkflowBroker {
             CEWBSpotMarket.Offer offer = spotMarket.acquire(
                     wfr.getTaskCores(taskId), wfr.getTaskRamMb(taskId),
                     estimatedRuntime(job, wfr, taskId), cl.getCloudletLength(),
-                    now, getLft(job), vmPool.getOnDemandPricePerSecond(taskId),
+                    now, getLft(job), spotMarket.isPhysicalMode()
+                            ? CEWBOnDemandPool.VM_PRICE_PER_SECOND
+                            : vmPool.getOnDemandPricePerSecond(taskId),
                     policyMode.usesTaskPolicy() ? effectiveSpotClass(jobId, decision)
                             : CEWBCriticalityPolicy.LOW_RELIABILITY_SPOT);
             if (offer != null) {
@@ -660,10 +665,12 @@ public class CEWBBroker extends AbstractWorkflowBroker {
         if (active != attempt) return;
         activeSpotAttempts.remove(job.getCloudletId());
         remainingEstimatedRuntimeByJob.remove(job.getCloudletId());
+        spotMarket.recordUsage(attempt.offer, workflowIdForJob(job),
+                attempt.startTime, CloudSim.clock());
         spotMarket.release(attempt.offer);
         snapshotPhysicalPools();
 
-        double cost = attempt.offer.getAttemptCost();
+        double cost = spotMarket.isPhysicalMode() ? 0.0 : attempt.offer.getAttemptCost();
         WorkflowRecord wfr = activeWorkflows.get(workflowIdForJob(job));
         if (wfr != null) wfr.addSpotCost(cost);
         job.setExecParam(attempt.offer.getEventDelaySeconds(),
@@ -713,7 +720,9 @@ public class CEWBBroker extends AbstractWorkflowBroker {
     private void retryInterruptedAttempt(SpotAttempt attempt) {
         Job job = attempt.job;
         activeSpotAttempts.remove(job.getCloudletId());
-        double cost = attempt.offer.getCostForElapsed(
+        spotMarket.recordUsage(attempt.offer, workflowIdForJob(job),
+                attempt.startTime, CloudSim.clock());
+        double cost = spotMarket.isPhysicalMode() ? 0.0 : attempt.offer.getCostForElapsed(
                 CloudSim.clock() - attempt.startTime);
         WorkflowRecord wfr = activeWorkflows.get(workflowIdForJob(job));
         if (wfr != null) wfr.addSpotCost(cost);
@@ -821,7 +830,7 @@ public class CEWBBroker extends AbstractWorkflowBroker {
         summary += " resumeProgress=" + resumeReferenceProgress
                 + " snapshotDelay=" + SNAPSHOT_DELAY_SECONDS
                 + "s admissionCpMultiplier=" + ADMISSION_CP_MULTIPLIER;
-        if (policyMode.usesPaperPricing()) summary += " pricing=" + pricingPolicy.getMode();
+        if (pricingPolicy != null) summary += " pricing=" + pricingPolicy.getMode();
         System.out.println("[CEWB-CONFIG] " + summary);
         CBMWLogger.log("CEWB-CONFIG", summary);
     }
@@ -830,6 +839,18 @@ public class CEWBBroker extends AbstractWorkflowBroker {
         if (summaryLogged) return;
         summaryLogged = true;
         settleOnDemandPool();
+        if (spotMarket.isPhysicalMode()) {
+            Map<Integer, WorkflowRecord> workflowsById = new HashMap<>();
+            for (WorkflowRecord workflow : allWorkflows) {
+                workflowsById.put(workflow.getWorkflowId(), workflow);
+            }
+            for (Map.Entry<Integer, Double> entry
+                    : spotMarket.settlePhysicalCosts(CloudSim.clock()).entrySet()) {
+                WorkflowRecord workflow = workflowsById.get(entry.getKey());
+                if (workflow == null) throw new IllegalStateException("Unknown Spot workflow");
+                workflow.addSpotCost(entry.getValue());
+            }
+        }
         String summary = spotMarket.diagnosticSummary()
                 + " " + onDemandPool.diagnosticSummary()
                 + " fallbacks=" + fallbackDispatches
@@ -875,7 +896,7 @@ public class CEWBBroker extends AbstractWorkflowBroker {
                 onDemandPool.getSettledCapacityCoreSeconds());
         accounting.setOnDemandCapacityRamMbSeconds(
                 onDemandPool.getSettledCapacityRamMbSeconds());
-        if (policyMode.usesPaperPricing()) {
+        if (pricingPolicy != null) {
             for (WorkflowRecord workflow : allWorkflows) {
                 if (workflow.isAccepted() && workflow.isComplete()) {
                     pricingPolicy.settleAfterExecution(workflow);

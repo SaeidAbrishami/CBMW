@@ -292,6 +292,69 @@ pricing families are selected by `cbmw.cewb.pricing.policy` with values
 These fields are retained by `scripts/merge_algorithm_outputs.py` in combined
 per-run and aggregate results.
 
+### Ohio July–August 2026 CEWB replay
+
+Run `python scripts/run_cewb_ohio_2026.py --all --workers 2
+--workflow-dir /path/to/test_workflows/workflows` from this checkout to
+simulate every arrival/deadline pair with the same full 500 and edge 200
+manifests. The script selects `use2-az1` by default; `--zone use2-az2` and
+`--zone use2-az3` allow zone sensitivity. Each pair replays the same August
+window for both manifests, and the 18 pairs start at offsets spread over the
+month. All three deadline factors at one arrival rate use the same price
+window; the six arrival rates begin on August 1, 6, 11, 16, 21, and 26 UTC.
+Each output folder contains `run_config.json`, `run.log`, scenario
+results, and `algorithms/CEWB/workflow_costs.csv`. The latter records each
+workflow's attributed Spot and On-Demand physical rental costs and marks
+positions 101–400 in the full manifest. The full-row `marginalCost` is the
+500-run total cost minus the matched edge-200 total cost. The edge manifest
+shifts the final 100 workflows earlier, so this difference also includes
+resource reuse and timing changes. The sum of the marked workflows'
+attributed costs is a different, descriptive quantity.
+
+To measure the middle 300 *alone*, run `python
+scripts/run_cewb_ohio_middle300.py --all --workers 2 --workflow-dir
+/path/to/test_workflows/workflows --output outputs/cewb_ohio_2026`.
+It writes a separate middle-300 result for each pair. The original workflow
+positions 101–400 are rebased to start at zero; the Spot clock is advanced
+by the removed leading arrival time, preserving the corresponding August
+price interval. `python scripts/summarize_cewb_ohio_2026.py
+outputs/cewb_ohio_2026` combines the three cost definitions and checks that
+per-workflow attributed costs sum to each physical VM total.
+
+The six small files under `data/spot_history` are the Linux/UNIX
+`m5.8xlarge` prices extracted for the three `use2-az*` zones from [Eric
+Pauley's AWS Spot Price History](https://zenodo.org/records/22647367)
+(July/August 2026). July supplies the *training minimum*, and August supplies
+the price timeline; the scheduler never trains its bids on future August
+prices. AWS's archived July (`20260728175247`) and August
+(`20260831181331`) Ohio EC2 price lists both quote $1.536 per hour for
+Linux/shared/used `m5.8xlarge`, SKU `8X9B68EH66TVHPDD`. These historical
+files are documented by [AWS's bulk price list API](https://docs.aws.amazon.com/awsaccountbilling/latest/aboutv2/using-the-aws-price-list-bulk-api-fetching-price-list-files-manually.html).
+
+Trace mode uses physical 32-vCPU/128-GiB Spot and On-Demand VMs, a 60-second
+VM startup, a 0.4-second container delay, a 100-second provisioning cycle,
+and a separate 90-second snapshot/restore delay. The paper's three Spot
+maximum bids are the July minimum plus 25%, 50%, and 75% of the difference
+to the Ohio On-Demand price. Spot rental is charged by physical VM,
+including its idle time, at the recorded price at the start of each
+instance-hour, with per-second metering. AWS-initiated interruptions during
+the first instance-hour have no Spot VM charge. VM cost is attributed to
+workflows using their container core-time on that VM. Customer quotes,
+revenue, and profit are disabled in trace mode.
+
+The CBMW runner still uses its separately configured reserved and task-sized
+On-Demand rates. The paired workflow inputs and provisioning assumptions can
+be compared now, but a claim about absolute dollar savings versus CBMW
+requires repricing the CBMW resource model to the same Ohio price basis.
+
+**Interpretation:** the history is a price trace, not an interruption event
+log. It supports only price-above-bid interruptions. For this instance and
+these bids, none of the three August zone traces exceeds even the lowest
+bid. AWS may still reclaim Spot capacity. The observed zero price crossings
+must not be presented as a measured zero capacity-interruption probability.
+Likewise, the synthetic fixed-MTBI mode is independent of this replay and
+does not calibrate a provider reclamation probability.
+
 The default class capacities are an explicitly labelled capacity-matched
 experimental normalization, not a CEWB paper constant. They divide 960
 physical spot cores equally across the three fixed instance classes, matching

@@ -60,6 +60,10 @@ import org.workflowsim.utils.ReplicaCatalog;
  */
 public class CBMWSimulation {
 
+    private static final StringBuilder CEWB_TRACE_WORKFLOW_ROWS = new StringBuilder(
+            "scenario,run,workflowPosition,workflowId,inMiddle300,accepted,"
+            + "complete,metDeadline,onDemandCost,spotCost,attributedTotalCost\n");
+
     private static final String OUTPUT_ROOT = System.getProperty("cbmw.output.dir", "Output");
     private static final String ALGORITHM_OUTPUT_ROOT =
             OUTPUT_ROOT + File.separator + "algorithms";
@@ -330,6 +334,28 @@ public class CBMWSimulation {
                 broker.getAccounting().getOnDemandUsageRatio(),
                 broker.getAccounting().getSpotUsageRatio());
 
+        if (algorithm.equals("CEWB")
+                && !System.getProperty("cbmw.cewb.spot.trace.august", "").isEmpty()) {
+            int position = 0;
+            for (org.workflowsim.cbmw.WorkflowRecord workflow : broker.getAllWorkflows()) {
+                position++;
+                boolean middle = datasetMode == DatasetMode.MIDDLE_300
+                        || datasetMode == DatasetMode.FULL_500
+                                && position > 100 && position <= 400;
+                double onDemand = workflow.getTotalOnDemandCost();
+                double spot = workflow.getTotalSpotCost();
+                CEWB_TRACE_WORKFLOW_ROWS.append(String.format(Locale.US,
+                        "%s,%d,%d,%d,%b,%b,%b,%b,%.10f,%.10f,%.10f%n",
+                        scenario, run, position, workflow.getWorkflowId(), middle,
+                        workflow.isAccepted(), workflow.isComplete(),
+                        workflow.isComplete() && workflow.getCompletionTime()
+                                <= workflow.getDeadline(),
+                        onDemand, spot, onDemand + spot));
+            }
+            saveCsv(new File(algorithmDir, "workflow_costs.csv").getPath(),
+                    CEWB_TRACE_WORKFLOW_ROWS.toString());
+        }
+
         CBMWDetailedResultExporter detailedExporter = new CBMWDetailedResultExporter(
                 broker.getAllWorkflows(),
                 broker.getAccounting(),
@@ -341,10 +367,14 @@ public class CBMWSimulation {
                 NOSFConfiguration.profileName(),
                 experiment.alpha,
                 simDuration);
-        detailedExporter.appendTaskCsv(
-                new File(algorithmDir, "task_execution.csv"));
-        System.out.println("[tasks] Appended to "
-                + new File(algorithmDir, "task_execution.csv").getAbsolutePath());
+        if (!algorithm.equals("CEWB")
+                || Boolean.parseBoolean(System.getProperty(
+                        "cbmw.cewb.export.task.csv", "true"))) {
+            detailedExporter.appendTaskCsv(
+                    new File(algorithmDir, "task_execution.csv"));
+            System.out.println("[tasks] Appended to "
+                    + new File(algorithmDir, "task_execution.csv").getAbsolutePath());
+        }
 
         if (EXPORT_DETAILS) {
             File detailsDir = new File(algorithmDir, label + "_details");
@@ -523,7 +553,8 @@ public class CBMWSimulation {
     }
 
     static String manifestFor(double mean, DatasetMode mode) {
-        String tag = mode == DatasetMode.FULL_500 ? "500workflows" : "edge200";
+        String tag = mode == DatasetMode.FULL_500 ? "500workflows"
+                : mode == DatasetMode.EDGE_200 ? "edge200" : "middle300";
         String property = "cbmw.workflow.manifest." + compactNumber(mean) + "." + mode.name();
         return System.getProperty(property, "dax_poisson_arrivals_mean"
                 + compactNumber(mean) + "s_" + tag + ".json");
@@ -592,7 +623,8 @@ public class CBMWSimulation {
     }
 
     private static String datasetTag(DatasetMode mode) {
-        return mode == DatasetMode.FULL_500 ? "full500" : "edge200";
+        return mode == DatasetMode.FULL_500 ? "full500"
+                : mode == DatasetMode.EDGE_200 ? "edge200" : "middle300";
     }
 
     private static String compactNumber(double value) {

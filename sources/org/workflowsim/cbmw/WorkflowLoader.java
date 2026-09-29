@@ -43,7 +43,9 @@ public class WorkflowLoader {
         /** All workflows, preserving the manifest arrival times. */
         FULL_500,
         /** 200 workflows with their already-adjusted manifest arrival times. */
-        EDGE_200;
+        EDGE_200,
+        /** Original positions 101–400, optionally rebased to start at zero. */
+        MIDDLE_300;
 
         public static DatasetMode parse(String value) {
             if (value == null || value.trim().isEmpty()) return FULL_500;
@@ -51,7 +53,8 @@ public class WorkflowLoader {
                 return DatasetMode.valueOf(value.trim().toUpperCase(Locale.US));
             } catch (IllegalArgumentException e) {
                 throw new IllegalArgumentException(DATASET_MODE_PROPERTY
-                        + " must be FULL_500 or EDGE_200, not: " + value, e);
+                        + " must be FULL_500, EDGE_200, or MIDDLE_300, not: "
+                        + value, e);
             }
         }
 
@@ -83,7 +86,9 @@ public class WorkflowLoader {
             throw new IllegalArgumentException(
                     "Workflow directory does not exist: " + root);
         }
-        File manifest = new File(root, jsonFile).getCanonicalFile();
+        File requestedManifest = new File(jsonFile);
+        File manifest = (requestedManifest.isAbsolute() ? requestedManifest
+                : new File(root, jsonFile)).getCanonicalFile();
         if (!manifest.isFile()) {
             throw new IllegalArgumentException(
                     "Workflow arrival manifest does not exist: " + manifest);
@@ -125,7 +130,8 @@ public class WorkflowLoader {
                                                       Set<String> manifestNames,
                                                       DatasetFiles files, DatasetMode mode)
             throws Exception {
-        int expectedCount = mode == DatasetMode.FULL_500 ? FULL_DATASET_SIZE : 200;
+        int expectedCount = mode == DatasetMode.FULL_500 ? FULL_DATASET_SIZE
+                : mode == DatasetMode.EDGE_200 ? 200 : 300;
         if (manifestNames.size() != expectedCount) {
             throw new IllegalArgumentException("Arrival manifest must contain exactly"
                     + " " + expectedCount + " unique workflows, found "

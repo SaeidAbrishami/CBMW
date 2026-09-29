@@ -20,6 +20,7 @@ final class CEWBSpotMarket {
             "cbmw.cewb.spot.total.cores",
             HybridVmPool.NUM_RESERVED * HybridVmPool.RESERVED_CORES);
     private static final int SPOT_CLASS_COUNT = 3;
+    private static final double TRACE_IDLE_SECONDS = 100.0;
 
     static final class Offer {
         private final SpotType type;
@@ -98,16 +99,24 @@ final class CEWBSpotMarket {
         private final SpotType type;
         private final double pricePerSecond;
         private final double interruptionTime;
+        private final double readyAt;
+        private double lastUsedAt;
+        private double endedAt = Double.NaN;
+        private boolean awsInterrupted;
+        private boolean capacityReclamation;
+        private final Map<Integer, Double> workflowCoreSeconds = new HashMap<>();
         private int usedCores;
         private int usedRamMb;
         private boolean active = true;
 
         SpotInstance(int id, SpotType type, double pricePerSecond,
-                     double interruptionTime) {
+                     double interruptionTime, double readyAt) {
             this.id = id;
             this.type = type;
             this.pricePerSecond = pricePerSecond;
             this.interruptionTime = interruptionTime;
+            this.readyAt = readyAt;
+            this.lastUsedAt = readyAt;
         }
 
         boolean fits(int cores, int ramMb) {
@@ -141,8 +150,12 @@ final class CEWBSpotMarket {
         }
     }
 
+    private static final String SYNTHETIC_MODE = "SYNTHETIC";
     private static final double STARTUP_SECONDS = property(
-            "cbmw.cewb.spot.startup.sec", 20.0);
+            "cbmw.cewb.spot.startup.sec",
+            System.getProperty("cbmw.cewb.spot.trace.august", "").isEmpty()
+                    && !SYNTHETIC_MODE.equalsIgnoreCase(System.getProperty(
+                            "cbmw.cewb.spot.mode", "")) ? 20.0 : 60.0);
     private static final double MIN_PRICE_FACTOR = property(
             "cbmw.cewb.spot.price.factor.min", 0.80);
     private static final double MAX_PRICE_FACTOR = property(
@@ -157,11 +170,26 @@ final class CEWBSpotMarket {
     private final Map<Integer, SpotInstance> instances = new HashMap<>();
     private final Random random;
     private final boolean sharedContainers;
+    private final CEWBSpotPriceTrace trace;
+    private final boolean synthetic;
+    private final double syntheticDiscountMin;
+    private final double syntheticDiscountMax;
+    private final double syntheticHourlyReclamation;
+    private final double syntheticHazard;
+    private final double syntheticTrainingMinimumPerSecond;
+    private final double traceHourlyReclamation;
+    private final double traceHazard;
+    private final List<SpotInstance> physicalHistory = new ArrayList<>();
+    private double physicalCost;
+    private boolean physicalSettled;
     private int nextInstanceId = 1_000_000;
     private long acquireCalls;
     private long acquiredOffers;
     private long noOfferCalls;
     private long saturatedCalls;
+    private long maximumPriceRejections;
+    private long capacityReclaimedVms;
+    private long priceInterruptedVms;
     private int activeInstances;
     private int activeCores;
     private int peakActiveInstances;
@@ -178,12 +206,71 @@ final class CEWBSpotMarket {
         }
         random = new Random(seed);
         this.sharedContainers = sharedContainers;
-        types.add(type("economy", 1, 1024, 900.0, 0.000085, 1800.0,
-                CEWBCriticalityPolicy.LOW_RELIABILITY_SPOT));
-        types.add(type("standard", 2, 4096, 1000.0, 0.000140, 3600.0,
-                CEWBCriticalityPolicy.MEDIUM_RELIABILITY_SPOT));
-        types.add(type("performance", 4, 8192, 1500.0, 0.000240, 7200.0,
-                CEWBCriticalityPolicy.HIGH_RELIABILITY_SPOT));
+        synthetic = SYNTHETIC_MODE.equalsIgnoreCase(System.getProperty(
+                "cbmw.cewb.spot.mode", ""));
+        syntheticDiscountMin = property("cbmw.cewb.spot.synthetic.discount.min", 0.30);
+        syntheticDiscountMax = property("cbmw.cewb.spot.synthetic.discount.max", 0.70);
+        syntheticHourlyReclamation = property("cbmw.cewb.spot.synthetic.reclamation.hourly", 0.05);
+        syntheticTrainingMinimumPerSecond = property(
+                "cbmw.cewb.spot.synthetic.training.minimum.per.hour", 0.3237) / 3600.0;
+        traceHourlyReclamation = property(
+                "cbmw.cewb.spot.trace.reclamation.hourly", 0.0);
+        if (!Double.isFinite(syntheticDiscountMin) || !Double.isFinite(syntheticDiscountMax)
+                || syntheticDiscountMin < 0 || syntheticDiscountMax >= 1
+                || syntheticDiscountMin > syntheticDiscountMax
+                || !Double.isFinite(syntheticHourlyReclamation)
+                || syntheticHourlyReclamation < 0 || syntheticHourlyReclamation >= 1
+                || !Double.isFinite(syntheticTrainingMinimumPerSecond)
+                || syntheticTrainingMinimumPerSecond <= 0
+                || !Double.isFinite(traceHourlyReclamation)
+                || traceHourlyReclamation < 0 || traceHourlyReclamation >= 1) {
+            throw new IllegalArgumentException("Invalid synthetic Spot discount or one-hour reclamation probability");
+        }
+        syntheticHazard = -Math.log1p(-syntheticHourlyReclamation) / 3600.0;
+        traceHazard = -Math.log1p(-traceHourlyReclamation) / 3600.0;
+        String traceFile = System.getProperty("cbmw.cewb.spot.trace.august", "").trim();
+        if (synthetic && !traceFile.isEmpty()) {
+            throw new IllegalArgumentException("Choose historical trace or synthetic Spot mode, not both");
+        }
+        if (synthetic) {
+            trace = null;
+            int totalCapacity = intProperty("cbmw.cewb.spot.synthetic.capacity",
+                    Math.max(1, DEFAULT_TOTAL_SPOT_CORES / 32));
+            if (totalCapacity < 1) {
+                throw new IllegalArgumentException("Synthetic Spot VM cap must be positive");
+            }
+            // Paper Eq. 3 has three maximum-price classes (c2, c3, c4).
+            for (int reliability = 3; reliability >= 1; reliability--) {
+                String name = reliability == 3 ? "economy"
+                        : reliability == 2 ? "standard" : "performance";
+                int capacity = totalCapacity / 3
+                        + (reliability == 1 ? totalCapacity % 3 : 0);
+                types.add(new SpotType(name, 32, 128 * 1024, 1000.0,
+                        0.0, 0.0, capacity, reliability));
+            }
+        } else if (traceFile.isEmpty()) {
+            trace = null;
+            types.add(type("economy", 1, 1024, 900.0, 0.000085, 1800.0,
+                    CEWBCriticalityPolicy.LOW_RELIABILITY_SPOT));
+            types.add(type("standard", 2, 4096, 1000.0, 0.000140, 3600.0,
+                    CEWBCriticalityPolicy.MEDIUM_RELIABILITY_SPOT));
+            types.add(type("performance", 4, 8192, 1500.0, 0.000240, 7200.0,
+                    CEWBCriticalityPolicy.HIGH_RELIABILITY_SPOT));
+        } else {
+            trace = new CEWBSpotPriceTrace(traceFile,
+                    System.getProperty("cbmw.cewb.spot.trace.july"),
+                    property("cbmw.cewb.spot.trace.offset.sec", 0));
+            // Paper Eq. 3 maximum prices: minimum July price plus a quarter, half,
+            // or three quarters of the gap to the Ohio on-demand VM price.
+            for (int reliability = 3; reliability >= 1; reliability--) {
+                String name = reliability == 3 ? "economy"
+                        : reliability == 2 ? "standard" : "performance";
+                types.add(new SpotType(name, 32, 128 * 1024, 1000.0,
+                        0.0, 0.0, intProperty("cbmw.cewb.spot." + name
+                                + ".capacity", matchedDefaultCapacity(32)),
+                        reliability));
+            }
+        }
         validateConfiguration();
     }
 
@@ -209,6 +296,7 @@ final class CEWBSpotMarket {
                     + requiredReliabilityClass);
         }
         acquireCalls++;
+        if (isPhysicalMode()) expireIdle(now);
         List<Offer> candidates = new ArrayList<>();
         boolean hasResourceFit = false;
         boolean hasCapacity = false;
@@ -219,14 +307,29 @@ final class CEWBSpotMarket {
             if (taskCores > type.cores || taskRamMb > type.ramMb) continue;
             hasResourceFit = true;
 
-            double price = currentPrice(type);
+            double price = synthetic
+                    ? onDemandPricePerSecond * (1 - syntheticDiscountMin
+                            - random.nextDouble() * (syntheticDiscountMax - syntheticDiscountMin))
+                    : trace == null ? currentPrice(type) : trace.priceAt(now);
+            double trainingMinimum = synthetic ? syntheticTrainingMinimumPerSecond
+                    : trace == null ? 0 : trace.trainingMinimumPerSecond();
+            double maximumPrice = isPhysicalMode() ? trainingMinimum
+                    + (4 - type.reliabilityClass) / 4.0
+                    * (onDemandPricePerSecond - trainingMinimum) : 0;
             double predictedExecution = estimatedRuntime * 1000.0 / type.mips;
             double execution = HybridVmPool.executionTimeSeconds(
                     cloudletLength, taskCores, type.mips);
-            double successProbability = type.meanTimeBetweenInterruptions == 0.0
-                    ? 0.0 : Math.exp(-predictedExecution
+            double successProbability = synthetic
+                    ? Math.exp(-syntheticHazard * predictedExecution)
+                    : trace != null ? Math.exp(-traceHazard * predictedExecution)
+                    : type.meanTimeBetweenInterruptions == 0.0 ? 0.0
+                    : Math.exp(-predictedExecution
                             / type.meanTimeBetweenInterruptions);
-            if (successProbability < MIN_SUCCESS_PROBABILITY) continue;
+            if (!isPhysicalMode() && successProbability < MIN_SUCCESS_PROBABILITY) continue;
+            if (trace != null && price > maximumPrice) {
+                maximumPriceRejections++;
+                continue;
+            }
 
             for (SpotInstance instance : sharedContainers
                     ? instances.values() : java.util.Collections.<SpotInstance>emptyList()) {
@@ -235,9 +338,10 @@ final class CEWBSpotMarket {
                 }
                 hasCapacity = true;
                 if (now + predictedExecution > subDeadline) continue;
-                if (instance.pricePerSecond
+                if (!isPhysicalMode() && instance.pricePerSecond
                         > onDemandPricePerSecond * MAX_BID_TO_ON_DEMAND_RATIO) continue;
-                candidates.add(new Offer(type, instance, instance.pricePerSecond,
+                candidates.add(new Offer(type, instance,
+                        trace == null ? instance.pricePerSecond : price,
                         0.0, predictedExecution, execution,
                         Math.max(0.0, instance.interruptionTime - now),
                         successProbability, taskCores, taskRamMb,
@@ -245,13 +349,35 @@ final class CEWBSpotMarket {
             }
 
             if (activeByType.getOrDefault(type.name, 0) < type.capacity
-                    && price <= onDemandPricePerSecond * MAX_BID_TO_ON_DEMAND_RATIO) {
+                    && (isPhysicalMode() || price <= onDemandPricePerSecond
+                            * MAX_BID_TO_ON_DEMAND_RATIO)) {
                 hasCapacity = true;
+                // Synthetic prices are sampled for new VM requests only. A
+                // running VM retains the price accepted at its launch.
+                if (synthetic && price > maximumPrice) {
+                    maximumPriceRejections++;
+                    continue;
+                }
                 if (now + STARTUP_SECONDS + predictedExecution > subDeadline) continue;
-                double interruptionDelay = sampleInterruptionDelay(
-                        type.meanTimeBetweenInterruptions);
+                double priceCrossingDelay = trace == null ? Double.MAX_VALUE / 4
+                        : Math.max(0, Math.min(Double.MAX_VALUE / 4,
+                                trace.nextExceeding(now, maximumPrice)
+                                        - now - STARTUP_SECONDS));
+                double capacityDelay = trace == null || traceHazard == 0
+                        ? Double.MAX_VALUE / 4
+                        : Math.min(Double.MAX_VALUE / 4,
+                                sampleInterruptionDelay(1 / traceHazard));
+                double interruptionDelay = synthetic
+                        ? syntheticHazard == 0 ? Double.MAX_VALUE / 4
+                        : sampleInterruptionDelay(1 / syntheticHazard)
+                        : trace != null
+                        ? Math.min(priceCrossingDelay, capacityDelay)
+                        : sampleInterruptionDelay(type.meanTimeBetweenInterruptions);
                 SpotInstance instance = new SpotInstance(nextInstanceId, type, price,
-                        now + STARTUP_SECONDS + interruptionDelay);
+                        now + STARTUP_SECONDS + interruptionDelay,
+                        now + STARTUP_SECONDS);
+                instance.capacityReclamation = synthetic || trace != null
+                        && capacityDelay < priceCrossingDelay;
                 candidates.add(new Offer(type, instance, price,
                         STARTUP_SECONDS, predictedExecution, execution,
                         interruptionDelay, successProbability,
@@ -271,6 +397,7 @@ final class CEWBSpotMarket {
         SpotInstance instance = selected.instance;
         if (!instances.containsKey(instance.id)) {
             instances.put(instance.id, instance);
+            if (isPhysicalMode()) physicalHistory.add(instance);
             nextInstanceId++;
             int activeForType = activeByType.merge(
                     selected.getTypeName(), 1, Integer::sum);
@@ -307,18 +434,54 @@ final class CEWBSpotMarket {
         }
         instance.usedCores -= offer.allocatedCores;
         instance.usedRamMb -= offer.allocatedRamMb;
-        if (!sharedContainers) terminateInstance(instance);
+        if (!sharedContainers) terminateInstance(instance,
+                instance.lastUsedAt);
+    }
+
+    boolean isPhysicalMode() { return trace != null || synthetic; }
+
+    void recordUsage(Offer offer, int workflowId, double from, double to) {
+        if (!isPhysicalMode()) return;
+        SpotInstance instance = offer.instance;
+        double runtime = Math.max(0, to - from);
+        instance.workflowCoreSeconds.merge(workflowId,
+                runtime * offer.allocatedCores, Double::sum);
+        instance.lastUsedAt = Math.max(instance.lastUsedAt, to);
+    }
+
+    private void expireIdle(double now) {
+        for (SpotInstance instance : new ArrayList<>(instances.values())) {
+            if (instance.usedCores != 0) continue;
+            double idleExpiry = instance.lastUsedAt + TRACE_IDLE_SECONDS;
+            if (now >= instance.interruptionTime
+                    && instance.interruptionTime <= idleExpiry) {
+                registerProviderInterruption(instance);
+                terminateInstance(instance, instance.interruptionTime);
+            } else if (now >= idleExpiry) {
+                terminateInstance(instance, idleExpiry);
+            }
+        }
     }
 
     void revoke(Offer offer) {
         SpotInstance instance = offer.instance;
         if (!instance.active) return;
-        terminateInstance(instance);
+        registerProviderInterruption(instance);
+        terminateInstance(instance, Math.max(instance.readyAt,
+                instance.interruptionTime));
     }
 
-    private void terminateInstance(SpotInstance instance) {
+    private void registerProviderInterruption(SpotInstance instance) {
+        if (instance.awsInterrupted) return;
+        instance.awsInterrupted = true;
+        if (instance.capacityReclamation) capacityReclaimedVms++;
+        else priceInterruptedVms++;
+    }
+
+    private void terminateInstance(SpotInstance instance, double now) {
         if (!instance.active) return;
         instance.active = false;
+        instance.endedAt = now;
         instances.remove(instance.id);
         int active = activeByType.getOrDefault(instance.type.name, 0);
         activeByType.put(instance.type.name, Math.max(0, active - 1));
@@ -331,6 +494,33 @@ final class CEWBSpotMarket {
         activeByType.clear();
         activeInstances = 0;
         activeCores = 0;
+    }
+
+    Map<Integer, Double> settlePhysicalCosts(double now) {
+        Map<Integer, Double> result = new HashMap<>();
+        if (!isPhysicalMode()) return result;
+        if (physicalSettled) throw new IllegalStateException("CEWB physical Spot costs settled twice");
+        physicalSettled = true;
+        for (SpotInstance instance : new ArrayList<>(instances.values())) {
+            if (instance.usedCores != 0) throw new IllegalStateException("Active Spot task at settlement");
+            terminateInstance(instance, Math.min(now, instance.lastUsedAt + TRACE_IDLE_SECONDS));
+        }
+        for (SpotInstance instance : physicalHistory) {
+            double cost = synthetic
+                    ? CEWBSpotSyntheticPricing.billInstance(instance.readyAt,
+                            instance.endedAt, instance.pricePerSecond,
+                            instance.awsInterrupted)
+                    : trace.billInstance(instance.readyAt, instance.endedAt,
+                            instance.awsInterrupted);
+            physicalCost += cost;
+            double weight = 0;
+            for (double value : instance.workflowCoreSeconds.values()) weight += value;
+            if (weight <= 0) throw new IllegalStateException("Unattributed Spot VM cost");
+            for (Map.Entry<Integer, Double> entry : instance.workflowCoreSeconds.entrySet()) {
+                result.merge(entry.getKey(), cost * entry.getValue() / weight, Double::sum);
+            }
+        }
+        return result;
     }
 
     int getConfiguredTotalCores() {
@@ -385,6 +575,15 @@ final class CEWBSpotMarket {
                     .append(type.capacity).append('x').append(type.cores)
                     .append("core");
         }
+        if (trace != null) summary.append(" trace=").append(trace.description())
+                .append(" maximumPriceClasses=[0.25,0.50,0.75] gapToOnDemand")
+                .append(" oneHourCapacityReclamation=").append(traceHourlyReclamation);
+        if (synthetic) summary.append(" syntheticDiscount=[")
+                .append(syntheticDiscountMin).append(',').append(syntheticDiscountMax)
+                .append("] oneHourReclamation=").append(syntheticHourlyReclamation)
+                .append(" trainingMinimum=$")
+                .append(syntheticTrainingMinimumPerSecond * 3600).append("/h")
+                .append(" maximumPriceClasses=[0.25,0.50,0.75] gapToOnDemand");
         return summary.toString();
     }
 
@@ -393,10 +592,15 @@ final class CEWBSpotMarket {
                 + " acquired=" + acquiredOffers
                 + " noOffer=" + noOfferCalls
                 + " saturated=" + saturatedCalls
+                + " maxPriceRejected=" + maximumPriceRejections
+                + " capacityReclaimedVMs=" + capacityReclaimedVms
+                + " priceInterruptedVMs=" + priceInterruptedVms
                 + " peakInstances=" + peakActiveInstances
                 + " peakCores=" + peakActiveCores
                 + "/" + getConfiguredTotalCores()
-                + " activeAtEnd=" + activeInstances;
+                + " activeAtEnd=" + activeInstances
+                + (!isPhysicalMode() ? "" : " spotPhysicalCost=" + physicalCost
+                        + " spotPhysicalInstances=" + physicalHistory.size());
     }
 
     private SpotType type(String name, int defaultCores, int defaultRamMb,
