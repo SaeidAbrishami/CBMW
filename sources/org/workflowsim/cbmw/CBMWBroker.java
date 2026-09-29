@@ -156,7 +156,7 @@ public class CBMWBroker extends AbstractWorkflowBroker {
     @Override
     protected boolean planWorkflow(WorkflowRecord wfr, List<Task> tasks) {
         CBMWStaticPlanningAlgorithm planner =
-                new CBMWStaticPlanningAlgorithm(wfr, vmPool, negotiation);
+                createStaticPlanner(wfr);
         planner.setTaskList(tasks);
         planner.setVmList(vmPool.getAllVms());
         long planningStart = CBMWPerformanceMetrics.isEnabled()
@@ -178,6 +178,15 @@ public class CBMWBroker extends AbstractWorkflowBroker {
         }
         return true;
     }
+
+    /** Ablations may change placement without changing admission or execution. */
+    protected CBMWStaticPlanningAlgorithm createStaticPlanner(WorkflowRecord wfr) {
+        return new CBMWStaticPlanningAlgorithm(wfr, vmPool, negotiation);
+    }
+
+    protected boolean advanceFutureTasks() { return true; }
+
+    protected boolean migrateDueOnDemandTasks() { return true; }
 
     private void schedulePlannedOnDemandOrders(WorkflowRecord wfr, List<Task> tasks) {
         double now = CloudSim.clock();
@@ -259,7 +268,9 @@ public class CBMWBroker extends AbstractWorkflowBroker {
             long dispatchStart = CBMWPerformanceMetrics.isEnabled()
                     ? System.nanoTime() : 0L;
             try {
-                if (advanceFuture) {
+                dynamicScheduler.setDueOnDemandMigrationEnabled(
+                        migrateDueOnDemandTasks());
+                if (advanceFuture && advanceFutureTasks()) {
                     dynamicScheduler.run();
                 } else {
                     dynamicScheduler.runDueOnly();

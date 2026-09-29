@@ -22,16 +22,25 @@ import org.workflowsim.planning.BasePlanningAlgorithm;
 public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
 
     public static final int ON_DEMAND_SENTINEL = -1;
+    public enum Placement { LATEST, EARLIEST }
 
     private final WorkflowRecord wfr;
     private final HybridVmPool pool;
     private final NegotiationModule negotiation;
+    private final Placement placement;
 
     public CBMWStaticPlanningAlgorithm(WorkflowRecord wfr, HybridVmPool pool,
                                         NegotiationModule negotiation) {
+        this(wfr, pool, negotiation, Placement.LATEST);
+    }
+
+    protected CBMWStaticPlanningAlgorithm(WorkflowRecord wfr, HybridVmPool pool,
+                                          NegotiationModule negotiation,
+                                          Placement placement) {
         this.wfr = wfr;
         this.pool = pool;
         this.negotiation = negotiation;
+        this.placement = placement;
     }
 
     @Override
@@ -41,15 +50,23 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
 
         try {
             computePaperTiming(tasks, wfr.getDeadline());
-            sorted.sort(Comparator.comparingDouble(
-                    (Task t) -> wfr.getLFT(t.getCloudletId())).reversed());
-
             CBMWLogger.log("PLAN-START",
                     String.format("wf=%d tasks=%d deadline=%.4f",
                             wfr.getWorkflowId(), tasks.size(), wfr.getDeadline()));
 
-            for (Task task : sorted) {
-                planTask(task);
+            if (placement == Placement.EARLIEST) {
+                // Parents must be placed before children when their actual
+                // chosen finish times set the children's earliest starts.
+                Map<Integer, Double> finishes = new HashMap<>();
+                for (Task task : sorted) {
+                    planEarlyTask(task, finishes);
+                }
+            } else {
+                sorted.sort(Comparator.comparingDouble(
+                        (Task t) -> wfr.getLFT(t.getCloudletId())).reversed());
+                for (Task task : sorted) {
+                    planTask(task);
+                }
             }
 
             validatePlannedPrecedence(tasks);
@@ -76,6 +93,54 @@ public class CBMWStaticPlanningAlgorithm extends BasePlanningAlgorithm {
         CBMWLogger.log("PLAN-DONE",
                 String.format("wf=%d tasks=%d deadline=%.4f",
                         wfr.getWorkflowId(), tasks.size(), wfr.getDeadline()));
+    }
+
+    private double planEarlyTask(Task task, Map<Integer, Double> finishes) {
+        int id = task.getCloudletId();
+        Double previous = finishes.get(id);
+        if (previous != null) return previous;
+        double est = Math.max(wfr.getEST(id), CloudSim.clock());
+        for (Task parent : task.getParentList()) {
+            est = Math.max(est, planEarlyTask(parent, finishes));
+        }
+        double dur = duration(task);
+        double lft = wfr.getLFT(id);
+        int cores = wfr.getTaskCores(id);
+        int ramMb = wfr.getTaskRamMb(id);
+        int bestVm = ON_DEMAND_SENTINEL;
+        double bestStart = Double.MAX_VALUE;
+        int bestLoad = Integer.MAX_VALUE;
+        for (CondorVM vm : pool.getReservedVms()) {
+            double slot = pool.findEarliestFeasibleSlot(vm.getId(), est, lft,
+                    dur, cores, ramMb);
+            if (slot == Double.MAX_VALUE) continue;
+            int load = pool.getBookingCount(vm.getId());
+            if (slot < bestStart - 1e-9
+                    || (Math.abs(slot - bestStart) <= 1e-9 && load < bestLoad)) {
+                bestStart = slot;
+                bestVm = vm.getId();
+                bestLoad = load;
+            }
+        }
+        if (bestVm == ON_DEMAND_SENTINEL) {
+            bestStart = Math.max(est, wfr.getArrivalTime()
+                    + HybridVmPool.ON_DEMAND_PROVISIONING_DELAY);
+            if (bestStart + dur > lft + 1e-9) {
+                throw new IllegalStateException("No early feasible slot for task " + id);
+            }
+            double order = bestStart - HybridVmPool.ON_DEMAND_PROVISIONING_DELAY;
+            wfr.setPlannedProvisionOrder(id, order);
+            wfr.setPlannedContainerReady(id, bestStart);
+        } else {
+            pool.bookSlot(bestVm, id, bestStart, bestStart + dur, cores, ramMb);
+        }
+        task.setVmId(bestVm);
+        wfr.setAssignedVm(id, bestVm);
+        wfr.setScheduledStart(id, bestStart);
+        wfr.setEST(id, est);
+        wfr.setEFT(id, est + dur);
+        finishes.put(id, bestStart + dur);
+        return bestStart + dur;
     }
 
     private void computePaperTiming(List<Task> tasks, double deadline) {

@@ -19,6 +19,9 @@ ALGORITHMS = {
     "CBMW": "CBMW", "SG": "StaticGreedy", "DG": "DynamicGreedy",
     "STATICGREEDY": "StaticGreedy", "DYNAMICGREEDY": "DynamicGreedy",
     "NOSF": "NOSF", "CEWB": "CEWB",
+    "CBMW-EARLY": "CBMW-Early", "CBMW-NOADVANCE": "CBMW-NoAdvance",
+    "CBMW-EARLY-NOADVANCE": "CBMW-Early-NoAdvance",
+    "CBMW-NOPLAN": "CBMW-NoPlan",
 }
 MEMORY_RESERVE_MIB = 1536  # OS, Python launcher, and JVM native memory
 
@@ -33,7 +36,8 @@ def read_config(path):
     for token in re.split(r"[\s,]+", lines[0]):
         name = ALGORITHMS.get(token.upper())
         if name is None:
-            raise ValueError(f"Unknown algorithm {token!r}; use CBMW, SG, DG, NOSF, or CEWB")
+            raise ValueError(f"Unknown algorithm {token!r}; use CBMW, SG, DG, "
+                             "NOSF, CEWB, or a CBMW ablation name")
         if name in algorithms:
             raise ValueError(f"Duplicate algorithm: {token}")
         algorithms.append(name)

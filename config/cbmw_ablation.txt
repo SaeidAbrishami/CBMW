@@ -1,0 +1,12 @@
+# Five algorithms, one scenario JVM at a time; increase line 2 if RAM permits.
+CBMW CBMW-Early CBMW-NoAdvance CBMW-Early-NoAdvance CBMW-NoPlan
+1
+15 1.2
+15 2
+15 4
+45 1.2
+45 2
+45 4
+90 1.2
+90 2
+90 4

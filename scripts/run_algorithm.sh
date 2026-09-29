@@ -2,7 +2,7 @@
 set -euo pipefail
 
 if [[ $# -lt 1 ]]; then
-  echo "Usage: scripts/run_algorithm.sh <CBMW|NOSF|CEWB|StaticGreedy|DynamicGreedy> [extra java -D options]" >&2
+  echo "Usage: scripts/run_algorithm.sh <CBMW|CBMW-Early|CBMW-NoAdvance|CBMW-Early-NoAdvance|CBMW-NoPlan|NOSF|CEWB|StaticGreedy|DynamicGreedy> [extra java -D options]" >&2
   exit 2
 fi
 

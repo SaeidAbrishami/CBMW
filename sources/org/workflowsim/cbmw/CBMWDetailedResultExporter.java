@@ -229,7 +229,7 @@ public class CBMWDetailedResultExporter {
 
             writer.write("========== SIMULATION SUMMARY ==========\n");
             writer.write(String.format(Locale.US, "Scheduling Algorithm: %s%n", algorithm));
-            if ("CBMW".equals(algorithm)) {
+            if (algorithm.startsWith("CBMW")) {
                 writer.write(String.format(Locale.US,
                         "Planning Runtime Margin (alpha): %.3f%n",
                         PaperRuntimeModel.PLANNING_ALPHA));

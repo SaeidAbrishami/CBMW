@@ -40,6 +40,10 @@ import org.workflowsim.cbmw.PaperRuntimeModel;
 import org.workflowsim.cbmw.WorkflowArrivalData;
 import org.workflowsim.cbmw.WorkflowLoader;
 import org.workflowsim.cbmw.WorkflowLoader.DatasetMode;
+import org.workflowsim.cbmw.ablation.CBMWEarlyBroker;
+import org.workflowsim.cbmw.ablation.CBMWEarlyNoAdvanceBroker;
+import org.workflowsim.cbmw.ablation.CBMWNoAdvanceBroker;
+import org.workflowsim.cbmw.ablation.CBMWNoPlanBroker;
 import org.workflowsim.cbmw.baselines.CEWBBroker;
 import org.workflowsim.cbmw.baselines.CEWBPolicyMode;
 import org.workflowsim.cbmw.baselines.DynamicGreedyBroker;
@@ -284,7 +288,8 @@ public class CBMWSimulation {
         WorkflowPlanner planner = new WorkflowPlanner("planner_0", 1);
         WorkflowEngine  engine  = planner.getWorkflowEngine();
         if ("StaticGreedy".equals(algorithm)
-                || "DynamicGreedy".equals(algorithm)) {
+                || "DynamicGreedy".equals(algorithm)
+                || "CBMW-NoPlan".equals(algorithm)) {
             engine.enableIndexedDependencies();
         }
 
@@ -396,6 +401,12 @@ public class CBMWSimulation {
                                                         double tightness) throws Exception {
         switch (algorithm) {
             case "CBMW":          return new CBMWBroker("CBMWBroker_0", tightness);
+            case "CBMW-Early": return new CBMWEarlyBroker("CBMWEarlyBroker_0", tightness);
+            case "CBMW-NoAdvance": return new CBMWNoAdvanceBroker(
+                    "CBMWNoAdvanceBroker_0", tightness);
+            case "CBMW-Early-NoAdvance": return new CBMWEarlyNoAdvanceBroker(
+                    "CBMWEarlyNoAdvanceBroker_0", tightness);
+            case "CBMW-NoPlan": return new CBMWNoPlanBroker("CBMWNoPlanBroker_0", tightness);
             case "NOSF":          return new NOSFBroker("NOSFBroker_0", tightness);
             case "CEWB":
                 return new CEWBBroker("CEWBBroker_0", tightness,
@@ -426,7 +437,7 @@ public class CBMWSimulation {
         // CBMW reserves 960 vCPUs; dedicated on-demand containers are logical
         // and need no CloudSim host PEs. A modest headroom keeps the simulator
         // within the memory budget of an 8 GiB Linux machine.
-        int hostPes = "CBMW".equals(algorithm) ? 2048 : 50000;
+        int hostPes = algorithm.startsWith("CBMW") ? 2048 : 50000;
         for (int i = 0; i < hostPes; i++) {
             peList.add(new Pe(i, new PeProvisionerSimple(mips)));
         }

@@ -27,6 +27,11 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
     private Set<Integer> waitingForPlannedReservedVm = Collections.emptySet();
     private Map<Integer, Double> reservedRetryTimes = Collections.emptyMap();
     private boolean safeReservedRebookingEnabled;
+    private boolean dueOnDemandMigrationEnabled = true;
+
+    public void setDueOnDemandMigrationEnabled(boolean enabled) {
+        dueOnDemandMigrationEnabled = enabled;
+    }
     /**
      * Static o0 orders superseded when Algorithm 3 advances a future task to
      * reserved capacity. The broker consumes the marker at the scheduled
@@ -136,8 +141,9 @@ public class CBMWDynamicSchedulingAlgorithm extends BaseSchedulingAlgorithm {
                 waitingForPlannedReservedVm.remove(taskId);
                 select(job, plannedVm, selected, pendingCores, pendingRamMb);
             } else {
-                CondorVM reserved = findReserved(now, now + duration,
-                        taskId, pendingCores, pendingRamMb);
+                CondorVM reserved = dueOnDemandMigrationEnabled
+                        ? findReserved(now, now + duration,
+                                taskId, pendingCores, pendingRamMb) : null;
                 if (reserved != null) {
                     cancelOnDemand(taskId);
                     pool.bookSlot(reserved.getId(), taskId, now,

@@ -458,6 +458,7 @@ public class CEWBBroker extends AbstractWorkflowBroker {
         cloudletsSubmitted++;
         accounting.markTaskProvisioningOrdered(job, now, now + containerDelay);
         accounting.markTaskSubmitted(job, "On-Demand");
+        reportTaskStarted(taskId);
         OnDemandAttempt attempt = new OnDemandAttempt(job, offer,
                 executionSeconds);
         activeOnDemandAttempts.put(job.getCloudletId(), attempt);
@@ -641,6 +642,7 @@ public class CEWBBroker extends AbstractWorkflowBroker {
         accounting.markTaskProvisioningOrdered(job, CloudSim.clock(),
                 CloudSim.clock() + offer.getStartupSeconds());
         accounting.markTaskSubmitted(job, "Spot");
+        reportTaskStarted(taskId);
 
         SpotAttempt attempt = new SpotAttempt(job, offer);
         activeSpotAttempts.put(job.getCloudletId(), attempt);

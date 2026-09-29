@@ -85,10 +85,15 @@ public final class CBMWProgressReporter implements AutoCloseable {
                 : Math.min(100.0, 100.0 * done / eligible);
         long elapsed = TimeUnit.NANOSECONDS.toSeconds(
                 System.nanoTime() - startedAtNanos);
+        int filled = (int) Math.min(20, Math.max(0,
+                Math.round(20.0 * percent / 100.0)));
+        StringBuilder bar = new StringBuilder(22).append('[');
+        for (int i = 0; i < 20; i++) bar.append(i < filled ? '#' : '.');
+        bar.append(']');
         System.out.println(String.format(Locale.US,
                 "[progress] scenario=%s phase=%s elapsed=%ds started=%d"
-                        + " completed=%d/%d (%.2f%%) rejectedWorkflows=%d",
-                scenario, phase, elapsed, started.get(), done, eligible,
+                        + " completed=%d/%d %s (%.2f%%) rejectedWorkflows=%d",
+                scenario, phase, elapsed, started.get(), done, eligible, bar,
                 percent, rejectedWorkflows.get()));
     }
 

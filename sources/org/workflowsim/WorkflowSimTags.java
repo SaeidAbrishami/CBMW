@@ -74,6 +74,8 @@ public class WorkflowSimTags {
     public static final int CEWB_SPOT_RETRY_READY = BASE + 22;
     /** CBMW ready queue reaching its next reserved task's exact planned SST. */
     public static final int CBMW_RESERVED_SST_WAKE = BASE + 23;
+    /** NoPlan's periodic scan of ready tasks that could not start immediately. */
+    public static final int CBMW_ABLATION_WAITING_TICK = BASE + 24;
 
     /**
      * Private Constructor

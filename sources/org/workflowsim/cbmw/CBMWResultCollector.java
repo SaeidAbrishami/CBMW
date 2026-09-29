@@ -390,7 +390,7 @@ public class CBMWResultCollector {
     }
 
     public static boolean includesReservedLeaseCost(String algorithm) {
-        return "CBMW".equals(algorithm)
+        return (algorithm != null && algorithm.startsWith("CBMW"))
                 || "StaticGreedy".equals(algorithm)
                 || "DynamicGreedy".equals(algorithm);
     }
