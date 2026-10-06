@@ -1,9 +1,11 @@
 package org.workflowsim.cbmw;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import org.cloudbus.cloudsim.Log;
 
 /** Collects and prints per-scenario statistics. */
@@ -107,7 +109,8 @@ public class CBMWResultCollector {
                 + "onDemandCost,directMeasuredOnDemandCost,spotCost,estimatedRawCost,"
                 + "offeredPrice,brokerRevenue,brokerProfit,reservedCost,"
                 + "totalCost,marginalCost,makespan,simulationStartTime,simulationDuration,"
-                + "simulationDurationHours,reservedUtil,onDemandUsageRatio,spotUsageRatio,"
+                + "simulationDurationHours,reservedUtil,reservedUtilMain300,"
+                + "onDemandUsageRatio,spotUsageRatio,"
                 + "reservedCpuWorkShare,onDemandCpuWorkShare,"
                 + "provisionedOnDemandVms,onDemandVmUtilization,deadlineRiskTasks,"
                 + "reservedInstanceCount,reservedCoresPerInstance,"
@@ -176,6 +179,7 @@ public class CBMWResultCollector {
                 spotCost, rawEstimate, offeredPrice,
                 brokerRevenue, brokerProfit, reservedCost,
                 totalCost, Double.NaN, makespan(), start, simulationDuration(),
+                main300ReservedUtil(scenario, reservedVmCount),
                 onDemandUsageRatio, spotUsageRatio,
                 accounting.getCpuWorkShare("Reserved"),
                 accounting.getCpuWorkShare("On-Demand"),
@@ -208,6 +212,7 @@ public class CBMWResultCollector {
                 f2(metrics.makespan),
                 f2(metrics.simulationStartTime), f2(metrics.simulationDuration),
                 f4(metrics.simulationDurationHours), f4(metrics.reservedUtil),
+                optionalF4(metrics.reservedUtilMain300),
                 f4(metrics.onDemandUsageRatio), f4(metrics.spotUsageRatio),
                 f4(metrics.reservedCpuWorkShare),
                 f4(metrics.onDemandCpuWorkShare),
@@ -344,6 +349,56 @@ public class CBMWResultCollector {
         return cost;
     }
 
+    /**
+     * Reserved core utilization attributable to workflows 101--400 in the
+     * full trace. The window starts at workflow 101's arrival and ends after
+     * the last measured arrival and all admitted measured completions. Tasks
+     * from overlapping boundary workflows do not contribute to the numerator.
+     */
+    private double main300ReservedUtil(String scenario, int reservedCount) {
+        if (!scenario.endsWith("_full500") || allWorkflows.size() != 500) {
+            return Double.NaN;
+        }
+        return main300ReservedUtil(allWorkflows, accounting.getTaskRecords(),
+                reservedCount);
+    }
+
+    static double main300ReservedUtil(List<WorkflowRecord> allWorkflows,
+                                      List<TaskExecutionRecord> tasks,
+                                      int reservedCount) {
+        double start = allWorkflows.get(100).getArrivalTime();
+        double end = allWorkflows.get(399).getArrivalTime();
+        Set<Integer> measuredIds = new HashSet<>();
+        for (int i = 100; i < 400; i++) {
+            WorkflowRecord workflow = allWorkflows.get(i);
+            if (!workflow.isAccepted()) continue;
+            double completion = workflow.getCompletionTime();
+            if (!workflow.isComplete() || !Double.isFinite(completion)
+                    || completion == Double.MAX_VALUE) {
+                return Double.NaN;
+            }
+            end = Math.max(end, completion);
+            measuredIds.add(workflow.getWorkflowId());
+        }
+        if (!(end > start)) return Double.NaN;
+        double capacity = (double) reservedCount * HybridVmPool.RESERVED_CORES;
+        if (capacity <= 0.0) return 0.0;
+
+        double occupiedCoreSeconds = 0.0;
+        for (TaskExecutionRecord task : tasks) {
+            if (!measuredIds.contains(task.getWorkflowId())
+                    || !"Reserved".equals(task.getVmType())) continue;
+            double submitted = task.getSubmitTime();
+            double finished = task.getFinishTime();
+            if (!Double.isFinite(submitted) || !Double.isFinite(finished)) continue;
+            double overlap = Math.min(end, finished) - Math.max(start, submitted);
+            if (overlap > 0.0) {
+                occupiedCoreSeconds += task.getTaskCores() * overlap;
+            }
+        }
+        return occupiedCoreSeconds / (capacity * (end - start));
+    }
+
     private double totalSpotCost() {
         return allWorkflows.stream()
                 .mapToDouble(WorkflowRecord::getTotalSpotCost).sum();
@@ -453,6 +508,7 @@ public class CBMWResultCollector {
         public final double simulationDuration;
         public final double simulationDurationHours;
         public final double reservedUtil;
+        public final double reservedUtilMain300;
         public final double onDemandUsageRatio;
         public final double spotUsageRatio;
         public final double reservedCpuWorkShare;
@@ -504,6 +560,7 @@ public class CBMWResultCollector {
                                double marginalCost,
                                double makespan, double simulationStartTime,
                                double simulationDuration,
+                               double reservedUtilMain300,
                                double onDemandUsageRatio,
                                double spotUsageRatio,
                                double reservedCpuWorkShare,
@@ -551,6 +608,7 @@ public class CBMWResultCollector {
             this.simulationStartTime = simulationStartTime;
             this.simulationDuration = simulationDuration;
             this.simulationDurationHours = simulationDuration / 3600.0;
+            this.reservedUtilMain300 = reservedUtilMain300;
             this.onDemandUsageRatio = onDemandUsageRatio;
             this.spotUsageRatio = spotUsageRatio;
             this.reservedCpuWorkShare = reservedCpuWorkShare;

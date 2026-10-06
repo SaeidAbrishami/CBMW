@@ -536,7 +536,8 @@ public class CBMWSimulation {
                 .append("avgReservedCost,avgTotalCost,avgMarginalCost,avgMakespan,")
                 .append("avgSimulationStartTime,avgSimulationDuration,")
                 .append("avgSimulationDurationHours,")
-                .append("avgReservedUtil,avgOnDemandUsageRatio,avgSpotUsageRatio,")
+                .append("avgReservedUtil,avgReservedUtilMain300,")
+                .append("avgOnDemandUsageRatio,avgSpotUsageRatio,")
                 .append("avgReservedCpuWorkShare,avgOnDemandCpuWorkShare,")
                 .append("avgProvisionedOnDemandVms,avgOnDemandVmUtilization,")
                 .append("avgDeadlineRiskTasks,")
@@ -709,6 +710,8 @@ public class CBMWSimulation {
         private double simulationDuration;
         private double simulationDurationHours;
         private double reservedUtil;
+        private double reservedUtilMain300;
+        private int main300UtilRuns;
         private double onDemandUsageRatio;
         private double spotUsageRatio;
         private double reservedCpuWorkShare;
@@ -794,6 +797,10 @@ public class CBMWSimulation {
             simulationDuration += row.simulationDuration;
             simulationDurationHours += row.simulationDurationHours;
             reservedUtil += row.reservedUtil;
+            if (Double.isFinite(row.reservedUtilMain300)) {
+                reservedUtilMain300 += row.reservedUtilMain300;
+                main300UtilRuns++;
+            }
             onDemandUsageRatio += row.onDemandUsageRatio;
             spotUsageRatio += row.spotUsageRatio;
             reservedCpuWorkShare += row.reservedCpuWorkShare;
@@ -853,6 +860,8 @@ public class CBMWSimulation {
                     f2(makespan / runs), f2(simulationStartTime / runs),
                     f2(simulationDuration / runs),
                     f4(simulationDurationHours / runs), f4(reservedUtil / runs),
+                    main300UtilRuns == 0 ? ""
+                            : f4(reservedUtilMain300 / main300UtilRuns),
                     f4(onDemandUsageRatio / runs), f4(spotUsageRatio / runs),
                     f4(reservedCpuWorkShare / runs),
                     f4(onDemandCpuWorkShare / runs),
