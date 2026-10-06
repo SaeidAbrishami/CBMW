@@ -4,7 +4,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-/** Literal NOSF Algorithm 3 feasibility and suitable-VM selection. */
+/** NOSF VM selection with an earliest-finish fallback for rigid tasks. */
 final class NOSFResourceSelector {
     private static final double EPS = 1e-9;
 
@@ -55,6 +55,7 @@ final class NOSFResourceSelector {
                   Map<Integer, Double> dataReadyByVm,
                   double newVmDataReady) {
         Choice best = null;
+        Choice earliestInfeasible = null;
         for (NOSFVmState state : active) {
             if (!state.canAcceptWaitingTask()
                     || !state.type.canRun(cores, ramMb)) continue;
@@ -64,14 +65,18 @@ final class NOSFResourceSelector {
             double start = Math.max(available, dataReady);
             double runtime = state.type.runtime(baseRuntime);
             double finish = start + runtime;
-            if (finish > subDeadline + EPS) continue;
             double oldCost = state.billedCost(available, billingQuantum);
             double newCost = state.billedCost(finish, billingQuantum);
+            boolean feasible = finish <= subDeadline + EPS;
             Choice candidate = new Choice(state, null, start, finish,
                     state.type.pricePerSecond * runtime,
                     Math.max(0.0, newCost - oldCost),
-                    Math.max(0.0, start - available), dataReady, true);
-            if (better(candidate, best)) best = candidate;
+                    Math.max(0.0, start - available), dataReady, feasible);
+            if (feasible) {
+                if (better(candidate, best)) best = candidate;
+            } else if (betterRecovery(candidate, earliestInfeasible)) {
+                earliestInfeasible = candidate;
+            }
         }
         if (best != null) return best;
 
@@ -80,37 +85,22 @@ final class NOSFResourceSelector {
             double start = Math.max(now + provisioningDelay, newVmDataReady);
             double runtime = type.runtime(baseRuntime);
             double finish = start + runtime;
-            if (finish > subDeadline + EPS) continue;
+            boolean feasible = finish <= subDeadline + EPS;
             Choice candidate = new Choice(null, type, start, finish,
                     type.pricePerSecond * runtime,
                     billedCost(now, finish, type.pricePerSecond),
                     Math.max(0.0, start - (now + provisioningDelay)),
-                    newVmDataReady, true);
-            if (better(candidate, best)) best = candidate;
-        }
-        if (best != null) return best;
-
-        // Algorithm 3, lines 16-17: lease a new highest-ranking compatible VM.
-        NOSFVmType fastest = null;
-        for (NOSFVmType type : types) {
-            if (!type.canRun(cores, ramMb)) continue;
-            if (fastest == null
-                    || type.runtime(baseRuntime) < fastest.runtime(baseRuntime) - EPS
-                    || (Math.abs(type.runtime(baseRuntime)
-                            - fastest.runtime(baseRuntime)) <= EPS
-                        && type.pricePerSecond < fastest.pricePerSecond)) {
-                fastest = type;
+                    newVmDataReady, feasible);
+            if (feasible) {
+                if (better(candidate, best)) best = candidate;
+            } else if (betterRecovery(candidate, earliestInfeasible)) {
+                earliestInfeasible = candidate;
             }
         }
-        if (fastest == null) return null;
-        double start = Math.max(now + provisioningDelay, newVmDataReady);
-        double runtime = fastest.runtime(baseRuntime);
-        double finish = start + runtime;
-        return new Choice(null, fastest, start, finish,
-                fastest.pricePerSecond * runtime,
-                billedCost(now, finish, fastest.pricePerSecond),
-                Math.max(0.0, start - (now + provisioningDelay)),
-                newVmDataReady, false);
+        if (best != null) return best;
+        // With rigid runtimes, the paper's fastest-new-VM fallback cannot
+        // accelerate a late task. Compare queued and freshly provisioned VMs.
+        return earliestInfeasible;
     }
 
     private double billedCost(double order, double finish, double price) {
@@ -128,6 +118,15 @@ final class NOSFResourceSelector {
             return a.idleTime < b.idleTime;
         }
         if (Math.abs(a.finish - b.finish) > EPS) return a.finish < b.finish;
+        return stableId(a) < stableId(b);
+    }
+
+    private boolean betterRecovery(Choice a, Choice b) {
+        if (b == null) return true;
+        if (Math.abs(a.finish - b.finish) > EPS) return a.finish < b.finish;
+        if (Math.abs(a.incrementalRentalCost - b.incrementalRentalCost) > EPS) {
+            return a.incrementalRentalCost < b.incrementalRentalCost;
+        }
         return stableId(a) < stableId(b);
     }
 

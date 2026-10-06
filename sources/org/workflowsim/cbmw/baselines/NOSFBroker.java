@@ -45,10 +45,11 @@ public class NOSFBroker extends AbstractWorkflowBroker {
         super(name, tightness);
         CBMWLogger.logf("NOSF-CONFIG",
                 "profile=%s types=%d provisioningDelay=%.1f"
-                        + " billingQuantum=%.1f sigmaRatio=%.4f priority=%s"
+                        + " billingQuantum=%.1f estimator=%s sigmaRatio=%.4f priority=%s"
                         + " transferMode=%s bandwidthMbps=%.1f",
                 NOSFConfiguration.profileName(), vmTypes.size(),
                 PROVISIONING_DELAY, BILLING_QUANTUM,
+                NOSFRuntimeModel.ESTIMATOR.name(),
                 NOSFRuntimeModel.STDDEV_RATIO,
                 workflowPlanner.getPriorityPolicy().name(),
                 workflowPlanner.getTransferModel().getMode().name(),
@@ -75,10 +76,11 @@ public class NOSFBroker extends AbstractWorkflowBroker {
             workflow.setPlannedVmType(task.getCloudletId(), "On-Demand");
         }
         CBMWLogger.logf("NOSF-PREPROCESS",
-                "wf=%d tasks=%d deadline=%.2f estimator=MU_PLUS_SIGMA"
+                "wf=%d tasks=%d deadline=%.2f estimator=%s"
                         + " sigmaRatio=%.4f priority=%s provisioningDelay=%.1f"
                         + " billingQuantum=%.1f transferMode=%s",
                 workflow.getWorkflowId(), tasks.size(), workflow.getDeadline(),
+                NOSFRuntimeModel.ESTIMATOR.name(),
                 NOSFRuntimeModel.STDDEV_RATIO,
                 workflowPlanner.getPriorityPolicy().name(), PROVISIONING_DELAY,
                 BILLING_QUANTUM,

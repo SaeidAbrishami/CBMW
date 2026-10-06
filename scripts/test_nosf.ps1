@@ -49,7 +49,7 @@ try {
     $detailLog = Get-ChildItem -Path $output -Recurse -Filter '*_detail.log' | Select-Object -First 1
     $logText = Get-Content -Raw $detailLog.FullName
     if ($logText -notmatch 'reused=yes') { throw 'NOSF smoke did not demonstrate VM reuse' }
-    if ($logText -notmatch 'estimator=MU_PLUS_SIGMA') { throw 'NOSF did not log the paper runtime estimator' }
+    if ($logText -notmatch 'estimator=CBMW_CONSERVATIVE') { throw 'NOSF did not log the shared CBMW planning estimate' }
     if ($logText -notmatch 'priority=EFT') { throw 'NOSF did not use EFT priority' }
     if ($logText -notmatch 'provisioningDelay=60\.0') { throw 'NOSF did not inherit the default CBMW provisioning delay' }
 
@@ -65,6 +65,7 @@ try {
     & java `
         '-Dcbmw.algorithms=NOSF' `
         '-Dnosf.profile=PAPER_ALIGNED' `
+        '-Dnosf.runtime.estimator=MU_PLUS_SIGMA' `
         '-Dcbmw.runtime.resample=true' `
         '-Dcbmw.max.workflows=2' `
         '-Dcbmw.max.scenarios=2' `
@@ -108,6 +109,9 @@ try {
     $paperLogText = Get-Content -Raw $paperLog.FullName
     if ($paperLogText -notmatch 'profile=PAPER_ALIGNED types=7') {
         throw 'Paper smoke did not activate the seven paper VM rankings'
+    }
+    if ($paperLogText -notmatch 'estimator=MU_PLUS_SIGMA') {
+        throw 'Paper sensitivity did not activate the paper runtime estimate'
     }
     if ($paperLogText -notmatch 'billingQuantum=3600\.0') {
         throw 'Paper smoke did not activate hourly billing'

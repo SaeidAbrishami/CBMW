@@ -44,12 +44,17 @@ Prices recorded for this comparison on 2026-09-29.
   The default task requirement is one core and 2048 MiB. `m1.small` is thus
   ineligible for a default task. Extra VM resources do not shorten a rigid
   task. All eligible VM types use the shared MIPS and exactly the same actual
-  TXT runtime. The NOSF planning weight remains `mu + sigma` with the shared
-  sigma ratio 0.05; CBMW keeps its own conservative planning estimate.
+  TXT runtime. Aligned NOSF and CBMW both plan with `mu * 1.20` under the
+  default `cbmw.runtime.planning.alpha=0.20`. Set the optional
+  `-Dnosf.runtime.estimator=MU_PLUS_SIGMA` for a separate paper-estimate
+  sensitivity run; with the shared sigma ratio 0.05 it uses `mu * 1.05`.
 - EFT is the ready-task priority. PCP sub-deadlines and successor feedback
   remain NOSF. A VM executes one task at a time and may hold an unbounded
   FIFO queue of waiting tasks; predictions are recomputed after actual task
-  completion. Core/RAM compatibility is checked before selecting a VM.
+  completion. Core/RAM compatibility is checked before selecting a VM. When
+  no eligible VM meets a task's subdeadline, the rigid-task adaptation selects
+  the earliest predicted finish among active and new VMs, breaking ties by
+  incremental hourly rental cost.
 - VM provisioning takes 60 seconds. Billing starts at order time and rounds
   to full 3600-second hours. An idle ordered VM is kept until the end of its
   paid hour for reuse. Shared-storage transfer mode matches the common CBMW
@@ -57,7 +62,8 @@ Prices recorded for this comparison on 2026-09-29.
 - `results.csv`, `results_aggregate.csv` and `task_execution.csv` use the
   shared CBMW exporter and metrics. The run is tagged `COMMON_MARKET` in the
   `nosfProfile` field; the accompanying `run_config.json` records the Ohio
-  catalog and comparison controls.
+  catalog, planning estimator, fallback, and comparison controls. The detail
+  log also records `estimator=CBMW_CONSERVATIVE`.
 
 Run all 18 scenarios with the dataset from the original repository:
 

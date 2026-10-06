@@ -9,6 +9,7 @@ import org.workflowsim.Job;
 import org.workflowsim.Task;
 import org.workflowsim.cbmw.ExperimentRunContext;
 import org.workflowsim.cbmw.HybridVmPool;
+import org.workflowsim.cbmw.PaperRuntimeModel;
 import org.workflowsim.cbmw.WorkflowRecord;
 import org.workflowsim.utils.Parameters;
 
@@ -22,6 +23,7 @@ public final class NOSFValidationTest {
         testOhioProxyVmTypes();
         testSharedProvisioningDelay();
         testPaperResourceSelection();
+        testRigidTaskRecovery();
         testUnboundedWaitingAndBootBilling();
         testPaperNetworkTransfer();
         testReplicateRuntimeSampling();
@@ -93,9 +95,17 @@ public final class NOSFValidationTest {
 
     private static void testRuntimeWeight() {
         double mean = 100.0;
-        require(close(NOSFRuntimeModel.weight(mean),
+        require(close(NOSFRuntimeModel.weight(mean,
+                        NOSFRuntimeModel.Estimator.CBMW_CONSERVATIVE),
+                        PaperRuntimeModel.conservativeEstimate(mean)),
+                "aligned NOSF must use CBMW's planning duration");
+        require(close(NOSFRuntimeModel.weight(mean,
+                        NOSFRuntimeModel.Estimator.MU_PLUS_SIGMA),
                         mean + NOSFRuntimeModel.sigma(mean)),
-                "NOSF must use w(lambda)=mu+sigma");
+                "paper sensitivity must use w(lambda)=mu+sigma");
+        require(close(NOSFRuntimeModel.weight(mean),
+                        NOSFRuntimeModel.weight(mean, NOSFRuntimeModel.ESTIMATOR)),
+                "NOSF must apply its selected estimator consistently");
     }
 
     private static void testSharedProvisioningDelay() {
@@ -134,14 +144,15 @@ public final class NOSFValidationTest {
         NOSFResourceSelector.Choice behindQueue = selector.choose(20.0,
                 10.0, 1, 1, 100.0, Arrays.asList(state), Arrays.asList(type));
         require(behindQueue != null && behindQueue.vm == state
-                        && close(behindQueue.start, 30.5),
+                        && close(behindQueue.start,
+                                20.0 + NOSFRuntimeModel.weight(10.0)),
                 "selector must consider an active VM with waiting work");
 
         NOSFResourceSelector.Choice risk = selector.choose(20.0, 10.0, 1, 1,
                 25.0, Arrays.asList(state), Arrays.asList(type));
         require(risk != null && !risk.feasible && risk.vm == null
                         && risk.newType == type,
-                "infeasible task must lease a new highest-ranking VM");
+                "infeasible task must select the earliest predicted finish");
 
         NOSFVmType tooSmall = new NOSFVmType("small", 1, 512, 1000.0, 0.001);
         NOSFResourceSelector.Choice incompatible = selector.choose(0.0, 10.0,
@@ -149,6 +160,38 @@ public final class NOSFValidationTest {
                 Arrays.asList(tooSmall));
         require(incompatible == null,
                 "incompatible VM types must not be selected");
+    }
+
+    private static void testRigidTaskRecovery() {
+        NOSFVmType type = new NOSFVmType("rigid", 1, 1024, 1000.0, 0.01);
+        NOSFResourceSelector selector = new NOSFResourceSelector(60.0, 3600.0);
+        NOSFVmState active = new NOSFVmState(vm(100, type), type, 0.0, 0.0);
+        active.plannedAvailableTime = 35.0;
+
+        NOSFResourceSelector.Choice reuse = selector.choose(20.0, 10.0,
+                1, 1, 30.0, Arrays.asList(active), Arrays.asList(type));
+        require(reuse != null && !reuse.feasible && reuse.vm == active
+                        && close(reuse.finish, 45.0),
+                "late active VM must beat a later 60-second cold start");
+
+        active.plannedAvailableTime = 100.0;
+        NOSFResourceSelector.Choice newVm = selector.choose(20.0, 10.0,
+                1, 1, 30.0, Arrays.asList(active), Arrays.asList(type));
+        require(newVm != null && !newVm.feasible && newVm.newType == type
+                        && close(newVm.finish, 90.0),
+                "a new VM must win when its predicted finish is earlier");
+
+        NOSFResourceSelector.Choice feasibleNewVm = selector.choose(20.0,
+                10.0, 1, 1, 95.0, Arrays.asList(active), Arrays.asList(type));
+        require(feasibleNewVm != null && feasibleNewVm.feasible
+                        && feasibleNewVm.newType == type,
+                "subdeadline-feasible selection must take precedence over recovery");
+
+        active.plannedAvailableTime = 80.0;
+        NOSFResourceSelector.Choice cheaperTie = selector.choose(20.0,
+                10.0, 1, 1, 30.0, Arrays.asList(active), Arrays.asList(type));
+        require(cheaperTie != null && cheaperTie.vm == active,
+                "equal late finishes must favor lower incremental rental cost");
     }
 
     private static void testUnboundedWaitingAndBootBilling() {
@@ -167,11 +210,13 @@ public final class NOSFValidationTest {
         state.replan(90.0);
         require(state.canAcceptWaitingTask() && state.waiting.size() == 3,
                 "VM must accept unbounded FIFO waiting tasks");
-        require(close(state.plannedAvailableTime, 136.0),
+        double expectedFinish = Math.max(90.0 + NOSFRuntimeModel.weight(10.0),
+                115.0) + 2.0 * NOSFRuntimeModel.weight(10.0);
+        require(close(state.plannedAvailableTime, expectedFinish),
                 "queue forecast must include readiness and sequential runtimes");
         state.waiting.removeFirst();
         state.replan(110.0);
-        require(close(state.plannedAvailableTime, 136.0),
+        require(close(state.plannedAvailableTime, expectedFinish),
                 "queue forecast must be repaired after actual completion");
 
         NOSFVmState paperBilling = new NOSFVmState(vm(8, type), type, 0.0, 90.0);

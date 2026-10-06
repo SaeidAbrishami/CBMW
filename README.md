@@ -161,7 +161,8 @@ The CBMW planning margin is controlled by
 `cbmw.runtime.planning.alpha` (default `0.20`), so the default planning runtime
 is `1.20 * mu`. It is separate from the 20% uniform uncertainty used to
 generate the supplied actual runtimes and from `cbmw.runtime.stddev.ratio`,
-which remains available for normal runtime resampling and NOSF.
+which remains available for normal runtime resampling and the optional NOSF
+paper runtime estimate.
 
 ## Algorithm Overview
 
@@ -212,14 +213,15 @@ scenario CSV columns `estimatedRawCost` and `offeredPrice`.
 `NOSFBroker` implements the original NOSF article's three-stage online
 scheduler:
 
-1. **Workflow preprocessing (Algorithm 1):** use the normal-runtime paper
-   weight `w(lambda)=mu+sigma`, calculate EST/EFT/LCT with Eqs. 8-10, find PCP
+1. **Workflow preprocessing (Algorithm 1):** use the selected planning
+   estimate, calculate EST/EFT/LCT with Eqs. 8-10, find PCP
    paths, assign Eq. 11 sub-deadlines, and retain each task's delta from Eq. 12.
 2. **Resource allocation (Algorithm 3):** order ready tasks by paper priority,
    allow any number of FIFO waiting tasks per VM, select a sub-deadline-feasible active
    VM by minimum `price * predicted execution` and then minimum idle time, or
-   provision a suitable new type. If none is feasible, provision the
-   highest-ranking compatible type and mark the task deadline-risk.
+   provision a suitable new type. If none is feasible, choose the eligible
+   active or new VM with the earliest predicted finish (then lowest additional
+   rental cost) and mark the task deadline-risk.
 3. **Feedback (Algorithm 2):** update only immediate successors that have become
    ready and apply Eqs. 16-18, preserving the original delta and LCT cap.
 
@@ -235,8 +237,13 @@ NOSF has two explicit experiment profiles:
   paper profile because tasks remain rigid and prices use Ohio proxies.
 
 Rigid tasks run for the same TXT sampled duration on every compatible VM;
-the paper's speed weights are disabled. Planning still uses `mu+sigma` and
-VM eligibility checks both task cores and RAM. One task runs per VM at a time.
+the paper's speed weights are disabled. Aligned planning uses CBMW's
+`mu * (1 + cbmw.runtime.planning.alpha)`, defaulting to `1.20 * mu`.
+Set `-Dnosf.runtime.estimator=MU_PLUS_SIGMA` for a separate run using the
+paper's `mu+sigma` estimate. The estimator and earliest-finish fallback are
+adaptations for this shared rigid-task market. The configured estimator is
+recorded in the NOSF detail log. VM eligibility checks task cores and RAM.
+One task runs per VM at a time.
 Historical M1/M2 capacities are kept in the simulator, while the price proxies
 are r5.2xlarge, r5.xlarge, m5.xlarge, r5.large, m5.large, t2.medium,
 and t2.small respectively. M1/M2 are not offered in Ohio. See
@@ -505,6 +512,10 @@ python3 scripts/run_nosf_ohio_middle300.py --all \
   --workflow-dir test_workflows/workflows
 ```
 
+The runner shows a live task progress bar every 10 seconds and writes the
+full per-scenario output to `run.log`. Use `--progress-interval-sec N` to
+change its wall-clock update interval.
+
 ---
 
 ## Simulation Parameters
@@ -531,7 +542,8 @@ python3 scripts/run_nosf_ohio_middle300.py --all \
 | `cbmw.run.start` | `0` | First exported run number, useful when extending an experiment |
 | `cbmw.seed.base` | `20260716` | Base seed used to derive a deterministic seed per repetition |
 | `cbmw.runtime.planning.alpha` | `0.20` | CBMW additive planning margin; `cet = mu + alpha * mu` |
-| `cbmw.runtime.stddev.ratio` | `0.05` | Normal-resampling and NOSF sigma/mu; does not affect CBMW planning |
+| `cbmw.runtime.stddev.ratio` | `0.05` | Normal-resampling and optional NOSF `MU_PLUS_SIGMA` sigma/mu; does not affect CBMW or aligned NOSF planning |
+| `nosf.runtime.estimator` | `CBMW_CONSERVATIVE` | Aligned NOSF planning; `MU_PLUS_SIGMA` selects the paper runtime estimate |
 | `cbmw.runtime.resample` | false (use matching TXT files) | Resample task runtimes per run; algorithms share samples within a run |
 | `nosf.billing.quantum.sec` | `3600` | Reusable NOSF VM billing quantum |
 | `nosf.transfer.mode` | profile default | `COMMON_SHARED_STORAGE` or `PAPER_NETWORK` |
