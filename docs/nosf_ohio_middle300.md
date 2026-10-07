@@ -68,7 +68,7 @@ Prices recorded for this comparison on 2026-09-29.
 Run all 18 scenarios with the dataset from the original repository:
 
 ```bash
-python3 scripts/run_nosf_ohio_middle300.py --all \
+python3 scripts/run_nosf_ohio_middle300.py --all --workers 2 \
   --workflow-dir test_workflows/workflows
 ```
 
@@ -78,7 +78,10 @@ launched by this runner. Override `--repetitions` only when performing
 additional runs; TXT runtime resampling stays off so all algorithms use the
 same per-task samples.
 
-The runner displays a live task progress bar for each scenario and keeps the
-full Java output in that scenario's `run.log`. The bar updates every 10 seconds
-of wall time by default; use `--progress-interval-sec N` to change this.
-With `--all`, the prefix also shows the current scenario out of 18.
+The runner compiles once, then runs up to two independent scenario JVMs at a
+time. Each Java process can use up to 3 GiB of heap; use `--workers 1` on a
+smaller machine. The terminal prints a labeled progress bar for each scenario
+on its own line, every 10 seconds by default. Use `--progress-interval-sec N`
+to change this. Each scenario keeps its full Java output in its own `run.log`.
+With `--all`, the prefix shows the current scenario out of 18. Every scenario
+still uses only its 300-entry middle workflow manifest.

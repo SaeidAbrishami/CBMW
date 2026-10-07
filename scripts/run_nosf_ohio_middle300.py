@@ -1,23 +1,31 @@
 #!/usr/bin/env python3
 """Run NOSF on the same isolated middle-300 workflow views as Ohio CEWB."""
 import argparse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 import json
 import re
 import subprocess
-import sys
+from threading import Lock
 from pathlib import Path
 
 from run_cewb_ohio_2026 import ROOT, JARS, SCENARIOS, compile_sources
 
 PROGRESS = re.compile(r"elapsed=(\d+)s started=(\d+) completed=(\d+)/(\d+)"
                       r" \((\d+(?:\.\d+)?)%\) rejectedWorkflows=(\d+)")
+PRINT_LOCK = Lock()
 
 
-def show_progress(line, scenario, position, total, previous_width):
+def report(message):
+    with PRINT_LOCK:
+        print(message, flush=True)
+
+
+def show_progress(line, scenario, position, total):
     match = PROGRESS.search(line)
     if match is None:
-        print(line, end="", flush=True)
-        return 0
+        if line.strip():
+            report(f"[{position}/{total} {scenario}] {line.rstrip()}")
+        return
     elapsed, started, completed, eligible, percent, rejected = match.groups()
     fraction = min(1.0, max(0.0, float(percent) / 100.0))
     filled = round(30 * fraction)
@@ -29,12 +37,7 @@ def show_progress(line, scenario, position, total, previous_width):
               f" {float(percent):5.1f}% ({completed}/{eligible} tasks,"
               f" {started} started)"
               f" elapsed={elapsed}s rejected={rejected}")
-    if sys.stdout.isatty():
-        print("\r" + status + " " * max(0, previous_width - len(status)),
-              end="", flush=True)
-    else:
-        print(status, flush=True)
-    return len(status)
+    report(status)
 
 
 def run_one(scenario, source, output, classes, repetitions,
@@ -45,6 +48,8 @@ def run_one(scenario, source, output, classes, repetitions,
     if len(original) != 500:
         raise ValueError(f"Expected 500 original workflows for {scenario}")
     middle = original[100:400]
+    if len(middle) != 300:
+        raise ValueError(f"Expected exactly 300 main workflows for {scenario}")
     shift = middle[0]["arrival_time_seconds"]
     rebased = [{**row, "arrival_time_seconds":
                 round(row["arrival_time_seconds"] - shift, 6)} for row in middle]
@@ -54,6 +59,7 @@ def run_one(scenario, source, output, classes, repetitions,
     manifest.write_text(json.dumps(rebased, indent=2) + "\n")
     (destination / "run_config.json").write_text(json.dumps({
         "scenario": scenario + "_middle300",
+        "workflow_count": 300,
         "source_positions_1_based": [101, 400],
         "source_arrival_shift_seconds": shift,
         "region": "us-east-2",
@@ -76,6 +82,7 @@ def run_one(scenario, source, output, classes, repetitions,
         f"-Dcbmw.progress.interval.sec={progress_interval}",
         f"-Dcbmw.scenarios={scenario}_middle300",
         "-Dcbmw.workflow.dataset.mode=MIDDLE_300",
+        "-Dcbmw.max.workflows=300",
         f"-Dcbmw.workflow.manifest.{mean}.MIDDLE_300={manifest}",
         f"-Dcbmw.workflow.dir={source}", f"-Dcbmw.output.dir={destination}",
         "-Dcbmw.export.details=false", "-Dcbmw.detail.log=false",
@@ -84,8 +91,7 @@ def run_one(scenario, source, output, classes, repetitions,
         f"-Dcbmw.repetitions={repetitions}", "-cp", f"{classes}:{JARS}",
         "org.workflowsim.examples.cbmw.CBMWSimulation",
     ]
-    print(f"Starting NOSF middle 300 ({position}/{total}): {scenario}", flush=True)
-    width = 0
+    report(f"Starting NOSF middle 300 ({position}/{total}): {scenario}")
     with (destination / "run.log").open("w", buffering=1) as log:
         with subprocess.Popen(command, cwd=ROOT, stdout=subprocess.PIPE,
                               stderr=subprocess.STDOUT, text=True,
@@ -93,14 +99,12 @@ def run_one(scenario, source, output, classes, repetitions,
             for line in process.stdout:
                 log.write(line)
                 if line.startswith("[progress]"):
-                    width = show_progress(line, scenario, position, total, width)
+                    show_progress(line, scenario, position, total)
             exit_code = process.wait()
-    if width and sys.stdout.isatty():
-        print()
     if exit_code:
         raise RuntimeError(f"NOSF {scenario} failed (exit {exit_code}); "
                            f"see {destination / 'run.log'}")
-    print(f"Completed NOSF middle 300: {scenario}", flush=True)
+    report(f"Completed NOSF middle 300: {scenario}")
 
 
 def main():
@@ -115,6 +119,8 @@ def main():
     parser.add_argument("--repetitions", type=int, default=1)
     parser.add_argument("--progress-interval-sec", type=int, default=10,
                         help="wall-clock interval between task-progress updates (default: 10)")
+    parser.add_argument("--workers", type=int, choices=(1, 2), default=2,
+                        help="concurrent scenario JVMs (default: 2)")
     parser.add_argument("--skip-compile", action="store_true")
     parser.add_argument("--classes-dir", type=Path)
     args = parser.parse_args()
@@ -133,9 +139,20 @@ def main():
         parser.error(f"Compiled classes missing: {classes}")
     output = args.output.resolve()
     scenarios = SCENARIOS if args.all else [args.scenario]
-    for position, scenario in enumerate(scenarios, start=1):
-        run_one(scenario, source, output, classes, args.repetitions,
-                args.progress_interval_sec, position, len(scenarios))
+    with ThreadPoolExecutor(max_workers=args.workers) as pool:
+        jobs = {pool.submit(run_one, scenario, source, output, classes,
+                            args.repetitions, args.progress_interval_sec,
+                            position, len(scenarios)): scenario
+                for position, scenario in enumerate(scenarios, start=1)}
+        failures = []
+        for job in as_completed(jobs):
+            try:
+                job.result()
+            except Exception as error:
+                failures.append(jobs[job])
+                report(f"FAILED NOSF middle 300: {jobs[job]}: {error}")
+    if failures:
+        raise RuntimeError("NOSF scenarios failed: " + ", ".join(failures))
 
 
 if __name__ == "__main__":
