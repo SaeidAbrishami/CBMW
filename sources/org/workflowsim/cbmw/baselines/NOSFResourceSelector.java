@@ -4,7 +4,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-/** NOSF VM selection with an earliest-finish fallback for rigid tasks. */
+/** Compare active and newly provisioned VMs by predicted finish for rigid tasks. */
 final class NOSFResourceSelector {
     private static final double EPS = 1e-9;
 
@@ -55,7 +55,6 @@ final class NOSFResourceSelector {
                   Map<Integer, Double> dataReadyByVm,
                   double newVmDataReady) {
         Choice best = null;
-        Choice earliestInfeasible = null;
         for (NOSFVmState state : active) {
             if (!state.canAcceptWaitingTask()
                     || !state.type.canRun(cores, ramMb)) continue;
@@ -72,13 +71,8 @@ final class NOSFResourceSelector {
                     state.type.pricePerSecond * runtime,
                     Math.max(0.0, newCost - oldCost),
                     Math.max(0.0, start - available), dataReady, feasible);
-            if (feasible) {
-                if (better(candidate, best)) best = candidate;
-            } else if (betterRecovery(candidate, earliestInfeasible)) {
-                earliestInfeasible = candidate;
-            }
+            if (betterFinish(candidate, best)) best = candidate;
         }
-        if (best != null) return best;
 
         for (NOSFVmType type : types) {
             if (!type.canRun(cores, ramMb)) continue;
@@ -88,40 +82,23 @@ final class NOSFResourceSelector {
             boolean feasible = finish <= subDeadline + EPS;
             Choice candidate = new Choice(null, type, start, finish,
                     type.pricePerSecond * runtime,
-                    billedCost(now, finish, type.pricePerSecond),
+                    billedCost(now + provisioningDelay, finish,
+                            type.pricePerSecond),
                     Math.max(0.0, start - (now + provisioningDelay)),
                     newVmDataReady, feasible);
-            if (feasible) {
-                if (better(candidate, best)) best = candidate;
-            } else if (betterRecovery(candidate, earliestInfeasible)) {
-                earliestInfeasible = candidate;
-            }
+            if (betterFinish(candidate, best)) best = candidate;
         }
-        if (best != null) return best;
-        // With rigid runtimes, the paper's fastest-new-VM fallback cannot
-        // accelerate a late task. Compare queued and freshly provisioned VMs.
-        return earliestInfeasible;
+        // A subdeadline-feasible active VM can still finish much later than a
+        // fresh VM. Apply the same comparison regardless of deadline factor.
+        return best;
     }
 
-    private double billedCost(double order, double finish, double price) {
-        double leased = Math.max(0.0, finish - order);
+    private double billedCost(double ready, double finish, double price) {
+        double leased = Math.max(0.0, finish - ready);
         return Math.ceil(leased / billingQuantum) * billingQuantum * price;
     }
 
-    /** Paper suitable VM: minimum execution cost, then minimum idle time. */
-    private boolean better(Choice a, Choice b) {
-        if (b == null) return true;
-        if (Math.abs(a.selectionCost - b.selectionCost) > EPS) {
-            return a.selectionCost < b.selectionCost;
-        }
-        if (Math.abs(a.idleTime - b.idleTime) > EPS) {
-            return a.idleTime < b.idleTime;
-        }
-        if (Math.abs(a.finish - b.finish) > EPS) return a.finish < b.finish;
-        return stableId(a) < stableId(b);
-    }
-
-    private boolean betterRecovery(Choice a, Choice b) {
+    private boolean betterFinish(Choice a, Choice b) {
         if (b == null) return true;
         if (Math.abs(a.finish - b.finish) > EPS) return a.finish < b.finish;
         if (Math.abs(a.incrementalRentalCost - b.incrementalRentalCost) > EPS) {

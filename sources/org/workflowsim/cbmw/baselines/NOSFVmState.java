@@ -63,14 +63,15 @@ final class NOSFVmState {
     }
 
     double billedCost(double shutdown, double quantum) {
-        double leased = Math.max(0.0, shutdown - orderTime);
+        // The VM becomes billable only after the provisioning interval.
+        double leased = Math.max(0.0, shutdown - readyTime);
         if (leased <= 0.0) return 0.0;
         return Math.ceil(leased / quantum) * quantum * type.pricePerSecond;
     }
 
     double currentBillingBoundary(double now, double quantum) {
-        double leased = Math.max(0.0, now - orderTime);
+        double leased = Math.max(0.0, now - readyTime);
         double quanta = Math.ceil(Math.max(leased, 1e-9) / quantum);
-        return orderTime + quanta * quantum;
+        return readyTime + quanta * quantum;
     }
 }

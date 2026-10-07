@@ -24,7 +24,8 @@ public final class NOSFValidationTest {
         testSharedProvisioningDelay();
         testPaperResourceSelection();
         testRigidTaskRecovery();
-        testUnboundedWaitingAndBootBilling();
+        testFinishComparisonIndependentOfSubdeadline();
+        testUnboundedWaitingAndReadyBilling();
         testPaperNetworkTransfer();
         testReplicateRuntimeSampling();
         testPcpPreprocessingAndFeedback();
@@ -126,6 +127,14 @@ public final class NOSFValidationTest {
                 "paper selection cost must be price times predicted execution");
         require(close(fresh.incrementalRentalCost, 0.60),
                 "actual new-VM rental estimate must be billing-rounded");
+        NOSFResourceSelector provisionedSelector =
+                new NOSFResourceSelector(90.0, 60.0);
+        NOSFResourceSelector.Choice provisioned = provisionedSelector.choose(
+                0.0, 10.0, 1, 1, 120.0,
+                Collections.<NOSFVmState>emptyList(), Arrays.asList(type));
+        require(provisioned != null && close(provisioned.start, 90.0)
+                        && close(provisioned.incrementalRentalCost, 0.60),
+                "new-VM rental estimate must exclude provisioning time");
 
         CondorVM vm = vm(42, type);
         NOSFVmState state = new NOSFVmState(vm, type, 0.0, 0.0);
@@ -143,10 +152,15 @@ public final class NOSFValidationTest {
         state.replan(20.0);
         NOSFResourceSelector.Choice behindQueue = selector.choose(20.0,
                 10.0, 1, 1, 100.0, Arrays.asList(state), Arrays.asList(type));
-        require(behindQueue != null && behindQueue.vm == state
-                        && close(behindQueue.start,
+        require(behindQueue != null && behindQueue.newType == type,
+                "a fresh VM must beat a slower existing queue");
+        NOSFResourceSelector.Choice shortQueue =
+                new NOSFResourceSelector(60.0, 60.0).choose(20.0,
+                        10.0, 1, 1, 100.0, Arrays.asList(state), Arrays.asList(type));
+        require(shortQueue != null && shortQueue.vm == state
+                        && close(shortQueue.start,
                                 20.0 + NOSFRuntimeModel.weight(10.0)),
-                "selector must consider an active VM with waiting work");
+                "an existing queue may beat a 60-second new-VM delay");
 
         NOSFResourceSelector.Choice risk = selector.choose(20.0, 10.0, 1, 1,
                 25.0, Arrays.asList(state), Arrays.asList(type));
@@ -194,11 +208,36 @@ public final class NOSFValidationTest {
                 "equal late finishes must favor lower incremental rental cost");
     }
 
-    private static void testUnboundedWaitingAndBootBilling() {
+    private static void testFinishComparisonIndependentOfSubdeadline() {
+        NOSFVmType type = new NOSFVmType("rigid", 1, 1024, 1000.0, 0.01);
+        NOSFResourceSelector selector = new NOSFResourceSelector(60.0, 3600.0);
+        NOSFVmState active = new NOSFVmState(vm(101, type), type, 0.0, 0.0);
+        active.plannedAvailableTime = 177.1;
+
+        for (double subdeadline : new double[] {150.0, 255.0, 775.0}) {
+            NOSFResourceSelector.Choice chosen = selector.choose(0.1, 122.0,
+                    1, 1, subdeadline, Arrays.asList(active), Arrays.asList(type));
+            require(chosen != null && chosen.newType == type
+                            && close(chosen.finish, 182.1),
+                    "a queued active VM must not beat a faster fresh VM at any subdeadline");
+        }
+
+        active.plannedAvailableTime = 35.0;
+        NOSFResourceSelector.Choice reuse = selector.choose(0.1, 10.0,
+                1, 1, 100.0, Arrays.asList(active), Arrays.asList(type));
+        require(reuse != null && reuse.vm == active && close(reuse.finish, 45.0),
+                "a short existing queue must beat a new VM's 60-second boot");
+    }
+
+    private static void testUnboundedWaitingAndReadyBilling() {
         NOSFVmType type = new NOSFVmType("test", 1, 1024, 1000.0, 0.01);
         NOSFVmState state = new NOSFVmState(vm(7, type), type, 0.0, 90.0);
-        require(close(state.billedCost(100.0, 60.0), 1.20),
-                "boot time must be included in the leased/billed interval");
+        require(close(state.billedCost(80.0, 60.0), 0.0),
+                "provisioning time must not be billed");
+        require(close(state.billedCost(100.0, 60.0), 0.60),
+                "billing starts when the VM becomes ready");
+        require(close(state.currentBillingBoundary(100.0, 60.0), 150.0),
+                "release boundary must be measured from readiness");
         WorkflowRecord workflow = workflow(3, 0.0, 300.0,
                 task(77, 10.0), task(78, 10.0), task(79, 10.0));
         state.waiting.addLast(new NOSFVmState.QueuedTask(new Job(77, 1000),
@@ -222,8 +261,11 @@ public final class NOSFValidationTest {
         NOSFVmState paperBilling = new NOSFVmState(vm(8, type), type, 0.0, 90.0);
         require(close(paperBilling.billedCost(100.0, 3600.0), 36.0),
                 "paper billing must round a partial hour to 3600 seconds");
-        require(close(paperBilling.currentBillingBoundary(100.0, 3600.0), 3600.0),
+        require(close(paperBilling.currentBillingBoundary(100.0, 3600.0), 3690.0),
                 "paper VM must remain reusable until its hourly boundary");
+        require(close(paperBilling.billedCost(3690.0, 3600.0), 36.0)
+                        && close(paperBilling.billedCost(3691.0, 3600.0), 72.0),
+                "hourly charge must change after one billable hour");
     }
 
     private static void testPaperNetworkTransfer() {

@@ -51,19 +51,37 @@ Prices recorded for this comparison on 2026-09-29.
 - EFT is the ready-task priority. PCP sub-deadlines and successor feedback
   remain NOSF. A VM executes one task at a time and may hold an unbounded
   FIFO queue of waiting tasks; predictions are recomputed after actual task
-  completion. Core/RAM compatibility is checked before selecting a VM. When
-  no eligible VM meets a task's subdeadline, the rigid-task adaptation selects
-  the earliest predicted finish among active and new VMs, breaking ties by
-  incremental hourly rental cost.
-- VM provisioning takes 60 seconds. Billing starts at order time and rounds
-  to full 3600-second hours. An idle ordered VM is kept until the end of its
-  paid hour for reuse. Shared-storage transfer mode matches the common CBMW
+  completion. Core/RAM compatibility is checked before selecting a VM. Every
+  ready task compares the earliest predicted finish among compatible active
+  VMs (including their existing waiting work) and a newly provisioned VM
+  (including the 60-second provisioning delay). A VM may receive additional
+  waiting tasks only when it finishes no later than the best new VM. Equal
+  finishes favor lower incremental hourly rental cost. This comparison is a
+  rigid-task adaptation of the paper, which allows one waiting task per VM.
+- VM provisioning takes 60 seconds and is not billed. Billing starts when
+  the VM becomes ready and rounds to full 3600-second hours. An idle VM is
+  kept until the end of its paid hour for reuse. Shared-storage transfer mode matches the common CBMW
   experiment (`COMMON_MARKET` profile).
 - `results.csv`, `results_aggregate.csv` and `task_execution.csv` use the
   shared CBMW exporter and metrics. The run is tagged `COMMON_MARKET` in the
   `nosfProfile` field; the accompanying `run_config.json` records the Ohio
-  catalog, planning estimator, fallback, and comparison controls. The detail
+  catalog, planning estimator, VM selection, and comparison controls. The detail
   log also records `estimator=CBMW_CONSERVATIVE`.
+
+Run the four primary arrival rates concurrently for one deadline factor:
+
+```bash
+python3 scripts/run_nosf_ohio_middle300.py --deadline-factor 1.2 --workers 4 \
+  --workflow-dir test_workflows/workflows
+```
+
+The factor may be `1.2`, `2`, or `4` (`2.0` and `4.0` are accepted). The four
+JVMs run independently in four Python worker threads. The scenario outputs
+stay under `outputs/nosf_ohio_2026/arrival<rate>_alpha<factor>/middle300/`.
+After all four finish, `outputs/nosf_ohio_2026/combined/alpha<factor>/` holds
+`results.csv` (four rows per repetition), `results_aggregate.csv` (four rows),
+and the streamed concatenation `task_execution.csv`, plus `run_config.json`.
+The merged files are only replaced after all four scenarios succeed.
 
 Run all 18 scenarios with the dataset from the original repository:
 
@@ -78,9 +96,12 @@ launched by this runner. Override `--repetitions` only when performing
 additional runs; TXT runtime resampling stays off so all algorithms use the
 same per-task samples.
 
-The runner compiles once, then runs up to two independent scenario JVMs at a
-time. Each Java process can use up to 3 GiB of heap; use `--workers 1` on a
-smaller machine. The terminal prints a labeled progress bar for each scenario
+The runner compiles once, then runs up to `--workers` independent scenario
+JVMs at a time (1–4; default 4 with `--deadline-factor`, otherwise 2).
+Each Java process can use up to 3 GiB of heap.
+Four workers can therefore reserve 12 GiB of Java heap plus JVM and OS
+overhead; monitor available memory on a 16 GiB machine, and reduce to two
+workers if memory becomes tight. The terminal prints a labeled progress bar for each scenario
 on its own line, every 10 seconds by default. Use `--progress-interval-sec N`
 to change this. Each scenario keeps its full Java output in its own `run.log`.
 With `--all`, the prefix shows the current scenario out of 18. Every scenario

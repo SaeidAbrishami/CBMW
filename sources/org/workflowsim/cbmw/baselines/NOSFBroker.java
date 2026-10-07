@@ -45,7 +45,7 @@ public class NOSFBroker extends AbstractWorkflowBroker {
         super(name, tightness);
         CBMWLogger.logf("NOSF-CONFIG",
                 "profile=%s types=%d provisioningDelay=%.1f"
-                        + " billingQuantum=%.1f estimator=%s sigmaRatio=%.4f priority=%s"
+                        + " billingQuantum=%.1f billingStart=READY estimator=%s sigmaRatio=%.4f priority=%s"
                         + " transferMode=%s bandwidthMbps=%.1f",
                 NOSFConfiguration.profileName(), vmTypes.size(),
                 PROVISIONING_DELAY, BILLING_QUANTUM,
@@ -311,8 +311,9 @@ public class NOSFBroker extends AbstractWorkflowBroker {
             stateByVmId.remove(state.vm.getId());
             iterator.remove();
             CBMWLogger.logf("NOSF-RELEASE",
-                    "vm=%d order=%.2f release=%.2f billed=$%.6f",
-                    state.vm.getId(), state.orderTime, state.releaseAt,
+                    "vm=%d order=%.2f ready=%.2f release=%.2f billed=$%.6f",
+                    state.vm.getId(), state.orderTime, state.readyTime,
+                    state.releaseAt,
                     state.chargedCost);
         }
     }
