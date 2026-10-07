@@ -4,7 +4,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-/** Compare active and newly provisioned VMs by predicted finish for rigid tasks. */
+/** Minimize incremental hourly rental among subdeadline-feasible VM choices. */
 final class NOSFResourceSelector {
     private static final double EPS = 1e-9;
 
@@ -71,7 +71,7 @@ final class NOSFResourceSelector {
                     state.type.pricePerSecond * runtime,
                     Math.max(0.0, newCost - oldCost),
                     Math.max(0.0, start - available), dataReady, feasible);
-            if (betterFinish(candidate, best)) best = candidate;
+            if (better(candidate, best)) best = candidate;
         }
 
         for (NOSFVmType type : types) {
@@ -86,10 +86,8 @@ final class NOSFResourceSelector {
                             type.pricePerSecond),
                     Math.max(0.0, start - (now + provisioningDelay)),
                     newVmDataReady, feasible);
-            if (betterFinish(candidate, best)) best = candidate;
+            if (better(candidate, best)) best = candidate;
         }
-        // A subdeadline-feasible active VM can still finish much later than a
-        // fresh VM. Apply the same comparison regardless of deadline factor.
         return best;
     }
 
@@ -98,8 +96,17 @@ final class NOSFResourceSelector {
         return Math.ceil(leased / billingQuantum) * billingQuantum * price;
     }
 
-    private boolean betterFinish(Choice a, Choice b) {
+    private boolean better(Choice a, Choice b) {
         if (b == null) return true;
+        // For rigid tasks, a longer active-VM queue can save a whole rental
+        // hour while still satisfying the task's NOSF subdeadline.
+        if (a.feasible != b.feasible) return a.feasible;
+        if (a.feasible
+                && Math.abs(a.incrementalRentalCost - b.incrementalRentalCost) > EPS) {
+            return a.incrementalRentalCost < b.incrementalRentalCost;
+        }
+        // When no resource can meet the subdeadline, minimize lateness rather
+        // than buying a cheaper VM that finishes even later.
         if (Math.abs(a.finish - b.finish) > EPS) return a.finish < b.finish;
         if (Math.abs(a.incrementalRentalCost - b.incrementalRentalCost) > EPS) {
             return a.incrementalRentalCost < b.incrementalRentalCost;

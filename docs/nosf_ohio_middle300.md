@@ -51,13 +51,19 @@ Prices recorded for this comparison on 2026-09-29.
 - EFT is the ready-task priority. PCP sub-deadlines and successor feedback
   remain NOSF. A VM executes one task at a time and may hold an unbounded
   FIFO queue of waiting tasks; predictions are recomputed after actual task
-  completion. Core/RAM compatibility is checked before selecting a VM. Every
-  ready task compares the earliest predicted finish among compatible active
-  VMs (including their existing waiting work) and a newly provisioned VM
-  (including the 60-second provisioning delay). A VM may receive additional
-  waiting tasks only when it finishes no later than the best new VM. Equal
-  finishes favor lower incremental hourly rental cost. This comparison is a
-  rigid-task adaptation of the paper, which allows one waiting task per VM.
+  completion. Core/RAM compatibility is checked before selecting a VM. For
+  every ready task, consider compatible active VMs (including existing waiting
+  work) and fresh VMs (including 60 seconds of provisioning). Among candidates
+  predicted to meet its NOSF subdeadline, select the smallest **incremental
+  rounded hourly rental cost**, breaking ties by earliest predicted finish.
+  For an active VM, the increment is its billed cost through the new task's
+  finish minus its billed cost through its already planned work; for a new VM,
+  it is its first billed period(s), starting at readiness. If no candidate is
+  predicted feasible, select the earliest finish, breaking ties by incremental
+  cost. An existing VM may thus accept another task even when it finishes it
+  after a fresh VM, as long as it is subdeadline-feasible and cheaper. The
+  paper uses an active-first price × task-duration rule and at most one waiting
+  task per VM, so this cost-aware rigid-task policy is explicitly an adaptation.
 - VM provisioning takes 60 seconds and is not billed. Billing starts when
   the VM becomes ready and rounds to full 3600-second hours. An idle VM is
   kept until the end of its paid hour for reuse. Shared-storage transfer mode matches the common CBMW
@@ -77,8 +83,8 @@ python3 scripts/run_nosf_ohio_middle300.py --deadline-factor 1.2 --workers 4 \
 
 The factor may be `1.2`, `2`, or `4` (`2.0` and `4.0` are accepted). The four
 JVMs run independently in four Python worker threads. The scenario outputs
-stay under `outputs/nosf_ohio_2026/arrival<rate>_alpha<factor>/middle300/`.
-After all four finish, `outputs/nosf_ohio_2026/combined/alpha<factor>/` holds
+stay under `outputs/nosf_cost_aware_middle300/arrival<rate>_alpha<factor>/middle300/`.
+After all four finish, `outputs/nosf_cost_aware_middle300/combined/alpha<factor>/` holds
 `results.csv` (four rows per repetition), `results_aggregate.csv` (four rows),
 and the streamed concatenation `task_execution.csv`, plus `run_config.json`.
 The merged files are only replaced after all four scenarios succeed.

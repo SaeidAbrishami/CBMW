@@ -13,7 +13,7 @@ import org.workflowsim.cbmw.PaperRuntimeModel;
 import org.workflowsim.cbmw.WorkflowRecord;
 import org.workflowsim.utils.Parameters;
 
-/** Fast equation and invariant tests for paper-faithful NOSF. */
+/** Fast equation and invariant tests for the rigid-task NOSF adaptation. */
 public final class NOSFValidationTest {
     private NOSFValidationTest() {}
 
@@ -22,15 +22,16 @@ public final class NOSFValidationTest {
         testProfileDefaults();
         testOhioProxyVmTypes();
         testSharedProvisioningDelay();
-        testPaperResourceSelection();
+        testAdaptedResourceSelection();
         testRigidTaskRecovery();
-        testFinishComparisonIndependentOfSubdeadline();
+        testDeadlineAwareCostComparison();
+        testHourlyBoundaryCostComparison();
         testUnboundedWaitingAndReadyBilling();
         testPaperNetworkTransfer();
         testReplicateRuntimeSampling();
         testPcpPreprocessingAndFeedback();
         testFeedbackTouchesOnlyReadyImmediateSuccessors();
-        System.out.println("NOSF paper equations and invariants: PASS");
+        System.out.println("NOSF equations and adapted selection invariants: PASS");
     }
 
     private static void testProfileDefaults() {
@@ -115,7 +116,7 @@ public final class NOSFValidationTest {
                 "NOSF must inherit CBMW's on-demand provisioning delay");
     }
 
-    private static void testPaperResourceSelection() {
+    private static void testAdaptedResourceSelection() {
         NOSFVmType type = new NOSFVmType("test", 1, 1024, 1000.0, 0.01);
         NOSFResourceSelector selector = new NOSFResourceSelector(0.0, 60.0);
 
@@ -152,8 +153,13 @@ public final class NOSFValidationTest {
         state.replan(20.0);
         NOSFResourceSelector.Choice behindQueue = selector.choose(20.0,
                 10.0, 1, 1, 100.0, Arrays.asList(state), Arrays.asList(type));
-        require(behindQueue != null && behindQueue.newType == type,
-                "a fresh VM must beat a slower existing queue");
+        require(behindQueue != null && behindQueue.vm == state,
+                "a cheaper feasible queue may finish after a fresh VM");
+        NOSFResourceSelector.Choice tightQueue = selector.choose(20.0,
+                10.0, 1, 1, 40.0, Arrays.asList(state), Arrays.asList(type));
+        require(tightQueue != null && tightQueue.newType == type
+                        && tightQueue.feasible,
+                "a late existing queue must lose to a feasible fresh VM");
         NOSFResourceSelector.Choice shortQueue =
                 new NOSFResourceSelector(60.0, 60.0).choose(20.0,
                         10.0, 1, 1, 100.0, Arrays.asList(state), Arrays.asList(type));
@@ -208,25 +214,54 @@ public final class NOSFValidationTest {
                 "equal late finishes must favor lower incremental rental cost");
     }
 
-    private static void testFinishComparisonIndependentOfSubdeadline() {
+    private static void testDeadlineAwareCostComparison() {
         NOSFVmType type = new NOSFVmType("rigid", 1, 1024, 1000.0, 0.01);
         NOSFResourceSelector selector = new NOSFResourceSelector(60.0, 3600.0);
         NOSFVmState active = new NOSFVmState(vm(101, type), type, 0.0, 0.0);
         active.plannedAvailableTime = 177.1;
 
-        for (double subdeadline : new double[] {150.0, 255.0, 775.0}) {
+        for (double subdeadline : new double[] {150.0, 255.0}) {
             NOSFResourceSelector.Choice chosen = selector.choose(0.1, 122.0,
                     1, 1, subdeadline, Arrays.asList(active), Arrays.asList(type));
             require(chosen != null && chosen.newType == type
                             && close(chosen.finish, 182.1),
-                    "a queued active VM must not beat a faster fresh VM at any subdeadline");
+                    "infeasible reuse must not beat a faster fresh VM");
         }
+        NOSFResourceSelector.Choice loose = selector.choose(0.1, 122.0,
+                1, 1, 775.0, Arrays.asList(active), Arrays.asList(type));
+        require(loose != null && loose.vm == active && loose.feasible
+                        && close(loose.finish, 299.1)
+                        && close(loose.incrementalRentalCost, 0.0),
+                "loose subdeadline must permit cheaper existing-VM reuse");
 
         active.plannedAvailableTime = 35.0;
         NOSFResourceSelector.Choice reuse = selector.choose(0.1, 10.0,
                 1, 1, 100.0, Arrays.asList(active), Arrays.asList(type));
         require(reuse != null && reuse.vm == active && close(reuse.finish, 45.0),
                 "a short existing queue must beat a new VM's 60-second boot");
+    }
+
+    private static void testHourlyBoundaryCostComparison() {
+        NOSFVmType expensive = new NOSFVmType("expensive", 1, 1024,
+                1000.0, 0.03);
+        NOSFVmType cheap = new NOSFVmType("cheap", 1, 1024,
+                1000.0, 0.01);
+        NOSFVmState active = new NOSFVmState(vm(102, expensive), expensive,
+                0.0, 0.0);
+        active.plannedAvailableTime = 3590.0;
+        NOSFResourceSelector selector = new NOSFResourceSelector(60.0, 3600.0);
+        NOSFResourceSelector.Choice fresh = selector.choose(3580.0, 20.0,
+                1, 1, 3700.0, Arrays.asList(active), Arrays.asList(cheap));
+        require(fresh != null && fresh.newType == cheap && fresh.feasible
+                        && close(fresh.finish, 3660.0)
+                        && close(fresh.incrementalRentalCost, 36.0),
+                "cheaper fresh VM must beat reuse that crosses a costly hourly boundary");
+
+        NOSFResourceSelector.Choice existing = selector.choose(3580.0, 20.0,
+                1, 1, 3630.0, Arrays.asList(active), Arrays.asList(cheap));
+        require(existing != null && existing.vm == active && existing.feasible
+                        && close(existing.incrementalRentalCost, 108.0),
+                "a feasible active VM must beat a cheaper but late new VM");
     }
 
     private static void testUnboundedWaitingAndReadyBilling() {

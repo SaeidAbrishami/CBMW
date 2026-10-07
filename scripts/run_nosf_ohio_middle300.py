@@ -83,8 +83,8 @@ def run_one(scenario, source, output, classes, repetitions,
         "pricing": "historical NOSF type capacities, Ohio on-demand proxy rates",
         "task_runtime": "shared CBMW TXT sample, rigid across eligible VM types",
         "planning_runtime": "CBMW_CONSERVATIVE (mu * 1.20 by default)",
-        "vm_selection": "earliest predicted finish across active and new VMs for every task; ties by incremental hourly cost",
-        "waiting_tasks_per_vm": "unbounded if the existing VM finishes no later than a new VM",
+        "vm_selection": "minimum incremental hourly rental among subdeadline-feasible active and new VMs; ties by earliest finish; if none feasible, earliest finish",
+        "waiting_tasks_per_vm": "unbounded FIFO, subject to subdeadline feasibility or earliest-finish fallback",
         "priority": "EFT",
         "vm_billing_seconds": 3600,
         "vm_billing_starts_at": "ready_time_after_provisioning",
@@ -185,7 +185,7 @@ def combine_results(output, scenarios, factor, repetitions):
             "scenarios": [scenario + "_middle300" for scenario in scenarios],
             "workflows_per_scenario": 300,
             "repetitions": repetitions,
-            "vm_selection": "earliest predicted finish, then incremental hourly cost",
+            "vm_selection": "minimum incremental hourly rental among subdeadline-feasible active and new VMs; ties by earliest finish; if none feasible, earliest finish",
             "provisioning_seconds": 60,
             "billing_seconds": 3600,
             "billing_starts_at": "ready_time_after_provisioning",
@@ -206,7 +206,7 @@ def main():
     parser.add_argument("--workflow-dir", type=Path,
                         default=ROOT / "test_workflows" / "workflows")
     parser.add_argument("--output", type=Path,
-                        default=ROOT / "outputs" / "nosf_ohio_2026")
+                        default=ROOT / "outputs" / "nosf_cost_aware_middle300")
     parser.add_argument("--repetitions", type=int, default=1)
     parser.add_argument("--progress-interval-sec", type=int, default=10,
                         help="wall-clock interval between task-progress updates (default: 10)")
