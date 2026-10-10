@@ -6,7 +6,7 @@ import org.workflowsim.CondorVM;
 import org.workflowsim.Job;
 import org.workflowsim.cbmw.WorkflowRecord;
 
-/** One NOSF VM: one running task and any number of FIFO waiting tasks. */
+/** One NOSF VM: one running task and at most one waiting task. */
 final class NOSFVmState {
     static final class QueuedTask {
         final Job job;
@@ -47,7 +47,7 @@ final class NOSFVmState {
     }
 
     boolean canAcceptWaitingTask() {
-        return !released;
+        return !released && waiting.isEmpty();
     }
 
     void replan(double now) {

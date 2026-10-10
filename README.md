@@ -87,7 +87,7 @@ Use `python3 scripts/prepare_cbmw_manifests.py` to reproduce the 75/90-second
 traces and the corrected compressed boundary traces. The simulation assumes
 one bounded-uniform runtime sample per task from the supplied TXT files, a
 20% conservative planning margin, one 60-second allowance in generated
-deadlines, 5-second advancement checks and 60-second billable provisioning for
+deadlines, 5-second advancement checks and 60-second unbilled provisioning for
 each on-demand container.
 
 The 60-second allowance covers an on-demand order placed at workflow arrival;
@@ -210,23 +210,30 @@ scenario CSV columns `estimatedRawCost` and `offeredPrice`.
 
 ### NOSF Baseline
 
-`NOSFBroker` implements the original NOSF article's three-stage online
-scheduler:
+`NOSFBroker` adapts the NOSF article's three-stage online scheduler to the
+shared rigid-task experiment:
 
 1. **Workflow preprocessing (Algorithm 1):** use the selected planning
    estimate, calculate EST/EFT/LCT with Eqs. 8-10, find PCP
    paths, assign Eq. 11 sub-deadlines, and retain each task's delta from Eq. 12.
-2. **Resource allocation (Algorithm 3):** order ready tasks by paper priority,
-   allow any number of FIFO waiting tasks per VM, select a sub-deadline-feasible active
-   VM by minimum `price * predicted execution` and then minimum idle time, or
-   provision a suitable new type. If none is feasible, choose the eligible
-   active or new VM with the earliest predicted finish (then lowest additional
-   rental cost) and mark the task deadline-risk.
+   PCP paths are allocated independently as in the article, so an initial
+   parent subdeadline may exceed a child's initial subdeadline on another path.
+2. **Resource allocation (pre-C Algorithm 3):** order ready tasks by EFT
+   priority. Select a compatible active VM that meets the task's subdeadline,
+   using predicted execution cost (price times runtime) and idle time to rank
+   active candidates. If none is feasible, lease the least-cost feasible new
+   VM. If no candidate meets the subdeadline, lease a new highest-ranking
+   compatible VM. Active VMs include queued work in their finish prediction;
+   new VMs include the 60-second provisioning delay. This implementation
+   allows at most one waiting task per VM, as in the article.
 3. **Feedback (Algorithm 2):** update only immediate successors that have become
    ready and apply Eqs. 16-18, preserving the original delta and LCT cap.
 
 The default priority is `EFT` as selected for the comparison; `EST` remains
 an optional sensitivity policy.
+NOSF bills complete instance-hours starting when a VM is ready, excluding the
+60-second provisioning interval. Its idle VMs remain reusable until the end
+of the paid hour.
 NOSF has two explicit experiment profiles:
 
 - `COMMON_MARKET` (default) uses the paper's seven named historical VM types
@@ -240,8 +247,8 @@ Rigid tasks run for the same TXT sampled duration on every compatible VM;
 the paper's speed weights are disabled. Aligned planning uses CBMW's
 `mu * (1 + cbmw.runtime.planning.alpha)`, defaulting to `1.20 * mu`.
 Set `-Dnosf.runtime.estimator=MU_PLUS_SIGMA` for a separate run using the
-paper's `mu+sigma` estimate. The estimator and earliest-finish fallback are
-adaptations for this shared rigid-task market. The configured estimator is
+paper's `mu+sigma` estimate. The queue capacity and rigid execution model are
+adaptations for the shared comparison. The estimator is
 recorded in the NOSF detail log. VM eligibility checks task cores and RAM.
 One task runs per VM at a time.
 Historical M1/M2 capacities are kept in the simulator, while the price proxies
@@ -393,22 +400,25 @@ paper's historical AWS price trace.
 
 ### Baseline Certification Status
 
-The NOSF scheduling logic follows the original publication and is adapted to
-this repository's rigid-task Ohio comparison market.
+The NOSF preprocessing and feedback follow the original publication, while
+resource selection is adapted to this repository's rigid-task Ohio market.
 CEWB remains a reconstructed baseline because its complete reference market
 and implementation are not available here.
 
-- **NOSF** implements the published Algorithms 1-3 and Eqs. 1, 8-18. Its
-  default `COMMON_MARKET` profile supports controlled CBMW comparison, while
-  `PAPER_ALIGNED` keeps Ohio price proxies and rigid task times while selecting
-  paper network transfers and the 30-repetition default.
+- **NOSF** retains the published PCP preprocessing, successor feedback, and
+  active-first Algorithm 3 VM selection with a new-VM fallback when no type
+  meets the subdeadline. Its default `COMMON_MARKET` profile supports the
+  controlled CBMW comparison, while `PAPER_ALIGNED` selects paper network
+  transfers and the 30-repetition default. Both retain rigid runtimes, Ohio
+  price proxies, 60-second provisioning, and the paper's one-waiting-task
+  limit; rigid runtimes, prices, and provisioning are comparison adaptations.
 - **CEWB** implements PCP sub-deadlines, absolute interruption-penalty slack
   classes, shared spot and on-demand physical VM containers, periodic
   provisioning, progress-preserving recovery, and reconstructed pricing.
 
 CEWB results should remain labeled as a reconstructed baseline. NOSF results
-should identify the priority policy and market profile; `COMMON_MARKET` is an
-algorithm-faithful run, not a reproduction of the paper's original EC2 results.
+should identify the priority policy and market profile; `COMMON_MARKET` is a
+rigid-task adaptation, not a reproduction of the paper's original EC2 results.
 
 Focused CEWB validation (capacity/timing invariants plus a two-workflow smoke):
 
@@ -504,13 +514,25 @@ Use JVM properties such as
 `-Dcbmw.algorithms=CBMW`, `-Dcbmw.max.workflows=5`, and
 `-Dcbmw.max.scenarios=1` to restrict smoke or diagnostic runs.
 
-Run the same isolated middle 300 manifests used for the Ohio CEWB experiment
-(all 18 arrival/tightness configurations, one shared TXT sample per task):
+Run the isolated middle 300 manifests for the four primary arrival rates
+(12 arrival/tightness configurations, one shared TXT sample per task):
 
 ```bash
 python3 scripts/run_nosf_ohio_middle300.py --all \
   --workflow-dir test_workflows/workflows
 ```
+
+For the four primary arrival rates at one deadline factor, run four scenario
+JVMs concurrently and write a combined CSV for each result type:
+
+```bash
+python3 scripts/run_nosf_ohio_middle300.py --deadline-factor 1.2 --workers 4 \
+  --workflow-dir test_workflows/workflows
+```
+
+Find the four scenario outputs in `outputs/nosf_one_wait_120_middle300/arrival*/middle300/`
+and the merged `results.csv`, `results_aggregate.csv`, and `task_execution.csv`
+in `outputs/nosf_one_wait_120_middle300/combined/alpha1.2/`.
 
 The runner shows a live task progress bar every 10 seconds and writes the
 full per-scenario output to `run.log`. Use `--progress-interval-sec N` to
@@ -625,6 +647,9 @@ Aggregate CSVs report the number of repetitions and the mean, minimum, maximum,
 and sample standard deviation for total cost, on-demand VM utilization, count
 violation, and time violation. `task_execution.csv` includes the run, seed,
 profile, sampled runtime, and actual NOSF VM type/name for auditability.
+For NOSF, `LFT (s)` is the initial, precedence-consistent PCP subdeadline;
+`SubDeadline (s)` is the feedback-adjusted value actually used when assigning
+the task. Other algorithms retain their existing column meanings.
 
 ### Detailed event log
 

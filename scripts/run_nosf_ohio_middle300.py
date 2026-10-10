@@ -87,7 +87,7 @@ def run_one(scenario, source, output, classes, repetitions,
         "task_runtime": "shared CBMW TXT sample, rigid across eligible VM types",
         "planning_runtime": "CBMW_CONSERVATIVE (mu * 1.20 by default)",
         "vm_selection": "NOSF pre-C active-first: paper execution cost then idle time; when none meets the subdeadline lease a new highest-ranking compatible VM",
-        "waiting_tasks_per_vm": "unbounded FIFO; planned finish includes all queued work",
+        "waiting_tasks_per_vm": "at most one; planned finish includes the waiting task",
         "priority": "EFT",
         "vm_billing_seconds": 3600,
         "vm_billing_starts_at": "ready_time_after_provisioning",
@@ -190,7 +190,7 @@ def combine_results(output, scenarios, factor, repetitions):
             "repetitions": repetitions,
             "vm_selection": "NOSF pre-C active-first paper execution cost then idle time; new highest-ranking VM when none feasible",
             "planning_runtime": "CBMW_CONSERVATIVE (mu * 1.20 by default)",
-            "waiting_tasks_per_vm": "unbounded FIFO",
+            "waiting_tasks_per_vm": "at most one (NOSF paper)",
             "provisioning_seconds": 60,
             "billing_seconds": 3600,
             "billing_starts_at": "ready_time_after_provisioning",
@@ -211,7 +211,7 @@ def main():
     parser.add_argument("--workflow-dir", type=Path,
                         default=ROOT / "test_workflows" / "workflows")
     parser.add_argument("--output", type=Path,
-                        default=ROOT / "outputs" / "nosf_pre_c_120_middle300")
+                        default=ROOT / "outputs" / "nosf_one_wait_120_middle300")
     parser.add_argument("--repetitions", type=int, default=1)
     parser.add_argument("--progress-interval-sec", type=int, default=10,
                         help="wall-clock interval between task-progress updates (default: 10)")

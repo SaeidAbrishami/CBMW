@@ -27,7 +27,7 @@ public class TaskExecutionRecord {
     private final double latestStartTime;
     private final double latestFinishTime;
     private final double scheduledStartTime;
-    private final double subDeadlineTime;
+    private double subDeadlineTime;
     private final double deadlineTightness;
     private final Integer plannedVmId;
     private final String plannedVmType;
@@ -204,6 +204,14 @@ public class TaskExecutionRecord {
 
     public void setActualVmName(String name) {
         actualVmName = name == null ? "" : name;
+    }
+
+    /** Replace the initial NOSF subdeadline with the feedback-adjusted allocation value. */
+    public void setAllocationSubDeadline(double subDeadline) {
+        if (!Double.isFinite(subDeadline)) {
+            throw new IllegalArgumentException("Allocation subdeadline must be finite");
+        }
+        subDeadlineTime = subDeadline;
     }
 
     private static double finiteDifference(double left, double right) {

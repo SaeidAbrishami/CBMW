@@ -49,18 +49,16 @@ Prices recorded for this comparison on 2026-09-29.
   `-Dnosf.runtime.estimator=MU_PLUS_SIGMA` for a separate paper-estimate
   sensitivity run; with the shared sigma ratio 0.05 it uses `mu * 1.05`.
 - EFT is the ready-task priority. PCP sub-deadlines and successor feedback
-  remain NOSF. A VM executes one task at a time and may hold an unbounded
-  FIFO queue of waiting tasks; predictions are recomputed after actual task
-  completion. Core/RAM compatibility is checked before selecting a VM. The
+  remain NOSF. A VM executes one task at a time and may hold at most one
+  waiting task, as specified by the paper. Predictions are recomputed after
+  actual task completion. Core/RAM compatibility is checked before selecting a VM. The
   pre-Option-C selector uses NOSF's active-first rule: among active VMs
   predicted to meet the task's subdeadline, select minimum predicted execution
   cost (price × runtime), breaking ties by idle time. If none qualifies,
   select a feasible new VM with minimum predicted execution cost, including
   60 seconds of provisioning in its finish prediction. If none qualifies,
   lease a new highest-ranking compatible VM. With rigid runtimes, more VM
-  resources cannot shorten an individual task. The unlimited waiting queue
-  is a comparison adaptation; the paper permits at most one waiting task on
-  a VM.
+  resources cannot shorten an individual task.
 - VM provisioning takes 60 seconds and is not billed. Billing starts when
   the VM becomes ready and rounds to full 3600-second hours. An idle VM is
   kept until the end of its paid hour for reuse. Shared-storage transfer mode matches the common CBMW
@@ -80,8 +78,8 @@ python3 scripts/run_nosf_ohio_middle300.py --deadline-factor 1.2 --workers 4 \
 
 The factor may be `1.2`, `2`, or `4` (`2.0` and `4.0` are accepted). The four
 JVMs run independently in four Python worker threads. The scenario outputs
-stay under `outputs/nosf_pre_c_120_middle300/arrival<rate>_alpha<factor>/middle300/`.
-After all four finish, `outputs/nosf_pre_c_120_middle300/combined/alpha<factor>/` holds
+stay under `outputs/nosf_one_wait_120_middle300/arrival<rate>_alpha<factor>/middle300/`.
+After all four finish, `outputs/nosf_one_wait_120_middle300/combined/alpha<factor>/` holds
 `results.csv` (four rows per repetition), `results_aggregate.csv` (four rows),
 and the streamed concatenation `task_execution.csv`, plus `run_config.json`.
 The merged files are only replaced after all four scenarios succeed.

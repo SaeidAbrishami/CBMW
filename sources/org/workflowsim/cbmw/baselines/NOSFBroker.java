@@ -172,7 +172,7 @@ public class NOSFBroker extends AbstractWorkflowBroker {
                         NOSFResourceSelector.Choice choice) {
         if (!state.canAcceptWaitingTask()) {
             throw new IllegalStateException("NOSF VM " + state.vm.getId()
-                    + " is released");
+                    + " is released or already has a waiting task");
         }
         int taskId = primaryTaskId(job);
         job.setVmId(state.vm.getId());
@@ -185,6 +185,8 @@ public class NOSFBroker extends AbstractWorkflowBroker {
         state.releaseAt = Double.POSITIVE_INFINITY;
         workflow.setAssignedVm(taskId, state.vm.getId());
         workflow.setScheduledStart(taskId, choice.start);
+        accounting.markTaskAllocationSubDeadline(taskId,
+                workflowPlanner.subDeadline(workflow, taskId));
         if (!choice.feasible) accounting.markDeadlineRisk(taskId);
         CBMWLogger.logf("NOSF-ALLOCATE",
                 "wf=%d task=%d priority=%.2f subDeadline=%.2f start=%.2f"

@@ -8,8 +8,10 @@ import org.workflowsim.FileItem;
 import org.workflowsim.Job;
 import org.workflowsim.Task;
 import org.workflowsim.cbmw.ExperimentRunContext;
+import org.workflowsim.cbmw.CBMWAccounting;
 import org.workflowsim.cbmw.HybridVmPool;
 import org.workflowsim.cbmw.PaperRuntimeModel;
+import org.workflowsim.cbmw.TaskExecutionRecord;
 import org.workflowsim.cbmw.WorkflowRecord;
 import org.workflowsim.utils.Parameters;
 
@@ -25,10 +27,11 @@ public final class NOSFValidationTest {
         testPaperStyleResourceSelection();
         testPaperStyleFallbackWithRigidTasks();
         testActiveFirstAndHourlyBoundary();
-        testUnboundedWaitingAndReadyBilling();
+        testOneWaitingTaskAndReadyBilling();
         testPaperNetworkTransfer();
         testReplicateRuntimeSampling();
         testPcpPreprocessingAndFeedback();
+        testBranchSubDeadlineAndAllocationExport();
         testFeedbackTouchesOnlyReadyImmediateSuccessors();
         System.out.println("NOSF equations and pre-C selection invariants: PASS");
     }
@@ -152,8 +155,9 @@ public final class NOSFValidationTest {
         state.replan(20.0);
         NOSFResourceSelector.Choice behindQueue = selector.choose(20.0,
                 10.0, 1, 1, 100.0, Arrays.asList(state), Arrays.asList(type));
-        require(behindQueue != null && behindQueue.vm == state,
-                "a cheaper feasible queue may finish after a fresh VM");
+        require(behindQueue != null && behindQueue.vm == null
+                        && behindQueue.newType == type,
+                "a VM with one waiting task must not receive a second");
         NOSFResourceSelector.Choice tightQueue = selector.choose(20.0,
                 10.0, 1, 1, 40.0, Arrays.asList(state), Arrays.asList(type));
         require(tightQueue != null && tightQueue.newType == type
@@ -162,10 +166,10 @@ public final class NOSFValidationTest {
         NOSFResourceSelector.Choice shortQueue =
                 new NOSFResourceSelector(60.0, 60.0).choose(20.0,
                         10.0, 1, 1, 100.0, Arrays.asList(state), Arrays.asList(type));
-        require(shortQueue != null && shortQueue.vm == state
-                        && close(shortQueue.start,
-                                20.0 + NOSFRuntimeModel.weight(10.0)),
-                "an existing queue may beat a 60-second new-VM delay");
+        require(shortQueue != null && shortQueue.vm == null
+                        && shortQueue.newType == type
+                        && close(shortQueue.start, 80.0),
+                "a full waiting slot must block reuse even with a 60-second boot");
 
         NOSFResourceSelector.Choice risk = selector.choose(20.0, 10.0, 1, 1,
                 25.0, Arrays.asList(state), Arrays.asList(type));
@@ -242,7 +246,7 @@ public final class NOSFValidationTest {
                 "paper rule provisions a feasible new VM when all active VMs are late");
     }
 
-    private static void testUnboundedWaitingAndReadyBilling() {
+    private static void testOneWaitingTaskAndReadyBilling() {
         NOSFVmType type = new NOSFVmType("test", 1, 1024, 1000.0, 0.01);
         NOSFVmState state = new NOSFVmState(vm(7, type), type, 0.0, 90.0);
         require(close(state.billedCost(80.0, 60.0), 0.0),
@@ -252,24 +256,35 @@ public final class NOSFValidationTest {
         require(close(state.currentBillingBoundary(100.0, 60.0), 150.0),
                 "release boundary must be measured from readiness");
         WorkflowRecord workflow = workflow(3, 0.0, 300.0,
-                task(77, 10.0), task(78, 10.0), task(79, 10.0));
+                task(77, 10.0), task(78, 10.0));
+        require(state.canAcceptWaitingTask(),
+                "a newly ordered VM must accept its first task");
         state.waiting.addLast(new NOSFVmState.QueuedTask(new Job(77, 1000),
                 workflow, 77, 90.0));
+        state.replan(90.0);
+        require(!state.canAcceptWaitingTask() && state.waiting.size() == 1,
+                "a provisioned VM with a waiting task must reject another");
+        require(close(state.plannedAvailableTime,
+                        90.0 + NOSFRuntimeModel.weight(10.0)),
+                "first-task forecast must include VM readiness");
+        state.waiting.removeFirst();
+        state.running = new Job(77, 1000);
+        state.runningPredictedFinish = 105.0;
+        require(state.canAcceptWaitingTask(),
+                "a running VM without a waiting task must accept one");
         state.waiting.addLast(new NOSFVmState.QueuedTask(new Job(78, 1000),
                 workflow, 78, 115.0));
-        state.waiting.addLast(new NOSFVmState.QueuedTask(new Job(79, 1000),
-                workflow, 79, 90.0));
-        state.replan(90.0);
-        require(state.canAcceptWaitingTask() && state.waiting.size() == 3,
-                "VM must accept unbounded FIFO waiting tasks");
-        double expectedFinish = Math.max(90.0 + NOSFRuntimeModel.weight(10.0),
-                115.0) + 2.0 * NOSFRuntimeModel.weight(10.0);
-        require(close(state.plannedAvailableTime, expectedFinish),
-                "queue forecast must include readiness and sequential runtimes");
+        state.replan(95.0);
+        require(!state.canAcceptWaitingTask()
+                        && close(state.plannedAvailableTime,
+                                115.0 + NOSFRuntimeModel.weight(10.0)),
+                "the only waiting task must account for dependency readiness");
+        state.running = null;
         state.waiting.removeFirst();
-        state.replan(110.0);
-        require(close(state.plannedAvailableTime, expectedFinish),
-                "queue forecast must be repaired after actual completion");
+        state.replan(130.0);
+        require(state.canAcceptWaitingTask()
+                        && close(state.plannedAvailableTime, 130.0),
+                "VM must accept work after its waiting task starts and completes");
 
         NOSFVmState paperBilling = new NOSFVmState(vm(8, type), type, 0.0, 90.0);
         require(close(paperBilling.billedCost(100.0, 3600.0), 36.0),
@@ -360,6 +375,51 @@ public final class NOSFValidationTest {
         planner.feedback(workflow, 10, 40.0);
         require(close(workflow.getEST(12), originalEst),
                 "feedback must not update a successor whose other parent is incomplete");
+    }
+
+    private static void testBranchSubDeadlineAndAllocationExport() {
+        // Eq. 11 independently assigns 76 to a short branch and 75 to its
+        // child on another PCP. Feedback revises the child when it is ready.
+        Task shortBranch = task(30, 10.0);
+        Task criticalBranch = task(31, 20.0);
+        Task join = task(32, 10.0);
+        Task exit = task(33, 10.0);
+        link(shortBranch, join);
+        link(criticalBranch, join);
+        link(join, exit);
+        WorkflowRecord workflow = workflow(30, 0.0, 100.0,
+                shortBranch, criticalBranch, join, exit);
+        NOSFVmType type = new NOSFVmType("rigid", 1, 1024, 1000.0, 0.01);
+        NOSFWorkflowPlanner planner = new NOSFWorkflowPlanner(
+                new NOSFTransferModel(), NOSFWorkflowPlanner.PriorityPolicy.EFT);
+        planner.preprocess(workflow, Arrays.asList(shortBranch, criticalBranch,
+                join, exit), Arrays.asList(type));
+        require(close(workflow.getLFT(30), 76.0)
+                        && close(workflow.getLFT(32), 75.0),
+                "NOSF Eq. 11 must independently allocate PCP subdeadlines");
+
+        CBMWAccounting accounting = new CBMWAccounting();
+        accounting.registerWorkflowTasks(workflow,
+                Arrays.asList(shortBranch, criticalBranch, join, exit),
+                1.2, true, "ACCEPTED");
+        double initialJoinSubDeadline = workflow.getLFT(32);
+        workflow.markTaskCompleted(31);
+        planner.feedback(workflow, 31, 24.0);
+        workflow.markTaskCompleted(30);
+        planner.feedback(workflow, 30, 63.0);
+        double allocationSubDeadline = planner.subDeadline(workflow, 32);
+        require(allocationSubDeadline > initialJoinSubDeadline,
+                "feedback must extend the ready task's subdeadline when slack permits");
+        accounting.markTaskAllocationSubDeadline(32, allocationSubDeadline);
+        TaskExecutionRecord record = null;
+        for (TaskExecutionRecord taskRecord : accounting.getTaskRecords()) {
+            if (taskRecord.getTaskId() == 32) record = taskRecord;
+        }
+        require(record != null && close(record.getSubDeadlineTime(),
+                        allocationSubDeadline)
+                        && close(record.getLatestFinishTime(),
+                                initialJoinSubDeadline),
+                "task export must distinguish allocated subdeadline from initial LFT");
     }
 
     private static WorkflowRecord workflow(int id, double arrival, double deadline,

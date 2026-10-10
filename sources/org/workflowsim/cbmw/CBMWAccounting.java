@@ -124,6 +124,12 @@ public class CBMWAccounting {
         }
     }
 
+    /** NOSF feedback may revise the subdeadline after workflow registration. */
+    public void markTaskAllocationSubDeadline(int taskId, double subDeadline) {
+        TaskExecutionRecord record = taskRecords.get(taskId);
+        if (record != null) record.setAllocationSubDeadline(subDeadline);
+    }
+
     public void markTaskFinished(Cloudlet cl, boolean onDemand) {
         markTaskFinished(cl, onDemand ? "On-Demand" : "Reserved");
     }
