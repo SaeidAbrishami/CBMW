@@ -4,7 +4,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-/** Minimize incremental hourly rental among subdeadline-feasible VM choices. */
+/** NOSF Algorithm 3 selection with shared rigid runtimes and ready-time billing. */
 final class NOSFResourceSelector {
     private static final double EPS = 1e-9;
 
@@ -64,31 +64,55 @@ final class NOSFResourceSelector {
             double start = Math.max(available, dataReady);
             double runtime = state.type.runtime(baseRuntime);
             double finish = start + runtime;
+            if (finish > subDeadline + EPS) continue;
             double oldCost = state.billedCost(available, billingQuantum);
             double newCost = state.billedCost(finish, billingQuantum);
-            boolean feasible = finish <= subDeadline + EPS;
             Choice candidate = new Choice(state, null, start, finish,
                     state.type.pricePerSecond * runtime,
                     Math.max(0.0, newCost - oldCost),
-                    Math.max(0.0, start - available), dataReady, feasible);
+                    Math.max(0.0, start - available), dataReady, true);
             if (better(candidate, best)) best = candidate;
         }
+        if (best != null) return best;
 
         for (NOSFVmType type : types) {
             if (!type.canRun(cores, ramMb)) continue;
             double start = Math.max(now + provisioningDelay, newVmDataReady);
             double runtime = type.runtime(baseRuntime);
             double finish = start + runtime;
-            boolean feasible = finish <= subDeadline + EPS;
+            if (finish > subDeadline + EPS) continue;
             Choice candidate = new Choice(null, type, start, finish,
                     type.pricePerSecond * runtime,
                     billedCost(now + provisioningDelay, finish,
                             type.pricePerSecond),
                     Math.max(0.0, start - (now + provisioningDelay)),
-                    newVmDataReady, feasible);
+                    newVmDataReady, true);
             if (better(candidate, best)) best = candidate;
         }
-        return best;
+        if (best != null) return best;
+
+        // Algorithm 3, lines 16-17: lease a new highest-ranking compatible VM.
+        NOSFVmType fastest = null;
+        for (NOSFVmType type : types) {
+            if (!type.canRun(cores, ramMb)) continue;
+            if (fastest == null
+                    || type.runtime(baseRuntime) < fastest.runtime(baseRuntime) - EPS
+                    || (Math.abs(type.runtime(baseRuntime)
+                            - fastest.runtime(baseRuntime)) <= EPS
+                        && type.pricePerSecond < fastest.pricePerSecond)) {
+                fastest = type;
+            }
+        }
+        if (fastest == null) return null;
+        double start = Math.max(now + provisioningDelay, newVmDataReady);
+        double runtime = fastest.runtime(baseRuntime);
+        double finish = start + runtime;
+        return new Choice(null, fastest, start, finish,
+                fastest.pricePerSecond * runtime,
+                billedCost(now + provisioningDelay, finish,
+                        fastest.pricePerSecond),
+                Math.max(0.0, start - (now + provisioningDelay)),
+                newVmDataReady, false);
     }
 
     private double billedCost(double ready, double finish, double price) {
@@ -96,21 +120,16 @@ final class NOSFResourceSelector {
         return Math.ceil(leased / billingQuantum) * billingQuantum * price;
     }
 
+    /** Paper suitable VM: minimum execution cost, then minimum idle time. */
     private boolean better(Choice a, Choice b) {
         if (b == null) return true;
-        // For rigid tasks, a longer active-VM queue can save a whole rental
-        // hour while still satisfying the task's NOSF subdeadline.
-        if (a.feasible != b.feasible) return a.feasible;
-        if (a.feasible
-                && Math.abs(a.incrementalRentalCost - b.incrementalRentalCost) > EPS) {
-            return a.incrementalRentalCost < b.incrementalRentalCost;
+        if (Math.abs(a.selectionCost - b.selectionCost) > EPS) {
+            return a.selectionCost < b.selectionCost;
         }
-        // When no resource can meet the subdeadline, minimize lateness rather
-        // than buying a cheaper VM that finishes even later.
+        if (Math.abs(a.idleTime - b.idleTime) > EPS) {
+            return a.idleTime < b.idleTime;
+        }
         if (Math.abs(a.finish - b.finish) > EPS) return a.finish < b.finish;
-        if (Math.abs(a.incrementalRentalCost - b.incrementalRentalCost) > EPS) {
-            return a.incrementalRentalCost < b.incrementalRentalCost;
-        }
         return stableId(a) < stableId(b);
     }
 

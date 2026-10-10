@@ -6,7 +6,7 @@ result columns, including the latest CEWB and Greedy baseline changes.
 The runner `scripts/run_nosf_ohio_middle300.py` executes **only** original
 workflow positions 101–400 from each 500-workflow arrival manifest, rebased
 to arrival zero exactly as in `run_cewb_ohio_middle300.py`. By default it
-runs the 18 configurations (arrival means 15, 30, 45, 60, 75, 90 seconds;
+runs the 12 primary configurations (arrival means 15, 30, 45, 60 seconds;
 deadline multipliers 1.2, 2, 4), one repetition per configuration. The
 same loader calculates all CBMW/NOSF deadlines, so there is no separate
 NOSF deadline rule. The runner stores its exact manifest and settings.
@@ -51,19 +51,16 @@ Prices recorded for this comparison on 2026-09-29.
 - EFT is the ready-task priority. PCP sub-deadlines and successor feedback
   remain NOSF. A VM executes one task at a time and may hold an unbounded
   FIFO queue of waiting tasks; predictions are recomputed after actual task
-  completion. Core/RAM compatibility is checked before selecting a VM. For
-  every ready task, consider compatible active VMs (including existing waiting
-  work) and fresh VMs (including 60 seconds of provisioning). Among candidates
-  predicted to meet its NOSF subdeadline, select the smallest **incremental
-  rounded hourly rental cost**, breaking ties by earliest predicted finish.
-  For an active VM, the increment is its billed cost through the new task's
-  finish minus its billed cost through its already planned work; for a new VM,
-  it is its first billed period(s), starting at readiness. If no candidate is
-  predicted feasible, select the earliest finish, breaking ties by incremental
-  cost. An existing VM may thus accept another task even when it finishes it
-  after a fresh VM, as long as it is subdeadline-feasible and cheaper. The
-  paper uses an active-first price × task-duration rule and at most one waiting
-  task per VM, so this cost-aware rigid-task policy is explicitly an adaptation.
+  completion. Core/RAM compatibility is checked before selecting a VM. The
+  pre-Option-C selector uses NOSF's active-first rule: among active VMs
+  predicted to meet the task's subdeadline, select minimum predicted execution
+  cost (price × runtime), breaking ties by idle time. If none qualifies,
+  select a feasible new VM with minimum predicted execution cost, including
+  60 seconds of provisioning in its finish prediction. If none qualifies,
+  lease a new highest-ranking compatible VM. With rigid runtimes, more VM
+  resources cannot shorten an individual task. The unlimited waiting queue
+  is a comparison adaptation; the paper permits at most one waiting task on
+  a VM.
 - VM provisioning takes 60 seconds and is not billed. Billing starts when
   the VM becomes ready and rounds to full 3600-second hours. An idle VM is
   kept until the end of its paid hour for reuse. Shared-storage transfer mode matches the common CBMW
@@ -83,13 +80,13 @@ python3 scripts/run_nosf_ohio_middle300.py --deadline-factor 1.2 --workers 4 \
 
 The factor may be `1.2`, `2`, or `4` (`2.0` and `4.0` are accepted). The four
 JVMs run independently in four Python worker threads. The scenario outputs
-stay under `outputs/nosf_cost_aware_middle300/arrival<rate>_alpha<factor>/middle300/`.
-After all four finish, `outputs/nosf_cost_aware_middle300/combined/alpha<factor>/` holds
+stay under `outputs/nosf_pre_c_120_middle300/arrival<rate>_alpha<factor>/middle300/`.
+After all four finish, `outputs/nosf_pre_c_120_middle300/combined/alpha<factor>/` holds
 `results.csv` (four rows per repetition), `results_aggregate.csv` (four rows),
 and the streamed concatenation `task_execution.csv`, plus `run_config.json`.
 The merged files are only replaced after all four scenarios succeed.
 
-Run all 18 scenarios with the dataset from the original repository:
+Run all 12 primary scenarios with the dataset from the original repository:
 
 ```bash
 python3 scripts/run_nosf_ohio_middle300.py --all --workers 2 \
@@ -110,5 +107,5 @@ overhead; monitor available memory on a 16 GiB machine, and reduce to two
 workers if memory becomes tight. The terminal prints a labeled progress bar for each scenario
 on its own line, every 10 seconds by default. Use `--progress-interval-sec N`
 to change this. Each scenario keeps its full Java output in its own `run.log`.
-With `--all`, the prefix shows the current scenario out of 18. Every scenario
+With `--all`, the prefix shows the current scenario out of 12. Every scenario
 still uses only its 300-entry middle workflow manifest.

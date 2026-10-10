@@ -529,6 +529,7 @@ public class CBMWSimulation {
                 .append("avgRejectedNegotiation,avgRejectedPlanning,")
                 .append("avgAcceptanceRate,avgDeadlineRate,avgOverallSuccessRate,")
                 .append("avgCountViolation,avgTimeViolation,avgDeadlineMissCount,")
+                .append("avgDeadlineMissCountMain300,")
                 .append("maxDeadlineMissSeconds,avgDeadlineMissSeconds,")
                 .append("avgOnDemandCost,avgDirectMeasuredOnDemandCost,")
                 .append("avgSpotCost,avgEstimatedRawCost,avgOfferedPrice,")
@@ -539,6 +540,8 @@ public class CBMWSimulation {
                 .append("avgReservedUtil,avgReservedUtilMain300,")
                 .append("avgOnDemandUsageRatio,avgSpotUsageRatio,")
                 .append("avgReservedCpuWorkShare,avgOnDemandCpuWorkShare,")
+                .append("avgReservedCpuWorkShareMain300,")
+                .append("avgOnDemandCpuWorkShareMain300,")
                 .append("avgProvisionedOnDemandVms,avgOnDemandVmUtilization,")
                 .append("avgDeadlineRiskTasks,")
                 .append("avgReservedInstanceCount,avgReservedCoresPerInstance,")
@@ -691,6 +694,8 @@ public class CBMWSimulation {
         private double countViolation;
         private double timeViolation;
         private double deadlineMissCount;
+        private double deadlineMissCountMain300;
+        private int main300Runs;
         private double maxDeadlineMissSeconds;
         private double deadlineMissSecondsSum;
         private double onDemandCost;
@@ -716,6 +721,8 @@ public class CBMWSimulation {
         private double spotUsageRatio;
         private double reservedCpuWorkShare;
         private double onDemandCpuWorkShare;
+        private double reservedCpuWorkShareMain300;
+        private double onDemandCpuWorkShareMain300;
         private double provisionedOnDemandVms;
         private double onDemandVmUtilization;
         private double deadlineRiskTasks;
@@ -772,6 +779,12 @@ public class CBMWSimulation {
             countViolation += row.countViolation;
             timeViolation += row.timeViolation;
             deadlineMissCount += row.deadlineMissCount;
+            if (row.deadlineMissCountMain300 >= 0) {
+                deadlineMissCountMain300 += row.deadlineMissCountMain300;
+                reservedCpuWorkShareMain300 += row.reservedCpuWorkShareMain300;
+                onDemandCpuWorkShareMain300 += row.onDemandCpuWorkShareMain300;
+                main300Runs++;
+            }
             maxDeadlineMissSeconds = Math.max(maxDeadlineMissSeconds,
                     row.maxDeadlineMissSeconds);
             deadlineMissSecondsSum += row.avgDeadlineMissSeconds
@@ -847,7 +860,9 @@ public class CBMWSimulation {
                     f2(rejectedPlanning / runs), f4(acceptanceRate / runs),
                     f4(deadlineRate / runs), f4(overallSuccessRate / runs),
                     f4(countViolation / runs), f4(timeViolation / runs),
-                    f4(deadlineMissCount / runs), f4(maxDeadlineMissSeconds),
+                    f4(deadlineMissCount / runs),
+                    main300Runs == 0 ? "" : f4(deadlineMissCountMain300 / main300Runs),
+                    f4(maxDeadlineMissSeconds),
                     f4(deadlineMissCount == 0 ? 0.0
                             : deadlineMissSecondsSum / deadlineMissCount),
                     f4(onDemandCost / runs),
@@ -865,6 +880,10 @@ public class CBMWSimulation {
                     f4(onDemandUsageRatio / runs), f4(spotUsageRatio / runs),
                     f4(reservedCpuWorkShare / runs),
                     f4(onDemandCpuWorkShare / runs),
+                    main300Runs == 0 ? ""
+                            : f4(reservedCpuWorkShareMain300 / main300Runs),
+                    main300Runs == 0 ? ""
+                            : f4(onDemandCpuWorkShareMain300 / main300Runs),
                     f4(provisionedOnDemandVms / runs),
                     f4(onDemandVmUtilization / runs), f2(deadlineRiskTasks / runs),
                     f4(reservedInstanceCount / runs),

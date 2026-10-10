@@ -13,12 +13,15 @@ import tempfile
 from threading import Lock
 from pathlib import Path
 
-from run_cewb_ohio_2026 import ROOT, JARS, SCENARIOS, compile_sources
+from run_cewb_ohio_2026 import ROOT, JARS, compile_sources
 
 PROGRESS = re.compile(r"elapsed=(\d+)s started=(\d+) completed=(\d+)/(\d+)"
                       r" \((\d+(?:\.\d+)?)%\) rejectedWorkflows=(\d+)")
 PRINT_LOCK = Lock()
 ARRIVAL_RATES = (15, 30, 45, 60)
+DEADLINE_FACTORS = ("1.2", "2", "4")
+PRIMARY_SCENARIOS = tuple(f"arrival{mean}_alpha{factor}"
+                          for mean in ARRIVAL_RATES for factor in DEADLINE_FACTORS)
 
 
 def deadline_factor(value):
@@ -83,8 +86,8 @@ def run_one(scenario, source, output, classes, repetitions,
         "pricing": "historical NOSF type capacities, Ohio on-demand proxy rates",
         "task_runtime": "shared CBMW TXT sample, rigid across eligible VM types",
         "planning_runtime": "CBMW_CONSERVATIVE (mu * 1.20 by default)",
-        "vm_selection": "minimum incremental hourly rental among subdeadline-feasible active and new VMs; ties by earliest finish; if none feasible, earliest finish",
-        "waiting_tasks_per_vm": "unbounded FIFO, subject to subdeadline feasibility or earliest-finish fallback",
+        "vm_selection": "NOSF pre-C active-first: paper execution cost then idle time; when none meets the subdeadline lease a new highest-ranking compatible VM",
+        "waiting_tasks_per_vm": "unbounded FIFO; planned finish includes all queued work",
         "priority": "EFT",
         "vm_billing_seconds": 3600,
         "vm_billing_starts_at": "ready_time_after_provisioning",
@@ -185,7 +188,9 @@ def combine_results(output, scenarios, factor, repetitions):
             "scenarios": [scenario + "_middle300" for scenario in scenarios],
             "workflows_per_scenario": 300,
             "repetitions": repetitions,
-            "vm_selection": "minimum incremental hourly rental among subdeadline-feasible active and new VMs; ties by earliest finish; if none feasible, earliest finish",
+            "vm_selection": "NOSF pre-C active-first paper execution cost then idle time; new highest-ranking VM when none feasible",
+            "planning_runtime": "CBMW_CONSERVATIVE (mu * 1.20 by default)",
+            "waiting_tasks_per_vm": "unbounded FIFO",
             "provisioning_seconds": 60,
             "billing_seconds": 3600,
             "billing_starts_at": "ready_time_after_provisioning",
@@ -200,13 +205,13 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--all", action="store_true")
-    group.add_argument("--scenario", choices=SCENARIOS)
+    group.add_argument("--scenario", choices=PRIMARY_SCENARIOS)
     group.add_argument("--deadline-factor", type=deadline_factor,
                        help="run arrivals 15, 30, 45, and 60 for factor 1.2, 2, or 4")
     parser.add_argument("--workflow-dir", type=Path,
                         default=ROOT / "test_workflows" / "workflows")
     parser.add_argument("--output", type=Path,
-                        default=ROOT / "outputs" / "nosf_cost_aware_middle300")
+                        default=ROOT / "outputs" / "nosf_pre_c_120_middle300")
     parser.add_argument("--repetitions", type=int, default=1)
     parser.add_argument("--progress-interval-sec", type=int, default=10,
                         help="wall-clock interval between task-progress updates (default: 10)")
@@ -235,7 +240,7 @@ def main():
     output = args.output.resolve()
     scenarios = ([f"arrival{mean}_alpha{args.deadline_factor}"
                   for mean in ARRIVAL_RATES] if args.deadline_factor else
-                 SCENARIOS if args.all else [args.scenario])
+                 list(PRIMARY_SCENARIOS) if args.all else [args.scenario])
     with ThreadPoolExecutor(max_workers=workers) as pool:
         jobs = {pool.submit(run_one, scenario, source, output, classes,
                             args.repetitions, args.progress_interval_sec,
@@ -253,6 +258,11 @@ def main():
     if args.deadline_factor:
         combine_results(output, scenarios, args.deadline_factor,
                         args.repetitions)
+    elif args.all:
+        for factor in DEADLINE_FACTORS:
+            for_factor = [f"arrival{mean}_alpha{factor}"
+                          for mean in ARRIVAL_RATES]
+            combine_results(output, for_factor, factor, args.repetitions)
 
 
 if __name__ == "__main__":

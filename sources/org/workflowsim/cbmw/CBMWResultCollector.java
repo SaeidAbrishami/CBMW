@@ -105,6 +105,7 @@ public class CBMWResultCollector {
                 + "total,accepted,rejected,metDeadline,rejectedNegotiation,"
                 + "rejectedPlanning,acceptanceRate,deadlineRate,overallSuccessRate,"
                 + "countViolation,timeViolation,deadlineMissCount,"
+                + "deadlineMissCountMain300,"
                 + "maxDeadlineMissSeconds,avgDeadlineMissSeconds,"
                 + "onDemandCost,directMeasuredOnDemandCost,spotCost,estimatedRawCost,"
                 + "offeredPrice,brokerRevenue,brokerProfit,reservedCost,"
@@ -112,6 +113,7 @@ public class CBMWResultCollector {
                 + "simulationDurationHours,reservedUtil,reservedUtilMain300,"
                 + "onDemandUsageRatio,spotUsageRatio,"
                 + "reservedCpuWorkShare,onDemandCpuWorkShare,"
+                + "reservedCpuWorkShareMain300,onDemandCpuWorkShareMain300,"
                 + "provisionedOnDemandVms,onDemandVmUtilization,deadlineRiskTasks,"
                 + "reservedInstanceCount,reservedCoresPerInstance,"
                 + "reservedRamMbPerInstance,reservedTotalCores,reservedTotalRamMb,"
@@ -169,6 +171,7 @@ public class CBMWResultCollector {
         ResourceAccountingSummary resources = accounting.summarizeResources(start, end);
         int reportReservedVmCount = includesReservedLeaseCost(algorithm)
                 ? Math.max(0, reservedVmCount) : 0;
+        Main300Metrics main300 = main300Metrics(scenario);
 
         return new ScenarioMetrics(scenario, load, deadlineClass, algorithm,
                 arrivalScale, tightness, run, runSeed, nosfProfile,
@@ -183,9 +186,12 @@ public class CBMWResultCollector {
                 onDemandUsageRatio, spotUsageRatio,
                 accounting.getCpuWorkShare("Reserved"),
                 accounting.getCpuWorkShare("On-Demand"),
+                main300.reservedCpuWorkShare,
+                main300.onDemandCpuWorkShare,
                 resources, reportReservedVmCount,
                 accounting.getOnDemandVmUtilization(),
                 accounting.getDeadlineRiskTaskCount(), deadlineMissCount(),
+                main300.deadlineMissCount,
                 maximumDeadlineMissSeconds(), averageDeadlineMissSeconds());
     }
 
@@ -202,6 +208,7 @@ public class CBMWResultCollector {
                 f4(metrics.acceptanceRate), f4(metrics.deadlineRate),
                 f4(metrics.overallSuccessRate), f4(metrics.countViolation),
                 f4(metrics.timeViolation), Long.toString(metrics.deadlineMissCount),
+                optionalLong(metrics.deadlineMissCountMain300),
                 f4(metrics.maxDeadlineMissSeconds),
                 f4(metrics.avgDeadlineMissSeconds), f4(metrics.onDemandCost),
                 optionalF4(metrics.directMeasuredOnDemandCost),
@@ -216,6 +223,8 @@ public class CBMWResultCollector {
                 f4(metrics.onDemandUsageRatio), f4(metrics.spotUsageRatio),
                 f4(metrics.reservedCpuWorkShare),
                 f4(metrics.onDemandCpuWorkShare),
+                optionalF4(metrics.reservedCpuWorkShareMain300),
+                optionalF4(metrics.onDemandCpuWorkShareMain300),
                 Integer.toString(metrics.provisionedOnDemandVms),
                 f4(metrics.onDemandVmUtilization),
                 Integer.toString(metrics.deadlineRiskTasks),
@@ -295,6 +304,10 @@ public class CBMWResultCollector {
         return Double.isFinite(value) ? f4(value) : "";
     }
 
+    private static String optionalLong(long value) {
+        return value >= 0 ? Long.toString(value) : "";
+    }
+
     /** Paper Eq. 20: mean positive normalized deadline overrun. */
     private double paperTimeViolation() {
         if (allWorkflows.isEmpty()) return 0.0;
@@ -313,6 +326,54 @@ public class CBMWResultCollector {
         return allWorkflows.stream().filter(w -> w.isAccepted()
                 && w.getCompletionTime() < Double.MAX_VALUE
                 && w.getCompletionTime() > w.getDeadline()).count();
+    }
+
+    /** Main-cohort task CPU shares and admitted workflow deadline misses. */
+    private Main300Metrics main300Metrics(String scenario) {
+        if (!scenario.endsWith("_full500") || allWorkflows.size() != 500) {
+            return new Main300Metrics(Double.NaN, Double.NaN, -1);
+        }
+        Set<Integer> mainIds = new HashSet<>();
+        long misses = 0;
+        for (int i = 100; i < 400; i++) {
+            WorkflowRecord workflow = allWorkflows.get(i);
+            mainIds.add(workflow.getWorkflowId());
+            if (workflow.isAccepted()
+                    && workflow.getCompletionTime() < Double.MAX_VALUE
+                    && workflow.getCompletionTime() > workflow.getDeadline()) {
+                misses++;
+            }
+        }
+
+        double totalWork = 0.0;
+        double reservedWork = 0.0;
+        double onDemandWork = 0.0;
+        for (TaskExecutionRecord task : accounting.getTaskRecords()) {
+            if (!mainIds.contains(task.getWorkflowId())
+                    || !Double.isFinite(task.getFinishTime())) continue;
+            double work = task.getExecutionTime() * task.getTaskCores();
+            if (!Double.isFinite(work) || work < 0.0) continue;
+            totalWork += work;
+            if ("Reserved".equals(task.getVmType())) reservedWork += work;
+            if ("On-Demand".equals(task.getVmType())) onDemandWork += work;
+        }
+        return new Main300Metrics(
+                totalWork > 0.0 ? reservedWork / totalWork : 0.0,
+                totalWork > 0.0 ? onDemandWork / totalWork : 0.0,
+                misses);
+    }
+
+    private static final class Main300Metrics {
+        final double reservedCpuWorkShare;
+        final double onDemandCpuWorkShare;
+        final long deadlineMissCount;
+
+        Main300Metrics(double reservedCpuWorkShare,
+                       double onDemandCpuWorkShare, long deadlineMissCount) {
+            this.reservedCpuWorkShare = reservedCpuWorkShare;
+            this.onDemandCpuWorkShare = onDemandCpuWorkShare;
+            this.deadlineMissCount = deadlineMissCount;
+        }
     }
 
     private double maximumDeadlineMissSeconds() {
@@ -491,6 +552,7 @@ public class CBMWResultCollector {
         public final double countViolation;
         public final double timeViolation;
         public final long deadlineMissCount;
+        public final long deadlineMissCountMain300;
         public final double maxDeadlineMissSeconds;
         public final double avgDeadlineMissSeconds;
         public final double onDemandCost;
@@ -513,6 +575,8 @@ public class CBMWResultCollector {
         public final double spotUsageRatio;
         public final double reservedCpuWorkShare;
         public final double onDemandCpuWorkShare;
+        public final double reservedCpuWorkShareMain300;
+        public final double onDemandCpuWorkShareMain300;
         public final int provisionedOnDemandVms;
         public final double onDemandVmUtilization;
         public final int deadlineRiskTasks;
@@ -565,10 +629,13 @@ public class CBMWResultCollector {
                                double spotUsageRatio,
                                double reservedCpuWorkShare,
                                double onDemandCpuWorkShare,
+                               double reservedCpuWorkShareMain300,
+                               double onDemandCpuWorkShareMain300,
                                ResourceAccountingSummary resourceSummary,
                                int reservedInstanceCount,
                                double onDemandVmUtilization,
                                int deadlineRiskTasks, long deadlineMissCount,
+                               long deadlineMissCountMain300,
                                double maxDeadlineMissSeconds,
                                double avgDeadlineMissSeconds) {
             this.scenario = scenario;
@@ -592,6 +659,7 @@ public class CBMWResultCollector {
             this.countViolation = countViolation;
             this.timeViolation = timeViolation;
             this.deadlineMissCount = deadlineMissCount;
+            this.deadlineMissCountMain300 = deadlineMissCountMain300;
             this.maxDeadlineMissSeconds = maxDeadlineMissSeconds;
             this.avgDeadlineMissSeconds = avgDeadlineMissSeconds;
             this.onDemandCost = onDemandCost;
@@ -613,6 +681,8 @@ public class CBMWResultCollector {
             this.spotUsageRatio = spotUsageRatio;
             this.reservedCpuWorkShare = reservedCpuWorkShare;
             this.onDemandCpuWorkShare = onDemandCpuWorkShare;
+            this.reservedCpuWorkShareMain300 = reservedCpuWorkShareMain300;
+            this.onDemandCpuWorkShareMain300 = onDemandCpuWorkShareMain300;
             this.resourceSummary = resourceSummary;
             this.reservedInstanceCount = reservedInstanceCount;
             this.reservedCoresPerInstance = reservedInstanceCount > 0
