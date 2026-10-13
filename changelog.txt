@@ -1,2 +1,0 @@
-2013 Sep 26
-Add support of CloudSim 3.0.3

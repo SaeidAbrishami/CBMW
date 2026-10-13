@@ -76,9 +76,7 @@ directly; the batch launcher uses 60 seconds.
 Combined per-scenario metrics, aggregate metrics and planning/dispatch timing
 are written to `Output/batch/combined/`. Individual runs retain their
 `task_execution.csv`, run log and performance CSV under
-`Output/batch/arrival<mean>_alpha<factor>/`. Deadline miss time is the positive
-difference between actual workflow completion and its deadline; the reported
-average uses completed, admitted workflows that missed. The
+`Output/batch/arrival<mean>_alpha<factor>/`. A deadline overrun is counted as a miss at 1.0 second or more. Miss seconds retain the full actual lateness for those workflows; the reported average uses completed, admitted workflows that missed. The
 `directMeasuredOnDemandCost` column counts costs from workflows 101–400 in
 the full trace. The default task allocation is a synthetic 1 vCPU / 2 GiB;
 the DAX files do not include CPU/RAM task profiles.
@@ -680,7 +678,7 @@ python plot_gantt.py cbmw_detail.log out.png 0 1000
 
 | Library | Version | Purpose |
 |---------|---------|---------|
-| WorkflowSim / CloudSim | 1.0 / 3.0.3 | Discrete-event simulation core (included compiled in `out/`) |
+| WorkflowSim / CloudSim | 1.0 / 3.0.3 | Discrete-event simulation core (compiled from `sources/`) |
 | commons-math3 | 3.2 | Statistical utilities |
 | jdom | 2.0.0 | DAX XML parsing |
 | flanagan | — | Numerical methods |
