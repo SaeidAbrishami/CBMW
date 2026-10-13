@@ -141,7 +141,8 @@ public class CBMWDetailedResultExporter {
                 * HybridVmPool.RESERVED_CORES * workloadDuration;
         double meanDelay = workflows.stream()
                 .filter(w -> w.getCompletionTime() < Double.MAX_VALUE)
-                .mapToDouble(w -> Math.max(0.0, w.getCompletionTime() - w.getDeadline()))
+                .mapToDouble(w -> DeadlineOutcome.missSeconds(
+                        w.getCompletionTime(), w.getDeadline()))
                 .filter(d -> d > 0.0)
                 .average().orElse(0.0);
 
@@ -229,7 +230,7 @@ public class CBMWDetailedResultExporter {
 
             writer.write("========== SIMULATION SUMMARY ==========\n");
             writer.write(String.format(Locale.US, "Scheduling Algorithm: %s%n", algorithm));
-            if (algorithm.startsWith("CBMW")) {
+            if ("CBMW".equals(algorithm)) {
                 writer.write(String.format(Locale.US,
                         "Planning Runtime Margin (alpha): %.3f%n",
                         PaperRuntimeModel.PLANNING_ALPHA));

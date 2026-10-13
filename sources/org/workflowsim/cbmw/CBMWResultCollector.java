@@ -315,8 +315,9 @@ public class CBMWResultCollector {
         for (WorkflowRecord workflow : allWorkflows) {
             double completion = workflow.getCompletionTime();
             double span = workflow.getDeadline() - workflow.getArrivalTime();
-            if (completion < Double.MAX_VALUE && span > 0.0) {
-                sum += Math.max(0.0, completion - workflow.getDeadline()) / span;
+            if (span > 0.0) {
+                sum += DeadlineOutcome.missSeconds(
+                        completion, workflow.getDeadline()) / span;
             }
         }
         return sum / allWorkflows.size();
@@ -324,8 +325,8 @@ public class CBMWResultCollector {
 
     private long deadlineMissCount() {
         return allWorkflows.stream().filter(w -> w.isAccepted()
-                && w.getCompletionTime() < Double.MAX_VALUE
-                && w.getCompletionTime() > w.getDeadline()).count();
+                && DeadlineOutcome.isMiss(
+                        w.getCompletionTime(), w.getDeadline())).count();
     }
 
     /** Main-cohort task CPU shares and admitted workflow deadline misses. */
@@ -338,9 +339,8 @@ public class CBMWResultCollector {
         for (int i = 100; i < 400; i++) {
             WorkflowRecord workflow = allWorkflows.get(i);
             mainIds.add(workflow.getWorkflowId());
-            if (workflow.isAccepted()
-                    && workflow.getCompletionTime() < Double.MAX_VALUE
-                    && workflow.getCompletionTime() > workflow.getDeadline()) {
+            if (workflow.isAccepted() && DeadlineOutcome.isMiss(
+                    workflow.getCompletionTime(), workflow.getDeadline())) {
                 misses++;
             }
         }
@@ -378,18 +378,16 @@ public class CBMWResultCollector {
 
     private double maximumDeadlineMissSeconds() {
         return allWorkflows.stream().filter(WorkflowRecord::isAccepted)
-                .filter(w -> w.getCompletionTime() < Double.MAX_VALUE)
-                .mapToDouble(w -> Math.max(0.0,
-                        w.getCompletionTime() - w.getDeadline()))
+                .mapToDouble(w -> DeadlineOutcome.missSeconds(
+                        w.getCompletionTime(), w.getDeadline()))
                 .max().orElse(0.0);
     }
 
     /** Arithmetic mean over completed, admitted workflows that missed. */
     private double averageDeadlineMissSeconds() {
         return allWorkflows.stream().filter(WorkflowRecord::isAccepted)
-                .filter(w -> w.getCompletionTime() < Double.MAX_VALUE)
-                .mapToDouble(w -> Math.max(0.0,
-                        w.getCompletionTime() - w.getDeadline()))
+                .mapToDouble(w -> DeadlineOutcome.missSeconds(
+                        w.getCompletionTime(), w.getDeadline()))
                 .filter(miss -> miss > 0.0).average().orElse(0.0);
     }
 

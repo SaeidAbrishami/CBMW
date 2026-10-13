@@ -851,7 +851,8 @@ public abstract class AbstractWorkflowBroker extends WorkflowScheduler {
         onWorkflowTaskComplete(wfr, taskId, now);
 
         if (wfr.isComplete()) {
-            boolean met = wfr.getCompletionTime() <= wfr.getDeadline();
+            boolean met = DeadlineOutcome.isMet(
+                    wfr.getCompletionTime(), wfr.getDeadline());
             wfr.setDeadlineMet(met);
             accounting.markWorkflowComplete(wfr, tightness);
             activeWorkflows.remove(wfId);
