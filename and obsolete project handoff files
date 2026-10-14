@@ -1,0 +1,276 @@
+ .claude/settings.local.json                        |    102 [31m-[m
+ .../inspect_results.mjs                            |     57 [31m-[m
+ .../node_modules/.modules.yaml                     |    259 [31m-[m
+ .../node_modules/.package-map.json                 |      1 [31m-[m
+ .../node_modules/.pnpm-workspace-state-v1.json     |     72 [31m-[m
+ .../node_modules/.pnpm/lock.yaml                   |    909 [31m-[m
+ .../node_modules/@img/colour/LICENSE.md            |     82 [31m-[m
+ .../node_modules/@img/colour/README.md             |     15 [31m-[m
+ .../node_modules/@img/colour/color.cjs             |   1596 [31m-[m
+ .../node_modules/@img/colour/index.cjs             |      1 [31m-[m
+ .../node_modules/@img/colour/index.d.ts            |    929 [31m-[m
+ .../node_modules/@img/colour/package.json          |     58 [31m-[m
+ .../node_modules/@img/sharp-win32-x64/LICENSE      |    191 [31m-[m
+ .../node_modules/@img/sharp-win32-x64/README.md    |     59 [31m-[m
+ .../node_modules/@img/sharp-win32-x64/index.cjs    |      1 [31m-[m
+ .../@img/sharp-win32-x64/lib/libvips-42.dll        |    Bin [31m18630448[m -> [32m0[m bytes
+ .../sharp-win32-x64/lib/libvips-cpp-8.18.6.dll     |    Bin [31m348976[m -> [32m0[m bytes
+ .../lib/sharp-win32-x64-0.35.4.node                |    Bin [31m458032[m -> [32m0[m bytes
+ .../node_modules/@img/sharp-win32-x64/package.json |     40 [31m-[m
+ .../@img/sharp-win32-x64/versions.json             |     30 [31m-[m
+ .../@napi-rs/canvas-win32-x64-msvc/README.md       |      3 [31m-[m
+ .../@napi-rs/canvas-win32-x64-msvc/icudtl.dat      |    Bin [31m10468208[m -> [32m0[m bytes
+ .../@napi-rs/canvas-win32-x64-msvc/package.json    |     45 [31m-[m
+ .../canvas-win32-x64-msvc/skia.win32-x64-msvc.node |    Bin [31m27310384[m -> [32m0[m bytes
+ .../node_modules/@napi-rs/canvas/LICENSE           |     21 [31m-[m
+ .../node_modules/@napi-rs/canvas/README.md         |    448 [31m-[m
+ .../node_modules/@napi-rs/canvas/geometry.js       |    873 [31m-[m
+ .../node_modules/@napi-rs/canvas/index.d.ts        |   1097 [31m-[m
+ .../node_modules/@napi-rs/canvas/index.js          |    196 [31m-[m
+ .../node_modules/@napi-rs/canvas/js-binding.js     |    464 [31m-[m
+ .../node_modules/@napi-rs/canvas/load-image.js     |    156 [31m-[m
+ .../node_modules/@napi-rs/canvas/node-canvas.d.ts  |    216 [31m-[m
+ .../node_modules/@napi-rs/canvas/node-canvas.js    |    379 [31m-[m
+ .../node_modules/@napi-rs/canvas/package.json      |    176 [31m-[m
+ .../node_modules/@oai/artifact-tool/LICENSE.md     |     18 [31m-[m
+ .../dist/artifact-session-mcp/server.mjs           |      8 [31m-[m
+ .../dist/artifact-session-mcp/worker.mjs           |      4 [31m-[m
+ .../dist/artifact-session/host-client.mjs          |      2 [31m-[m
+ .../dist/artifact-session/host-daemon.mjs          |   2851 [31m-[m
+ .../artifact-tool/dist/artifact-session/index.mjs  |   2844 [31m-[m
+ .../dist/artifact-session/service.mjs              |      2 [31m-[m
+ .../@oai/artifact-tool/dist/artifact_tool.mjs      |   3216 [31m-[m
+ .../artifact-tool/dist/embedded_font_decoder.wasm  |    Bin [31m124946[m -> [32m0[m bytes
+ .../artifact-tool/dist/presentation-jsx/index.mjs  |      2 [31m-[m
+ .../dist/presentation-jsx/jsx-dev-runtime.mjs      |      2 [31m-[m
+ .../dist/presentation-jsx/jsx-runtime.mjs          |      2 [31m-[m
+ .../docs/presentations/API_QUICK_START.md          |    274 [31m-[m
+ .../docs/presentations/api/API_DOCS.md             |    263 [31m-[m
+ .../api/references/auto-layout.spec.md             |    100 [31m-[m
+ .../presentations/api/references/charts.spec.md    |    263 [31m-[m
+ .../docs/presentations/api/references/comments.md  |    103 [31m-[m
+ .../presentations/api/references/connectors.md     |    206 [31m-[m
+ .../api/references/cookbook/imported-deck.md       |    187 [31m-[m
+ .../api/references/cookbook/layout.md              |    419 [31m-[m
+ .../docs/presentations/api/references/fill.spec.md |    186 [31m-[m
+ .../docs/presentations/api/references/help.md      |    223 [31m-[m
+ .../presentations/api/references/images.spec.md    |    286 [31m-[m
+ .../docs/presentations/api/references/inspect.md   |    176 [31m-[m
+ .../docs/presentations/api/references/jsx.md       |    227 [31m-[m
+ .../presentations/api/references/layout.spec.md    |     98 [31m-[m
+ .../presentations/api/references/master.spec.md    |     57 [31m-[m
+ .../api/references/presentation.spec.md            |    255 [31m-[m
+ .../presentations/api/references/rich-text.spec.md |    253 [31m-[m
+ .../presentations/api/references/shapes.spec.md    |    239 [31m-[m
+ .../presentations/api/references/slide.spec.md     |    187 [31m-[m
+ .../api/references/speaker-notes.spec.md           |     49 [31m-[m
+ .../presentations/api/references/styles.spec.md    |     85 [31m-[m
+ .../presentations/api/references/tables.spec.md    |    187 [31m-[m
+ .../presentations/api/references/theme.spec.md     |     85 [31m-[m
+ .../docs/presentations/api/references/tokens.md    |    447 [31m-[m
+ .../docs/spreadsheets/API_QUICK_START.md           |    503 [31m-[m
+ .../docs/spreadsheets/api/API_DOCS.md              |    196 [31m-[m
+ .../api/references/charts-drawings.spec.md         |    101 [31m-[m
+ .../api/references/comments-notes-names.spec.md    |     78 [31m-[m
+ .../spreadsheets/api/references/formatting.spec.md |     98 [31m-[m
+ .../spreadsheets/api/references/formulas.spec.md   |     74 [31m-[m
+ .../spreadsheets/api/references/import-export.md   |    152 [31m-[m
+ .../spreadsheets/api/references/inspect-help.md    |    121 [31m-[m
+ .../spreadsheets/api/references/ranges.spec.md     |    148 [31m-[m
+ .../spreadsheets/api/references/tables.spec.md     |     72 [31m-[m
+ .../spreadsheets/api/references/workbook.spec.md   |    129 [31m-[m
+ .../spreadsheets/api/references/worksheets.spec.md |    119 [31m-[m
+ .../spreadsheets/examples/chart_suggestions.ts     |     97 [31m-[m
+ .../examples/formula_trace_and_help.ts             |    177 [31m-[m
+ .../examples/inspect_existing_workbooks.ts         |    113 [31m-[m
+ .../spreadsheets/examples/quick_start_example.ts   |    146 [31m-[m
+ .../docs/spreadsheets/formulas/database.md         |     32 [31m-[m
+ .../docs/spreadsheets/formulas/date-time.md        |     34 [31m-[m
+ .../docs/spreadsheets/formulas/engineering.md      |     34 [31m-[m
+ .../docs/spreadsheets/formulas/financial.md        |     32 [31m-[m
+ .../docs/spreadsheets/formulas/information.md      |     34 [31m-[m
+ .../docs/spreadsheets/formulas/logical.md          |     63 [31m-[m
+ .../docs/spreadsheets/formulas/lookup-reference.md |     34 [31m-[m
+ .../docs/spreadsheets/formulas/math-trig.md        |     33 [31m-[m
+ .../docs/spreadsheets/formulas/statistical.md      |     32 [31m-[m
+ .../docs/spreadsheets/formulas/text.md             |     34 [31m-[m
+ .../docs/spreadsheets/references/comments.md       |     62 [31m-[m
+ .../references/conditional-formatting.spec.md      |     81 [31m-[m
+ .../spreadsheets/references/data-tables.spec.md    |     31 [31m-[m
+ .../references/data-validations.spec.md            |     73 [31m-[m
+ .../spreadsheets/references/defined-names.spec.md  |     43 [31m-[m
+ .../docs/spreadsheets/references/drawings.spec.md  |    144 [31m-[m
+ .../docs/spreadsheets/references/enums.md          |    647 [31m-[m
+ .../docs/spreadsheets/references/images.spec.md    |     85 [31m-[m
+ .../docs/spreadsheets/references/ops/chart.md      |     86 [31m-[m
+ .../docs/spreadsheets/references/ops/comments.md   |     29 [31m-[m
+ .../references/ops/conditionalformat.md            |     52 [31m-[m
+ .../spreadsheets/references/ops/datavalidation.md  |     59 [31m-[m
+ .../docs/spreadsheets/references/ops/image.md      |     47 [31m-[m
+ .../docs/spreadsheets/references/ops/names.md      |     67 [31m-[m
+ .../docs/spreadsheets/references/ops/range.md      |    165 [31m-[m
+ .../docs/spreadsheets/references/ops/shape.md      |     57 [31m-[m
+ .../docs/spreadsheets/references/ops/sheet.md      |     26 [31m-[m
+ .../docs/spreadsheets/references/ops/sparkline.md  |     69 [31m-[m
+ .../docs/spreadsheets/references/ops/table.md      |     71 [31m-[m
+ .../docs/spreadsheets/references/ops/thread.md     |     97 [31m-[m
+ .../docs/spreadsheets/references/ranges.spec.md    |     68 [31m-[m
+ .../spreadsheets/references/sparklines.spec.md     |     78 [31m-[m
+ .../docs/spreadsheets/references/styles.spec.md    |    120 [31m-[m
+ .../docs/spreadsheets/references/tables.spec.md    |     55 [31m-[m
+ .../docs/spreadsheets/references/workbook.spec.md  |     31 [31m-[m
+ .../artifact-tool/node_modules/.package-map.json   |      1 [31m-[m
+ .../node_modules/.pnpm-workspace-state-v1.json     |     48 [31m-[m
+ .../node_modules/@oai/walnut/package.json          |      9 [31m-[m
+ .../wasm/DocumentFormat.OpenXml.4g1x2psnat.wasm    |    Bin [31m4381465[m -> [32m0[m bytes
+ ...ocumentFormat.OpenXml.Framework.kx8sy06e2n.wasm |    Bin [31m280853[m -> [32m0[m bytes
+ .../walnut/wasm/Google.Protobuf.ze35jf5cfr.wasm    |    Bin [31m315669[m -> [32m0[m bytes
+ .../System.Collections.Concurrent.314czp46j7.wasm  |    Bin [31m19733[m -> [32m0[m bytes
+ .../System.Collections.NonGeneric.m8869tz8tq.wasm  |    Bin [31m7445[m -> [32m0[m bytes
+ .../System.Collections.Specialized.33e5nhr777.wasm |    Bin [31m9493[m -> [32m0[m bytes
+ .../walnut/wasm/System.Collections.zs8tj0a4pt.wasm |    Bin [31m23829[m -> [32m0[m bytes
+ .../wasm/System.ComponentModel.57ng7ofebt.wasm     |    Bin [31m4885[m -> [32m0[m bytes
+ ...ystem.ComponentModel.Primitives.ae299o1he4.wasm |    Bin [31m6933[m -> [32m0[m bytes
+ ...em.ComponentModel.TypeConverter.3uohgqehbk.wasm |    Bin [31m45333[m -> [32m0[m bytes
+ .../walnut/wasm/System.Console.nj273v0hc9.wasm     |    Bin [31m14613[m -> [32m0[m bytes
+ ...em.Diagnostics.DiagnosticSource.edalg4cfrk.wasm |    Bin [31m18197[m -> [32m0[m bytes
+ .../wasm/System.IO.Compression.wwftzdh637.wasm     |    Bin [31m73493[m -> [32m0[m bytes
+ .../wasm/System.IO.Packaging.ejb20qp7p2.wasm       |    Bin [31m74517[m -> [32m0[m bytes
+ .../wasm/System.Linq.Expressions.bdje6lf7iv.wasm   |    Bin [31m75541[m -> [32m0[m bytes
+ .../@oai/walnut/wasm/System.Linq.g3mc2yd2pn.wasm   |    Bin [31m37653[m -> [32m0[m bytes
+ .../@oai/walnut/wasm/System.Memory.hnms2u3pku.wasm |    Bin [31m12053[m -> [32m0[m bytes
+ .../walnut/wasm/System.Net.Http.5bp2v57cl6.wasm    |    Bin [31m135957[m -> [32m0[m bytes
+ .../wasm/System.Net.Primitives.ky1mogzjxv.wasm     |    Bin [31m7445[m -> [32m0[m bytes
+ .../walnut/wasm/System.ObjectModel.7otvr9nrzw.wasm |    Bin [31m12565[m -> [32m0[m bytes
+ .../wasm/System.Private.CoreLib.hjbmifyfnb.wasm    |    Bin [31m1558805[m -> [32m0[m bytes
+ .../walnut/wasm/System.Private.Uri.yeg7rwgt8u.wasm |    Bin [31m66837[m -> [32m0[m bytes
+ .../walnut/wasm/System.Private.Xml.9fr1mb9qxg.wasm |    Bin [31m496405[m -> [32m0[m bytes
+ .../wasm/System.Private.Xml.Linq.xok481983t.wasm   |    Bin [31m40213[m -> [32m0[m bytes
+ ...time.InteropServices.JavaScript.3e2qycdlpj.wasm |    Bin [31m42261[m -> [32m0[m bytes
+ .../System.Security.Cryptography.ze6q2kptrd.wasm   |    Bin [31m20245[m -> [32m0[m bytes
+ .../System.Text.RegularExpressions.kqdi1s7teb.wasm |    Bin [31m229653[m -> [32m0[m bytes
+ .../walnut/wasm/System.Xml.Linq.h2itojlcog.wasm    |    Bin [31m4373[m -> [32m0[m bytes
+ .../@oai/walnut/wasm/System.w40v23gp3a.wasm        |    Bin [31m4373[m -> [32m0[m bytes
+ .../@oai/walnut/wasm/Walnut.dq4lnlv9eu.wasm        |    Bin [31m2978073[m -> [32m0[m bytes
+ .../node_modules/@oai/walnut/wasm/blazor.boot.json |     88 [31m-[m
+ .../node_modules/@oai/walnut/wasm/dotnet.d.ts      |    779 [31m-[m
+ .../node_modules/@oai/walnut/wasm/dotnet.js        |      4 [31m-[m
+ .../@oai/walnut/wasm/dotnet.native.4mgrexaapy.js   |     16 [31m-[m
+ .../@oai/walnut/wasm/dotnet.native.nktwk6xqdw.wasm |    Bin [31m1525769[m -> [32m0[m bytes
+ .../@oai/walnut/wasm/dotnet.runtime.x4l8oxbjyh.js  |      4 [31m-[m
+ .../artifact-tool/node_modules/agent-base/LICENSE  |     22 [31m-[m
+ .../node_modules/agent-base/README.md              |     69 [31m-[m
+ .../node_modules/agent-base/dist/helpers.d.ts      |     15 [31m-[m
+ .../node_modules/agent-base/dist/helpers.d.ts.map  |      1 [31m-[m
+ .../node_modules/agent-base/dist/helpers.js        |     66 [31m-[m
+ .../node_modules/agent-base/dist/helpers.js.map    |      1 [31m-[m
+ .../node_modules/agent-base/dist/index.d.ts        |     41 [31m-[m
+ .../node_modules/agent-base/dist/index.d.ts.map    |      1 [31m-[m
+ .../node_modules/agent-base/dist/index.js          |    178 [31m-[m
+ .../node_modules/agent-base/dist/index.js.map      |      1 [31m-[m
+ .../node_modules/agent-base/package.json           |     46 [31m-[m
+ .../@oai/artifact-tool/node_modules/debug/LICENSE  |     20 [31m-[m
+ .../artifact-tool/node_modules/debug/README.md     |    481 [31m-[m
+ .../artifact-tool/node_modules/debug/package.json  |     64 [31m-[m
+ .../node_modules/debug/src/browser.js              |    272 [31m-[m
+ .../artifact-tool/node_modules/debug/src/common.js |    292 [31m-[m
+ .../artifact-tool/node_modules/debug/src/index.js  |     10 [31m-[m
+ .../artifact-tool/node_modules/debug/src/node.js   |    263 [31m-[m
+ .../artifact-tool/node_modules/detect-libc/LICENSE |    201 [31m-[m
+ .../node_modules/detect-libc/README.md             |    163 [31m-[m
+ .../node_modules/detect-libc/index.d.ts            |     14 [31m-[m
+ .../node_modules/detect-libc/lib/detect-libc.js    |    313 [31m-[m
+ .../node_modules/detect-libc/lib/elf.js            |     39 [31m-[m
+ .../node_modules/detect-libc/lib/filesystem.js     |     51 [31m-[m
+ .../node_modules/detect-libc/lib/process.js        |     24 [31m-[m
+ .../node_modules/detect-libc/package.json          |     44 [31m-[m
+ .../node_modules/follow-redirects/LICENSE          |     18 [31m-[m
+ .../node_modules/follow-redirects/README.md        |    157 [31m-[m
+ .../node_modules/follow-redirects/debug.js         |     15 [31m-[m
+ .../node_modules/follow-redirects/http.js          |      1 [31m-[m
+ .../node_modules/follow-redirects/https.js         |      1 [31m-[m
+ .../node_modules/follow-redirects/index.js         |    709 [31m-[m
+ .../node_modules/follow-redirects/package.json     |     58 [31m-[m
+ .../node_modules/https-proxy-agent/LICENSE         |     22 [31m-[m
+ .../node_modules/https-proxy-agent/README.md       |     70 [31m-[m
+ .../node_modules/https-proxy-agent/dist/index.d.ts |     47 [31m-[m
+ .../https-proxy-agent/dist/index.d.ts.map          |      1 [31m-[m
+ .../node_modules/https-proxy-agent/dist/index.js   |    180 [31m-[m
+ .../https-proxy-agent/dist/index.js.map            |      1 [31m-[m
+ .../dist/parse-proxy-response.d.ts                 |     15 [31m-[m
+ .../dist/parse-proxy-response.d.ts.map             |      1 [31m-[m
+ .../https-proxy-agent/dist/parse-proxy-response.js |    101 [31m-[m
+ .../dist/parse-proxy-response.js.map               |      1 [31m-[m
+ .../node_modules/https-proxy-agent/package.json    |     50 [31m-[m
+ .../@oai/artifact-tool/node_modules/ms/index.js    |    162 [31m-[m
+ .../@oai/artifact-tool/node_modules/ms/license.md  |     21 [31m-[m
+ .../artifact-tool/node_modules/ms/package.json     |     38 [31m-[m
+ .../@oai/artifact-tool/node_modules/ms/readme.md   |     59 [31m-[m
+ .../artifact-tool/node_modules/parenthesis/LICENSE |      8 [31m-[m
+ .../node_modules/parenthesis/README.md             |     56 [31m-[m
+ .../node_modules/parenthesis/index.d.ts            |     46 [31m-[m
+ .../node_modules/parenthesis/index.js              |    135 [31m-[m
+ .../node_modules/parenthesis/package.json          |     46 [31m-[m
+ .../artifact-tool/node_modules/skia-canvas/LICENSE |     21 [31m-[m
+ .../node_modules/skia-canvas/README.md             |    429 [31m-[m
+ .../node_modules/skia-canvas/lib/browser.js        |    256 [31m-[m
+ .../node_modules/skia-canvas/lib/classes/canvas.js |    327 [31m-[m
+ .../skia-canvas/lib/classes/context.js             |    305 [31m-[m
+ .../node_modules/skia-canvas/lib/classes/css.js    |    398 [31m-[m
+ .../skia-canvas/lib/classes/geometry.js            |    895 [31m-[m
+ .../node_modules/skia-canvas/lib/classes/gui.js    |    352 [31m-[m
+ .../skia-canvas/lib/classes/imagery.js             |    253 [31m-[m
+ .../node_modules/skia-canvas/lib/classes/neon.js   |    101 [31m-[m
+ .../node_modules/skia-canvas/lib/classes/path.js   |    113 [31m-[m
+ .../skia-canvas/lib/classes/typography.js          |     47 [31m-[m
+ .../node_modules/skia-canvas/lib/fonts/fonts.conf  |     25 [31m-[m
+ .../node_modules/skia-canvas/lib/index.d.ts        |   1052 [31m-[m
+ .../node_modules/skia-canvas/lib/index.js          |     22 [31m-[m
+ .../node_modules/skia-canvas/lib/index.mjs         |     24 [31m-[m
+ .../node_modules/skia-canvas/lib/prebuild.mjs      |    155 [31m-[m
+ .../node_modules/skia-canvas/lib/skia.node         |    Bin [31m24247088[m -> [32m0[m bytes
+ .../node_modules/skia-canvas/lib/urls.js           |     61 [31m-[m
+ .../node_modules/skia-canvas/package.json          |     81 [31m-[m
+ .../node_modules/string-split-by/.eslintrc.json    |     44 [31m-[m
+ .../node_modules/string-split-by/.travis.yml       |      5 [31m-[m
+ .../node_modules/string-split-by/index.js          |     56 [31m-[m
+ .../node_modules/string-split-by/package.json      |     33 [31m-[m
+ .../node_modules/string-split-by/readme.md         |     38 [31m-[m
+ .../node_modules/string-split-by/test.js           |    175 [31m-[m
+ .../@oai/artifact-tool/oai_js_emf.wasm             |    Bin [31m296222[m -> [32m0[m bytes
+ .../node_modules/@oai/artifact-tool/package.json   |     41 [31m-[m
+ .../@oai/artifact-tool/pnpm-workspace.yaml         |     13 [31m-[m
+ .../@pdf-lib/standard-fonts/LICENSE.md             |     21 [31m-[m
+ .../node_modules/@pdf-lib/standard-fonts/README.md |     83 [31m-[m
+ .../@pdf-lib/standard-fonts/dist/standard-fonts.js |   7023 [31m-[m
+ .../standard-fonts/dist/standard-fonts.min.js      |      1 [31m-[m
+ .../standard-fonts/es/Courier-Bold.compressed.json |      1 [31m-[m
+ .../es/Courier-BoldOblique.compressed.json         |      1 [31m-[m
+ .../es/Courier-Oblique.compressed.json             |      1 [31m-[m
+ .../standard-fonts/es/Courier.compressed.json      |      1 [31m-[m
+ .../@pdf-lib/standard-fonts/es/Encoding.d.ts       |     24 [31m-[m
+ .../@pdf-lib/standard-fonts/es/Encoding.js         |     34 [31m-[m
+ .../@pdf-lib/standard-fonts/es/Font.d.ts           |     83 [31m-[m
+ .../@pdf-lib/standard-fonts/es/Font.js             |     83 [31m-[m
+ .../es/Helvetica-Bold.compressed.json              |      1 [31m-[m
+ .../es/Helvetica-BoldOblique.compressed.json       |      1 [31m-[m
+ .../es/Helvetica-Oblique.compressed.json           |      1 [31m-[m
+ .../standard-fonts/es/Helvetica.compressed.json    |      1 [31m-[m
+ .../standard-fonts/es/Symbol.compressed.json       |      1 [31m-[m
+ .../standard-fonts/es/Times-Bold.compressed.json   |      1 [31m-[m
+ .../es/Times-BoldItalic.compressed.json            |      1 [31m-[m
+ .../standard-fonts/es/Times-Italic.compressed.json |      1 [31m-[m
+ .../standard-fonts/es/Times-Roman.compressed.json  |      1 [31m-[m
+ .../standard-fonts/es/ZapfDingbats.compressed.json |      1 [31m-[m
+ .../es/all-encodings.compressed.json               |      1 [31m-[m
+ .../@pdf-lib/standard-fonts/es/index.d.ts          |      2 [31m-[m
+ .../@pdf-lib/standard-fonts/es/index.js            |      2 [31m-[m
+ .../@pdf-lib/standard-fonts/es/utils.d.ts          |      3 [31m-[m
+ .../@pdf-lib/standard-fonts/es/utils.js            |     62 [31m-[m
+ .../lib/Courier-Bold.compressed.json               |      1 [31m-[m
+ .../lib/Courier-BoldOblique.compressed.json        |      1 [31m-[m
+ .../lib/Courier-Oblique.compressed.json            |      1 [31m-[m
+ .../standard-fonts/lib/Courier.compressed.json     |      1 [31m-[m
+ .../@pdf-lib/standard-fonts/lib/Encoding.d.ts      |     24 [31m-[m
+ .../@pdf-lib/standard-fonts/lib/Encoding.js        |     39 [31m-[m
+ .../@pdf-lib/standard-fonts/lib/Fon
