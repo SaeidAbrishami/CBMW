@@ -85,8 +85,11 @@ public class NegotiationModule {
     }
 
     /**
-     * Computes the paper's post-planning price quote. With no simulated user,
-     * every quote is accepted automatically.
+     * Computes the post-planning price quote. The reserved VM rate covers the
+     * whole shared VM, so a reserved task pays for its fraction of the VM's
+     * cores over its planning duration. Idle reserved capacity is not allocated
+     * by this quote; the full lease remains part of actual cost accounting.
+     * With no simulated user, every quote is accepted automatically.
      */
     public double quoteExecutionPrice(WorkflowRecord wfr) {
         double reservedCost = 0.0;
@@ -98,7 +101,11 @@ public class NegotiationModule {
             double duration = wfr.getEstimatedExecTime(taskId);
             int vmId = wfr.getAssignedVm(taskId);
             if (vmId >= 0) {
-                reservedCost += duration * reservedPricePerSecond;
+                // Use floating-point division: tasks share the reserved VM.
+                // Memory has no separate charge in this CPU-based allocation.
+                double coreShare = (double) wfr.getTaskCores(taskId)
+                        / HybridVmPool.RESERVED_CORES;
+                reservedCost += duration * reservedPricePerSecond * coreShare;
             } else {
                 double billableDuration = Math.max(
                         HybridVmPool.ON_DEMAND_MIN_BILLING_SECONDS,
