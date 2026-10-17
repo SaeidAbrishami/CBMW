@@ -1,104 +1,39 @@
 # CBMW Workflow Simulation
 
-Implementation of the **CBMW** (Cost-efficient Broker for Multiple Workflows) algorithm on top of [WorkflowSim 1.0](https://github.com/WorkflowSim/WorkflowSim-1.0) / CloudSim 3.0.3.
+CBMW is a research simulator for scheduling multiple scientific workflows with deadlines over a hybrid pool of reserved VMs and on-demand containers. It is implemented in Java on [WorkflowSim 1.0](https://github.com/WorkflowSim/WorkflowSim-1.0) / CloudSim 3.0.3. The program simulates arrivals, planning, dispatch, provisioning, costs, and deadline outcomes; it does not provision real cloud resources.
 
-CBMW manages a hybrid pool of reserved VMs (fixed hourly cost) and on-demand containers (per-second cost) to schedule dynamically arriving scientific workflows while meeting user-specified deadlines at minimum cost.
+The central algorithm has four parts:
 
-This `codex/cbmw-exact-sst-paper` branch tests exact-time CBMW starts against
-the optimized periodic baseline on `codex/cbmw-config-concurrency`. A ready task
-can dispatch when its planned SST arrives, and a static on-demand order is
-issued at its planned SPT (`SST - 60 seconds`). Completion or container readiness
-can also dispatch an overdue task between ticks. Only attempts to advance tasks
-*before* their SST scan the full ready queue every five seconds. Static LFT/LST
-and reserved bookings use continuous time. Compare the two branches using the
-same scenario, workflow cap, runtime seed, JVM heap, and machine before choosing
-which method to report in the paper.
+1. **Negotiation** checks a workflow's deadline feasibility, calls the static planner, and quotes its estimated execution price. All feasible quotes are automatically accepted in the simulation.
+2. **Static planning** reserves capacity as late as feasible, leaving earlier slots for future arrivals. Tasks that cannot be placed on reserved VMs are planned on-demand.
+3. **Dynamic scheduling** starts ready tasks at their planned scheduled start times (SSTs). Every five simulated seconds it also checks whether future tasks can start earlier on reserved capacity.
+4. **Provisioning** requests on-demand containers at their planned provisioning times and accounts for their lifecycle and costs.
 
-### Preliminary matched comparison
+The repository also contains the SG and DG greedy baselines, NOSF and CEWB adaptations, and CBMW ablations (Early, NoAdvance, Early-NoAdvance, and NoPlan). See [Algorithm overview](#algorithm-overview) and [baseline details](#nosf-baseline).
 
-Both versions were run sequentially on `arrival15_alpha1.2_full500`, with
-the same first 20 or 100 workflows, TXT runtimes, default resources, one
-repetition, 2 GiB JVM heap, and details/charts disabled. The times below
-include loading the 500-workflow manifest. These capped runs establish
-correctness and give an early performance indication; they are not the
-full 500/200 paper experiment.
+**Start here:** [Linux experiments](#run-cbmw-experiments-on-linux) · [Windows build](#build) · [inputs](#workflow-inputs-and-optional-workbook) · [results and metric definitions](#outputs-and-metrics) · [project structure](#project-structure)
 
-| Workflows | Version | Deadlines met | Wall time | Total cost | Simulated makespan |
-|-----------|---------|---------------|-----------|------------|--------------------|
-| 20 | Optimized periodic | 20/20 | 28.26 s | 40.9458 | 4790 s |
-| 20 | Exact SST | 20/20 | 26.97 s | 41.1113 | 4790 s |
-| 100 | Optimized periodic | 100/100 | 82.48 s | 78.9987 | 7760 s |
-| 100 | Exact SST | 100/100 | 52.94 s | 79.9981 | 7880 s |
+## Run CBMW experiments on Linux
 
-The 100-workflow exact-SST run started 4,226 tasks at fractional SSTs, and
-its planned on-demand orders occurred exactly 60 seconds before SST. Its
-runtime was lower in this single run, while total cost was higher because
-reserved rental covered an additional 120 simulated seconds. Repeat the full
-scenario pairs and compare both deadline success and cost before selecting the
-paper result.
-
-## Revised CBMW experiments on Linux (8 cores, 8 GiB)
-
-Edit `config/cbmw_experiments.txt`: line 1 selects `CBMW`, line 2 sets the
-number of concurrent experiments, and each subsequent line gives
-`mean_inter_arrival_seconds deadline_factor`. The supplied file has 18
-scenarios: means 15, 30, 45, 60, 75 and 90, with factors 1.2, 2 and 4.
+From the repository root, install Python 3 and JDK 17 (including `javac`), then run:
 
 ```bash
-bash scripts/run_cbmw_config.sh config/cbmw_experiments.txt
+python3 scripts/run_cbmw_config.py config/cbmw_experiments.txt --max-workflows 5
 ```
 
-The launcher compiles Java 17 sources and runs each scenario in an isolated
-CloudSim JVM. Each scenario executes the full 500-workflow trace and the
-compressed 200-workflow boundary trace once, preserving the same workflow
-identities and arrival pattern across deadline factors. Full runs on an 8 GiB
-machine use one JVM at a time with a 5120 MiB heap. The supplied config
-sets line 2 to `2` for a 16 GiB machine. A machine with more RAM can use a
-larger number on line 2;
-the launcher uses that number without silently reducing it. It checks physical
-RAM and container limits before starting, reserving 1536 MiB for the OS and
-native processes. If the requested JVM heaps would exceed that limit, it
-reports the largest safe number and stops. Small smoke tests capped at 100
-workflows use 1280 MiB per JVM.
-For example, run `python3 scripts/run_cbmw_config.py
-config/cbmw_experiments.txt --max-workflows 5` for a smoke test.
+This is a short smoke run. For full experiments, omit `--max-workflows`:
 
-During each dataset, the terminal and that scenario's `run.log` print a
-`[progress]` line every 60 seconds of wall-clock time. It reports distinct
-tasks started, completed tasks, and completion percentage of tasks in accepted
-workflows. `rejectedWorkflows` counts rejected workflows; their tasks are
-excluded from the completion denominator. Each configuration reports the full
-500 and edge 200 datasets separately, and a final progress line appears when
-each dataset finishes. The progress timer
-can be changed with `-Dcbmw.progress.interval.sec=N` when invoking Java
-directly; the batch launcher uses 60 seconds.
+```bash
+python3 scripts/run_cbmw_config.py config/cbmw_experiments.txt
+```
 
-Combined per-scenario metrics, aggregate metrics and planning/dispatch timing
-are written to `Output/batch/combined/`. Individual runs retain their
-`task_execution.csv`, run log and performance CSV under
-`Output/batch/arrival<mean>_alpha<factor>/`. A deadline overrun is counted as a miss at 1.0 second or more. Miss seconds retain the full actual lateness for those workflows; the reported average uses completed, admitted workflows that missed. The
-`directMeasuredOnDemandCost` column counts costs from workflows 101–400 in
-the full trace. The default task allocation is a synthetic 1 vCPU / 2 GiB;
-the DAX files do not include CPU/RAM task profiles.
+The launcher compiles sources into `Output/batch/build_classes/`, runs each configured scenario in an isolated JVM, and writes results under `Output/batch/`. The shell wrapper `bash scripts/run_cbmw_config.sh config/cbmw_experiments.txt` runs the same full experiment with the default output path.
 
-Use `python3 scripts/prepare_cbmw_manifests.py` to reproduce the 75/90-second
-traces and the corrected compressed boundary traces. The simulation assumes
-one bounded-uniform runtime sample per task from the supplied TXT files, a
-20% conservative planning margin, one 60-second allowance in generated
-deadlines, 5-second advancement checks and 60-second unbilled provisioning for
-each on-demand container.
+The text configuration has three parts: line 1 lists algorithms, line 2 sets the maximum number of simultaneous scenario JVMs, and each remaining line is `mean_inter_arrival_seconds deadline_factor`. The supplied [configuration](config/cbmw_experiments.txt) selects `CBMW SG DG`, permits two concurrent scenarios, and lists 18 combinations of arrival mean 15–90 seconds and deadline factor 1.2, 2, or 4. Each scenario runs both the full 500-workflow trace and its paired edge-200 trace. Other supported names include `NOSF`, `CEWB`, and the CBMW ablations in [`config/cbmw_ablation.txt`](config/cbmw_ablation.txt).
 
-The 60-second allowance covers an on-demand order placed at workflow arrival;
-the 1.2 factor provides additional room over the conservative critical path.
-Neither value alone guarantees admission under reserved-capacity contention. If CBMW's
-backward reserved-slot pass cannot place a workflow, it releases that
-workflow's tentative bookings and tries an earliest feasible continuous plan.
-This recovery uses reserved capacity only when it starts no later than the
-task's on-demand alternative, and rejects a workflow if the resulting plan
-still exceeds its deadline. Recovery may raise on-demand cost.
-If an earlier task occupies a reserved VM past a committed start, the ready
-task waits until capacity is released; measured deadline misses include any
-resulting delay.
+Production runs allocate up to 5120 MiB heap per JVM; smoke runs capped at 100 workflows use 1280 MiB. The launcher checks physical/container memory and reserves 1536 MiB for other processes. If the configured concurrency exceeds the available memory, reduce line 2 rather than assuming it will be reduced automatically. A scenario's `run.log` and terminal show periodic `[progress]` updates.
+
+By default CBMW uses five reserved VMs, each with 192 cores and 384 GiB RAM; tasks fall back to one core and 2 GiB when the input lacks resource metadata. On-demand provisioning is modeled as 60 seconds, with 60-second minimum billing, and the scheduler's advancement scan runs every five simulated seconds. The config runner uses the supplied task runtime samples and one repetition. To change output location or inspect options, run `python3 scripts/run_cbmw_config.py --help`.
 
 ### Task Runtime Meaning
 
@@ -118,49 +53,13 @@ separate from task runtime. Reserved-container startup is currently not added
 separately; it is represented only when it is already included in the supplied
 DAX/runtime measurement.
 
-### Current dataset and results workbook
+## Workflow inputs and optional workbook
 
-The default `test_workflows/workflows` folder contains 500 XML/TXT pairs and
-12 arrival manifests. TXT task runtimes are `ceil(mu + uniform(-0.2*mu, 0.2*mu))`
-in XML job order, generated with seed 20260909. All four full manifests share
-one shuffled workflow order (seed 20260909); exponential inter-arrival gaps
-use seeds `20260909 + mean` for means 15, 30, 45 and 60 seconds; the
-75/90-second traces use seeds `20260924 + mean`. Edge manifests preserve
-the first 100 and last 100 workflows, shifting the latter by
-arrival(400)-arrival(100) (1-based positions), so the original gap between
-arrivals 400 and 401 remains.
-The simulator never rescales or rebases these JSON timestamps.
+[`test_workflows/workflows/`](test_workflows/workflows/) contains 500 paired XML/TXT workflow files and arrival manifests. XML describes the DAG; TXT contains sampled task durations in XML job order. The full trace consists of 100 warm-up, 300 measured, and 100 cool-down workflows. The paired edge trace keeps the first and last 100 workflows, with the final arrivals shifted to preserve the original inter-arrival pattern at the boundary. The simulator uses manifest timestamps as supplied.
 
-Run all 24 CBMW scenarios and fill the supplied template:
+[`scripts/prepare_cbmw_manifests.py`](scripts/prepare_cbmw_manifests.py) regenerates the later arrival manifests and corrected edge traces. Planning uses `cet = mu * (1 + alpha)`, with `alpha=0.20` by default (`cbmw.runtime.planning.alpha`). The supplied TXT durations are sampled execution times, distinct from the planning estimate.
 
-```powershell
-.\scripts\run_results_workbook.ps1 -Template 'C:\Users\AsiaLapTop.Com\OneDrive\Desktop\results.xlsx'
-```
-
-This runs one repetition with TXT runtime samples in four independent JVMs
-(configurable with `-Workers`), saves scenario CSVs and
-`run_config.json` under a fresh `Output/results_24_<timestamp>` directory, and
-writes `outputs/results_24_<timestamp>/results.xlsx`. The original template
-is preserved. Task and aggregate CSVs remain under each scenario subfolder;
-the combined 24-row CSV is `algorithms/CBMW/results.csv`. The exporter rejects missing, duplicate, capped, mixed-algorithm,
-or multi-repetition inputs. To export an already completed run, pass
-`-SkipSimulation -OutputRoot <run-directory>`.
-
-Workbook definitions: success is met-deadline/total; time is elapsed simulated
-seconds from first arrival to final completion; Fun. Cost is on-demand cost;
-total cost includes reserved rental; marginal cost is full cost minus matching
-edge cost, on the full row only. RAM is MB; capacity integrals are core-seconds
-and MB-seconds. Utilization means are time-weighted over the workload window.
-Reserved integrals are available capacity, not consumed capacity. On-demand
-counts/capacities sum provisioned instances across their lifecycles, not peaks.
-The exported sheet contains formulas for success rate, total and marginal cost.
-
-The CBMW planning margin is controlled by
-`cbmw.runtime.planning.alpha` (default `0.20`), so the default planning runtime
-is `1.20 * mu`. It is separate from the 20% uniform uncertainty used to
-generate the supplied actual runtimes and from `cbmw.runtime.stddev.ratio`,
-which remains available for normal runtime resampling and the optional NOSF
-paper runtime estimate.
+An optional Windows workbook pipeline is in [`scripts/run_results_workbook.ps1`](scripts/run_results_workbook.ps1). It needs a compatible Excel template and the Node runtime path supplied by `-RuntimeRoot`; those are external to the repository. Give it explicit `-Template`, `-OutputRoot`, and `-WorkbookPath` arguments for reproducible exports. CSV outputs from the core runner do not require Node or Excel.
 
 ## Algorithm Overview
 
@@ -185,26 +84,18 @@ planned request time, including for tasks that are not yet ready.
 Previously committed reserved slots remain available at their planned start;
 an early start replaces only the task's own future booking.
 
-### CBMW Price Negotiation
+### CBMW price negotiation
 
-After a deadline-feasible workflow is statically planned, CBMW computes the
-paper's price quote:
+For each admitted workflow, the quote sums task estimates from its static plan:
 
 ```text
-raw cost = sum(planned task duration * allocated resource price)
-offered price = gamma * raw cost
+reserved task = planning duration × reserved VM price per second × (task cores / reserved VM cores)
+on-demand task = max(minimum billing seconds, ceil(provisioning delay + planning duration))
+                 × task-sized on-demand price per second
+offered price = gamma × (sum of reserved and on-demand task estimates)
 ```
 
-Reserved tasks use the reserved VM's per-second price. On-demand tasks use the task-sized container price and the greater of
-60 seconds or the conservative task duration plus provisioning time. The
-markup is configured with `cbmw.negotiation.gamma` and defaults to `1.0`
-because the paper does not publish an experimental gamma value.
-
-There is no simulated human user, so every generated price quote is marked
-`AUTO_ACCEPTED`. The automatic user decision does not bypass the paper's
-deadline-feasibility check or a genuine static-planning failure. Quotes are
-written to the detail log, workflow completion summary, `results.txt`, and the
-scenario CSV columns `estimatedRawCost` and `offeredPrice`.
+The reserved VM's memory limits placement but carries no separate per-task quotation charge. The quote attributes CPU-share cost to reserved tasks; actual `reservedCost` charges for the leased reserved pool over the simulation window, including idle capacity. Thus `estimatedRawCost` and `offeredPrice` are predictions, while `totalCost` is realized resource cost. The default markup `gamma` is 1.0 (`cbmw.negotiation.gamma`). There is no simulated customer decision: a deadline-feasible and successfully planned workflow's quote is auto-accepted.
 
 ### NOSF Baseline
 
@@ -446,97 +337,48 @@ and CEWB settings as simulator assumptions rather than paper-certified values.
 
 ---
 
-## Project Structure
+## Project structure
 
-```
-sources/org/workflowsim/cbmw/
-    CBMWBroker.java                     — Central event handler; wires all four modules
-    NegotiationModule.java              — Module 1: admission control
-    CBMWStaticPlanningAlgorithm.java    — Module 2: backward sweep slot booking
-    CBMWDynamicSchedulingAlgorithm.java — Module 3: current-cycle reserved dispatch
-    ProvisioningModule.java             — Module 4: on-demand VM lifecycle
-    HybridVmPool.java                   — Manages reserved + on-demand VM pools and slot bookings
-    WorkflowRecord.java                 — Per-workflow state (LST map, VM assignments, results)
-    CBMWResultCollector.java            — Per-scenario statistics and CSV output
-    CBMWLogger.java                     — Structured event log to cbmw_detail.log
-
-examples/org/workflowsim/examples/cbmw/
-    CBMWSimulation.java                 — Main simulation driver (single or batch scenarios)
-
-test_workflows/
-    duplicate_and_process.py            — Reproducible manifest-driven runtime dataset generator
-    poisson_distribution.json           — Arrival manifest for the 200-workflow experiment
-    manifest.csv                        — Index of generated DAX files with CP and deadline info
-    workflow_NNN_TOPOLOGY_Xtasks.xml    — Pegasus DAX files (CHAIN, FORK_JOIN, RANDOM topologies)
-```
-
----
+| Path | Purpose |
+|------|---------|
+| [`sources/org/workflowsim/cbmw/`](sources/org/workflowsim/cbmw/) | CBMW broker, negotiation, planning, scheduling, provisioning, accounting, and validation classes |
+| [`sources/org/workflowsim/cbmw/ablation/`](sources/org/workflowsim/cbmw/ablation/) | CBMW variants; see its [README](sources/org/workflowsim/cbmw/ablation/README.md) |
+| [`sources/org/workflowsim/cbmw/baselines/`](sources/org/workflowsim/cbmw/baselines/) | SG, DG, NOSF, and CEWB implementations |
+| [`examples/org/workflowsim/examples/cbmw/`](examples/org/workflowsim/examples/cbmw/) | `CBMWSimulation` experiment driver |
+| [`config/`](config/) and [`test_workflows/workflows/`](test_workflows/workflows/) | Scenario selection and paired workflow inputs |
+| [`scripts/`](scripts/) | Build, experiment launchers, and result utilities |
+| [`lib/`](lib/) | Bundled Java dependencies |
+| [`docs/`](docs/) | Baseline-specific experimental notes |
 
 ## Build
 
-Requires **JDK 8+** and the bundled libraries in `lib/`.
+JDK 17 and the JDK compiler (`javac`) are needed for source builds; Python 3 is needed for the Linux batch runner. The four required JARs are included in `lib/`.
 
-**Windows PowerShell:**
+On Windows PowerShell, from the repository root:
+
 ```powershell
 .\scripts\build.ps1
 ```
 
-The script recursively removes old `.class` files from `bin/`, preserves its
-non-class launcher files, compiles every Java file under `sources/` and
-`examples/`, and uses a temporary argument file so Windows does not exceed its
-command-length limit. It compiles into a temporary staging directory and only
-updates `bin/` after success. Cleaning prevents deleted or renamed classes from
-remaining in the runtime classpath without destroying the last working build
-when compilation fails.
+The PowerShell build compiles the Java sources into `bin/`. On Linux, the batch runner above compiles automatically; [`scripts/run_algorithm.sh`](scripts/run_algorithm.sh) also compiles before running one algorithm. Use `javac -version` to check that your installed JDK is on `PATH`.
 
-**Linux / macOS:** use the existing `scripts/run_algorithm.sh` helper or compile
-with `:` as the classpath separator.
+## Run an individual algorithm
 
----
+On Linux, use the helper for a targeted diagnostic run:
 
-## Running
+```bash
+CBMW_MAX_WORKFLOWS=5 CBMW_MAX_SCENARIOS=1 bash scripts/run_algorithm.sh CBMW
+```
 
-### Run the simulation
+Omit the two caps for a full run. `scripts/run_algorithm.sh` also accepts `NOSF`, `CEWB`, `StaticGreedy`, `DynamicGreedy`, and the ablation names printed by the script when run without arguments. For a batch of specified scenarios with the paired full/edge runs, edit the text configuration and use the Python runner above.
+
+On Windows after building, a small diagnostic run is:
 
 ```powershell
-java -cp "bin;lib/*" org.workflowsim.examples.cbmw.CBMWSimulation
+java '-Dcbmw.algorithms=CBMW' '-Dcbmw.max.workflows=5' '-Dcbmw.max.scenarios=1' -cp 'bin;lib/*' org.workflowsim.examples.cbmw.CBMWSimulation
 ```
 
-The historical driver defaults to five algorithms over 36 scenarios each: six
-arrival rates (15/30/45/60/75/90), three factors (1.2/2/4), and both dataset
-modes. For the revised CBMW experiment, use the Linux config launcher above.
-Inputs default to `test_workflows/workflows`. Each scenario selects its
-`dax_poisson_arrivals_mean<mean>s_500workflows.json` or `_edge200.json` file
-and uses the manifest arrival times without modification.
-Use JVM properties such as
-`-Dcbmw.algorithms=CBMW`, `-Dcbmw.max.workflows=5`, and
-`-Dcbmw.max.scenarios=1` to restrict smoke or diagnostic runs.
-
-Run the isolated middle 300 manifests for the four primary arrival rates
-(12 arrival/tightness configurations, one shared TXT sample per task):
-
-```bash
-python3 scripts/run_nosf_ohio_middle300.py --all \
-  --workflow-dir test_workflows/workflows
-```
-
-For the four primary arrival rates at one deadline factor, run four scenario
-JVMs concurrently and write a combined CSV for each result type:
-
-```bash
-python3 scripts/run_nosf_ohio_middle300.py --deadline-factor 1.2 --workers 4 \
-  --workflow-dir test_workflows/workflows
-```
-
-Find the four scenario outputs in `outputs/nosf_one_wait_120_middle300/arrival*/middle300/`
-and the merged `results.csv`, `results_aggregate.csv`, and `task_execution.csv`
-in `outputs/nosf_one_wait_120_middle300/combined/alpha1.2/`.
-
-The runner shows a live task progress bar every 10 seconds and writes the
-full per-scenario output to `run.log`. Use `--progress-interval-sec N` to
-change its wall-clock update interval.
-
----
+These caps are for diagnosis; a capped full trace does not produce the 300-workflow cohort or a valid full/edge marginal-cost pair. Workflow inputs default to `test_workflows/workflows/`.
 
 ## Simulation Parameters
 
@@ -571,108 +413,29 @@ change its wall-clock update interval.
 
 ---
 
-## Output
+## Outputs and metrics
 
-Simulation artifacts are separated by algorithm. A normal run writes per-algorithm
-files under `Output/algorithms/<algorithm>/` and only combined comparison files
-under `Output/comparison/`.
+The Linux config runner writes one folder per arrival/deadline pair under `Output/batch/arrival<mean>_alpha<factor>/`. Each folder has `run.log`, `performance_metrics.csv`, and per-algorithm CSVs in `algorithms/<algorithm>/`. Across scenarios, `Output/batch/combined/` contains `results.csv`, `results_aggregate.csv`, `performance_metrics.csv`, and per-algorithm combined results. `task_execution.csv` is written per algorithm by the driver (CEWB can disable it separately). The config runner sets `cbmw.export.details=false`, which suppresses the additional detailed export bundle and plots.
 
-Main files:
+| Field in `results.csv` | Meaning |
+|-------------------------|---------|
+| `total`, `accepted`, `metDeadline` | Submitted, admitted, and completed within the deadline tolerance |
+| `overallSuccessRate` | `metDeadline / total`; `deadlineRate` instead divides by admitted workflows |
+| `deadlineMissCount` | Admitted workflows completed at least 1.0 second after their deadlines |
+| `deadlineMissCountMain300` | The same count for workflow positions 101–400 in a complete full-500 run |
+| `maxDeadlineMissSeconds`, `avgDeadlineMissSeconds` | Actual lateness among reportable misses; the latter averages only missed workflows |
+| `estimatedRawCost`, `offeredPrice` | Sum of planning-stage estimates and `gamma`-marked quotes for the run |
+| `onDemandCost`, `reservedCost`, `spotCost`, `totalCost` | Realized resource charges; `totalCost` is their sum |
+| `marginalCost` | Full-500 total cost minus paired edge-200 total cost; populated on a matching full row |
+| `reservedUtil` | Reserved-core occupancy over the whole scenario window |
+| `reservedUtilMain300` | Reserved-core occupancy attributable to main-300 tasks, from first main arrival to last admitted main completion |
+| `reservedCpuWorkShare`, `onDemandCpuWorkShare` | Fractions of executed task core-seconds on each resource for the full run |
+| `reservedCpuWorkShareMain300`, `onDemandCpuWorkShareMain300` | The same work shares using tasks of the main 300 only |
+| `directMeasuredOnDemandCost` | Actual on-demand cost attributed directly to workflows 101–400 |
 
-- `Output/algorithms/<algorithm>/results.csv`
-- `Output/algorithms/<algorithm>/results_aggregate.csv`
-- `Output/algorithms/<algorithm>/task_execution.csv`
-- `Output/comparison/results.csv`
-- `Output/comparison/results_aggregate.csv`
-- `Output/comparison/new_experiment_<load>.png`
+The main-300 fields appear only when the complete 500-workflow trace is present. `reservedUtilMain300` counts main-workflow tasks in its numerator; overlapping warm-up/cool-down tasks are excluded even if they execute during its time window. `marginalCost` is a paired-run difference and includes changes in resource reuse and timing, so it need not equal direct cost attribution to the 300 workflows. The predicted quote does not allocate idle reserved lease cost, which is part of realized cost.
 
-### Console
-
-```
-========== RESULTS: low_tight_CBMW_t1.2 ==========
-Workflows total/accepted : 50 / 50
-Workflows rejected       : 0 (negotiation=0, planning=0)
-Acceptance rate          : 1.000 (50 / 50)
-Accepted deadline rate   : 0.780 (39 / 50)
-Overall success rate     : 0.780 (39 / 50)
-Reserved VM utilization  : 36.2%
-On-demand cost ($)       : 23.0717
-Spot cost ($)            : 0.0000
-Reserved prepaid cost ($): 0.00 (excluded)
-Total cost ($)           : 23.0717
-Makespan (sim s)         : 8652.25
-```
-
-Current report accounting includes reserved lease cost for CBMW and greedy
-baselines. `totalCost = reservedCost + onDemandCost + spotCost`. NOSF/CEWB have
-no reserved lease charge. The console example above is historical; the current
-report includes reserved rental over the simulated workload duration.
-
-### CSV
-
-Scenario rows are written to both the current algorithm's own `results.csv`
-and the combined comparison `results.csv`. Columns:
-```
-scenario,load,deadlineClass,algorithm,arrivalScale,tightness,run,runSeed,
-nosfProfile,total,
-accepted,rejected,metDeadline,rejectedNegotiation,rejectedPlanning,
-acceptanceRate,deadlineRate,overallSuccessRate,countViolation,timeViolation,
-onDemandCost,spotCost,
-estimatedRawCost,offeredPrice,reservedCost,totalCost,makespan,reservedUtil,
-onDemandUsageRatio,spotUsageRatio
-```
-
-Workflow admission and success are reported with separate denominators:
-
-```text
-acceptanceRate     = accepted / total submitted
-deadlineRate       = met deadline / accepted
-overallSuccessRate = met deadline / total submitted
-countViolation     = workflows missing deadline / total submitted
-timeViolation      = mean(max(0, completion - deadline) / deadline span)
-rejected           = total submitted - accepted
-```
-
-The CSV also reports `metDeadline`, `rejectedNegotiation`, and
-`rejectedPlanning`. This prevents a high accepted-workflow `deadlineRate` from
-hiding workflows rejected before execution.
-
-Comparison charts use `overallSuccessRate`, so deadline success is measured
-against all submitted workflows. The conditional `deadlineRate` remains in CSV
-outputs for admission and execution diagnostics.
-
-Aggregate CSVs report the number of repetitions and the mean, minimum, maximum,
-and sample standard deviation for total cost, on-demand VM utilization, count
-violation, and time violation. `task_execution.csv` includes the run, seed,
-profile, sampled runtime, and actual NOSF VM type/name for auditability.
-For NOSF, `LFT (s)` is the initial, precedence-consistent PCP subdeadline;
-`SubDeadline (s)` is the feedback-adjusted value actually used when assigning
-the task. Other algorithms retain their existing column meanings.
-
-### Detailed event log
-
-`cbmw_detail.log` — written by `CBMWLogger` during each run. Contains timestamped entries for every negotiation decision, VM dispatch, task completion, and workflow outcome. Useful for diagnosing scheduling behaviour.
-
-### Gantt chart
-
-`<label>_gantt.png` — generated automatically after each scenario by `plot_gantt.py`. Requires Python 3 and matplotlib (`pip install matplotlib`).
-
-The chart has two panels sharing a common time axis:
-
-- **Reserved VMs (top)** — one row per VM (0–49); each bar is one task, coloured by workflow. Hatched bars indicate workflows that missed their deadline.
-- **On-demand slots (bottom)** — ephemeral VMs are slot-packed so that when one VM finishes its display row is reused by the next. The row count equals the peak concurrent on-demand usage, not the total number of VMs provisioned.
-
-The chart can also be run standalone:
-
-```bash
-# regenerate from an existing log
-python plot_gantt.py cbmw_detail.log my_output.png
-
-# restrict the time axis to the first 1000 seconds
-python plot_gantt.py cbmw_detail.log out.png 0 1000
-```
-
----
+For direct driver runs (without the batch wrapper), output defaults to `Output/algorithms/<algorithm>/` and `Output/comparison/`. Detail bundles, comparison plots, and Gantt charts are controlled by driver properties; the batch launcher disables them to reduce run time and memory.
 
 ## Dependencies
 
@@ -682,3 +445,4 @@ python plot_gantt.py cbmw_detail.log out.png 0 1000
 | commons-math3 | 3.2 | Statistical utilities |
 | jdom | 2.0.0 | DAX XML parsing |
 | flanagan | — | Numerical methods |
+
